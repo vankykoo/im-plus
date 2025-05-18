@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package com.vanky.im.common.protocol;
+
+// 定义Java代码生成相关的选项
+option java_package = "com.vanky.im.common.protocol";
+option java_outer_classname = "ChatMessage"; // 生成的Java外部类名，所有该.proto文件中的消息会作为内部类存在于此
+option java_multiple_files = true;
+
+message ChatMessage {
+  int32 type = 1;           // 协议类型
+  string content = 2;       // 消息内容
+  string fromId = 3;        // 发送方id
+  string toId = 4;          // 接收方id
+  string uid = 5;           // 全局唯一ID
+  string seq = 6;           // 客户端生成的消息ID
+  int64 timestamp = 7;      // 时间戳
+  int32 retry = 8;          // 重试次数
+} 

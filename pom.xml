@@ -14,6 +14,7 @@
         <module>im-gateway</module>
         <module>im-client</module>
         <module>im-common</module>
+        <module>im-server</module>
     </modules>
 
     <properties>

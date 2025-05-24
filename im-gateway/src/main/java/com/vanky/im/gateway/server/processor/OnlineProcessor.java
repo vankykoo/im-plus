@@ -2,6 +2,8 @@ package com.vanky.im.gateway.server.processor;
 
 import com.vanky.im.gateway.session.UserSession;
 import io.netty.channel.Channel;
+import com.vanky.im.common.util.MsgGenerator;
+import com.vanky.im.common.protocol.ChatMessage;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
@@ -51,6 +53,18 @@ public class OnlineProcessor {
      * @param channel
      */
     public void userOnline(String userId, Channel channel) {
+        // 检查是否已在线
+        UserSession oldSession = userSessionMap.get(userId);
+        if (oldSession != null) {
+            // 发送踢人通知
+            ChatMessage kickMsg = MsgGenerator.generateKickoutMsg(userId);
+            oldSession.getChannel().writeAndFlush(kickMsg);
+            // 关闭旧连接
+            oldSession.getChannel().close();
+            // 移除旧的channel映射
+            channelUserMap.remove(oldSession.getChannel().id().asLongText());
+            System.out.println("用户[" + userId + "]已在线，踢掉旧连接");
+        }
         // 获取客户端地址信息
         InetSocketAddress address = (InetSocketAddress) channel.remoteAddress();
         String host = address.getHostString();
@@ -60,6 +74,10 @@ public class OnlineProcessor {
         // 同时维护Channel到用户ID的映射
         channelUserMap.put(channel.id().asLongText(), userId);
         System.out.println("用户[" + userId + "]上线，当前在线用户数：" + userSessionMap.size());
+
+        // 发送登录成功回执
+        ChatMessage loginSuccessMsg = MsgGenerator.generateLoginSuccessMsg(userId);
+        channel.writeAndFlush(loginSuccessMsg);
     }
 
     /**

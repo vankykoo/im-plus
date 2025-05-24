@@ -8,6 +8,6 @@ public class TcpClientHandler extends SimpleChannelInboundHandler<ChatMessage> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ChatMessage msg) throws Exception {
         // 这里可以处理收到的消息
-        System.out.println("[TCP客户端] 收到消息: " + msg);
+        System.out.println("[TCP客户端] 收到消息: " + msg.getContent() + "，完整消息: " + msg);
     }
 } 

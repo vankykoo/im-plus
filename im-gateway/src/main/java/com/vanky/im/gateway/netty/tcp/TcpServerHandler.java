@@ -23,7 +23,7 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ChatMessage msg) throws Exception {
         // 这里可以处理收到的消息
-        System.out.println("收到消息: " + msg);
+        System.out.println("收到消息内容: " + msg.getContent() + "，完整消息: " + msg);
 
         if (ReceiveUserId.SYSTEM_ID.equals(msg.getToId())) {
             log.info("收到【系统】消息:  from:{}, type:{}",  msg.getFromId(), msg.getType());

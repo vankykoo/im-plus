@@ -6,6 +6,11 @@ import com.vanky.im.gateway.netty.NettyServerWebSocket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.vanky.im.common.constant.PortConstant.DEFAULT_TCP_PORT;
+import static com.vanky.im.common.constant.PortConstant.DEFAULT_UDP_PORT;
+import static com.vanky.im.common.constant.PortConstant.DEFAULT_WEBSOCKET_PORT;
+import static com.vanky.im.common.constant.UriConstant.DEFAULT_WEBSOCKET_PATH;
+
 /**
  * @author vanky
  * @create 2025/5/15 22:18
@@ -22,7 +27,7 @@ public class GatewayApplication {
                 NettyServerTCP tcpServer = new NettyServerTCP();
                 tcpServer.init();
                 // 监听TCP 8080端口
-                tcpServer.start(8080);
+                tcpServer.start(DEFAULT_TCP_PORT);
             } catch (InterruptedException e) {
                 logger.error("TCP server startup failed.", e);
                 Thread.currentThread().interrupt();
@@ -35,7 +40,7 @@ public class GatewayApplication {
                 NettyServerUDP udpServer = new NettyServerUDP();
                 udpServer.init();
                 // 监听UDP 8081端口
-                udpServer.start(8081);
+                udpServer.start(DEFAULT_UDP_PORT);
             } catch (InterruptedException e) {
                 logger.error("UDP server startup failed.", e);
                 Thread.currentThread().interrupt();
@@ -45,10 +50,10 @@ public class GatewayApplication {
         // 启动WebSocket服务器
         new Thread(() -> {
             try {
-                NettyServerWebSocket webSocketServer = new NettyServerWebSocket("/websocket");
+                NettyServerWebSocket webSocketServer = new NettyServerWebSocket(DEFAULT_WEBSOCKET_PATH);
                 webSocketServer.init();
                 // 监听WebSocket 8082端口
-                webSocketServer.start(8082);
+                webSocketServer.start(DEFAULT_WEBSOCKET_PORT);
             } catch (InterruptedException e) {
                 logger.error("WebSocket server startup failed.", e);
                 Thread.currentThread().interrupt();

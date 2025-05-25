@@ -2,11 +2,17 @@ package com.vanky.im.gateway.netty.websocket;
 
 import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.gateway.server.processor.OnlineProcessor;
+import com.vanky.im.common.util.MsgGenerator;
+import com.vanky.im.gateway.server.processor.server.OnlineProcessor;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class WebSocketServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
+    
+    private static final Logger logger = LoggerFactory.getLogger(WebSocketServerHandler.class);
+    
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ChatMessage msg) throws Exception {
         // 这里可以处理收到的WebSocket消息
@@ -23,6 +29,14 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<ChatMess
             System.out.println("[WebSocket] 用户[" + userId + "]已登录");
             // 发送登录成功响应（这里可以根据需求自定义响应）
             // ctx.writeAndFlush(loginResponse);
+        } else if (msg.getType() == ClientToServerMessageType.HEARTBEAT.getValue()) {
+            // 处理心跳消息
+            logger.info("[WebSocket] 处理心跳消息，来自: {}", msg.getFromId());
+            
+            // 回复心跳响应包
+            ChatMessage heartbeatResponse = MsgGenerator.generateHeartbeatResponseMsg(msg.getFromId());
+            ctx.channel().writeAndFlush(heartbeatResponse);
+            logger.debug("[WebSocket] 已回复心跳响应: {}", heartbeatResponse.getUid());
         } else {
             // 处理其他类型消息
             // 可以根据业务需求做响应

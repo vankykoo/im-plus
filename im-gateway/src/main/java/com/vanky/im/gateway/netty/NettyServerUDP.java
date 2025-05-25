@@ -2,6 +2,7 @@ package com.vanky.im.gateway.netty;
 
 import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
 import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.gateway.netty.handler.CommonHeartbeatHandler;
 import com.vanky.im.gateway.netty.udp.UdpServerHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
@@ -14,9 +15,18 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioDatagramChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.vanky.im.common.protocol.ChatMessage;
+
+import java.util.concurrent.TimeUnit;
+
+import static com.vanky.im.common.constant.ChannelOptionConstant.SO_RCVBUF;
+import static com.vanky.im.common.constant.ChannelOptionConstant.SO_SNDBUF;
+import static com.vanky.im.common.constant.CommonConstant.UDP_PROTOCOL;
+import static com.vanky.im.common.constant.TimeConstant.IDLE_TIME_DISABLE;
+import static com.vanky.im.common.constant.TimeConstant.SERVER_READ_IDLE_TIMEOUT;
 
 /**
  * @author vanky
@@ -28,7 +38,7 @@ public class NettyServerUDP extends NettyServer {
     private static final Logger logger = LoggerFactory.getLogger(NettyServerUDP.class);
     private EventLoopGroup group;
     private Bootstrap udpBootstrap;
-    
+
     /**
      * 构造函数，初始化UDP服务器所需的资源
      */
@@ -47,8 +57,8 @@ public class NettyServerUDP extends NettyServer {
         udpBootstrap.group(group)
                 .channel(NioDatagramChannel.class)
                 .option(ChannelOption.SO_BROADCAST, true)
-                .option(ChannelOption.SO_RCVBUF, 1024 * 1024) // 设置接收缓冲区大小
-                .option(ChannelOption.SO_SNDBUF, 1024 * 1024) // 设置发送缓冲区大小
+                .option(ChannelOption.SO_RCVBUF, SO_RCVBUF) // 设置接收缓冲区大小
+                .option(ChannelOption.SO_SNDBUF, SO_SNDBUF) // 设置发送缓冲区大小
                 .handler(new LoggingHandler(LogLevel.INFO))
                 .handler(new UDPChannelInitializer());
     }
@@ -100,6 +110,10 @@ public class NettyServerUDP extends NettyServer {
     private class UDPChannelInitializer extends ChannelInitializer<DatagramChannel> {
         @Override
         protected void initChannel(DatagramChannel ch) throws Exception {
+            // 添加空闲状态处理器，设置读空闲超时时间
+            ch.pipeline().addLast(new IdleStateHandler(SERVER_READ_IDLE_TIMEOUT, IDLE_TIME_DISABLE, IDLE_TIME_DISABLE, TimeUnit.SECONDS));
+            // 添加通用心跳处理器
+            ch.pipeline().addLast(new CommonHeartbeatHandler(UDP_PROTOCOL));
             // 添加日志处理器
             ch.pipeline().addLast(new LoggingHandler(LogLevel.INFO));
             // 添加通用Protobuf编解码器

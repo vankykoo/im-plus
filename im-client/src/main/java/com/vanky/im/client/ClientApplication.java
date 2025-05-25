@@ -10,6 +10,12 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Scanner;
 
+import static com.vanky.im.common.constant.PortConstant.DEFAULT_TCP_PORT;
+import static com.vanky.im.common.constant.PortConstant.DEFAULT_UDP_PORT;
+import static com.vanky.im.common.constant.PortConstant.DEFAULT_WEBSOCKET_PORT;
+import static com.vanky.im.common.constant.UriConstant.DEFAULT_HOST;
+import static com.vanky.im.common.constant.UriConstant.DEFAULT_WEBSOCKET_PATH;
+
 /**
  * @author vanky
  * @create 2025/5/15 22:18
@@ -27,7 +33,7 @@ public class ClientApplication {
         logger.info("请输入服务器IP地址 (默认: localhost):");
         String host = scanner.nextLine();
         if (host.isEmpty()) {
-            host = "localhost";
+            host = DEFAULT_HOST;
         }
 
         logger.info("请输入用户ID (用于登录):");
@@ -55,9 +61,9 @@ public class ClientApplication {
     }
 
     private static void startTcpClient(Scanner scanner, String host, String userId) {
-        logger.info("请输入TCP服务器端口 (默认: 8080):");
+        logger.info("请输入TCP服务器端口 (默认: {}):", DEFAULT_TCP_PORT);
         String portStr = scanner.nextLine();
-        int port = portStr.isEmpty() ? 8080 : Integer.parseInt(portStr);
+        int port = portStr.isEmpty() ? DEFAULT_TCP_PORT : Integer.parseInt(portStr);
 
         NettyClientTCP tcpClient = new NettyClientTCP(host, port);
         try {
@@ -65,8 +71,15 @@ public class ClientApplication {
             tcpClient.connect();
             logger.info("TCP客户端已连接到 {}:{}.", host, port);
             
+            // 设置用户ID
+            tcpClient.setUserId(userId);
+            
             // 发送登录消息
             sendLoginMessage(tcpClient, userId);
+            
+            // 启动心跳
+            tcpClient.startHeartbeat();
+            logger.info("TCP心跳机制已启动");
             
             logger.info("输入消息内容进行聊天，输入 'exit' 断开连接。");
             while (tcpClient.isConnected()) {
@@ -89,9 +102,9 @@ public class ClientApplication {
     }
 
     private static void startUdpClient(Scanner scanner, String host, String userId) {
-        logger.info("请输入UDP服务器端口 (默认: 8081):");
+        logger.info("请输入UDP服务器端口 (默认: {}):", DEFAULT_UDP_PORT);
         String portStr = scanner.nextLine();
-        int port = portStr.isEmpty() ? 8081 : Integer.parseInt(portStr);
+        int port = portStr.isEmpty() ? DEFAULT_UDP_PORT : Integer.parseInt(portStr);
 
         NettyClientUDP udpClient = new NettyClientUDP(host, port);
         try {
@@ -99,8 +112,15 @@ public class ClientApplication {
             udpClient.connect(); // UDP的connect是绑定本地端口
             logger.info("UDP客户端已准备好与 {}:{} 通信.", host, port);
             
+            // 设置用户ID
+            udpClient.setUserId(userId);
+            
             // 发送登录消息
             sendLoginMessage(udpClient, userId);
+            
+            // 启动心跳
+            udpClient.startHeartbeat();
+            logger.info("UDP心跳机制已启动");
             
             logger.info("输入消息内容进行聊天，输入 'exit' 退出。");
             while (true) {
@@ -123,14 +143,14 @@ public class ClientApplication {
     }
 
     private static void startWebSocketClient(Scanner scanner, String host, String userId) {
-        logger.info("请输入WebSocket服务器端口 (默认: 8082):");
+        logger.info("请输入WebSocket服务器端口 (默认: {}):", DEFAULT_WEBSOCKET_PORT);
         String portStr = scanner.nextLine();
-        int port = portStr.isEmpty() ? 8082 : Integer.parseInt(portStr);
+        int port = portStr.isEmpty() ? DEFAULT_WEBSOCKET_PORT : Integer.parseInt(portStr);
 
-        logger.info("请输入WebSocket路径 (默认: /websocket):");
+        logger.info("请输入WebSocket路径 (默认: {}):", DEFAULT_WEBSOCKET_PATH);
         String path = scanner.nextLine();
         if (path.isEmpty()) {
-            path = "/websocket";
+            path = DEFAULT_WEBSOCKET_PATH;
         }
 
         logger.info("是否使用SSL (wss)? (yes/no, 默认: no):");
@@ -142,8 +162,15 @@ public class ClientApplication {
             wsClient.connect();
             logger.info("WebSocket客户端已连接到 {}:{}{}.", host, port, path);
             
+            // 设置用户ID
+            wsClient.setUserId(userId);
+            
             // 发送登录消息
             sendLoginMessage(wsClient, userId);
+            
+            // 启动心跳
+            wsClient.startHeartbeat();
+            logger.info("WebSocket心跳机制已启动");
             
             logger.info("输入消息内容进行聊天，输入 'exit' 断开连接。");
             while (wsClient.isConnected()) {

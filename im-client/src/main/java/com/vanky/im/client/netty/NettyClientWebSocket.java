@@ -2,6 +2,8 @@ package com.vanky.im.client.netty;
 
 import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
 import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.common.protocol.ChatMessage;
+import com.vanky.im.common.util.MsgGenerator;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -21,8 +23,16 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
-import com.vanky.im.common.protocol.ChatMessage;
+import static com.vanky.im.common.constant.ChannelOptionConstant.MAX_CONTENT_LENGTH;
+import static com.vanky.im.common.constant.TimeConstant.HEARTBEAT_INTERVAL;
+import static com.vanky.im.common.constant.UriConstant.DEFAULT_WEBSOCKET_PATH;
+import static com.vanky.im.common.constant.UriConstant.WS_SCHEME;
+import static com.vanky.im.common.constant.UriConstant.WSS_SCHEME;
 
 /**
  * @author vanky
@@ -34,14 +44,22 @@ public class NettyClientWebSocket extends NettyClient {
     private String websocketPath;
     private boolean useSSL;
     private URI uri;
+    
+    // 心跳定时任务调度器
+    private ScheduledExecutorService heartbeatScheduler;
+    // 心跳任务的Future
+    private ScheduledFuture<?> heartbeatFuture;
+    // 用户ID，用于发送心跳
+    private String userId;
 
     /**
      * 默认构造函数
      */
     public NettyClientWebSocket() {
         super();
-        this.websocketPath = "/";
+        this.websocketPath = DEFAULT_WEBSOCKET_PATH;
         this.useSSL = false;
+        this.heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
     }
 
     /**
@@ -56,6 +74,7 @@ public class NettyClientWebSocket extends NettyClient {
         super(host, port);
         this.websocketPath = websocketPath;
         this.useSSL = useSSL;
+        this.heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
     }
 
     /**
@@ -65,7 +84,7 @@ public class NettyClientWebSocket extends NettyClient {
     public void init() {
         try {
             // 构建WebSocket URI
-            String scheme = useSSL ? "wss" : "ws";
+            String scheme = useSSL ? WSS_SCHEME : WS_SCHEME;
             uri = new URI(scheme + "://" + host + ":" + port + websocketPath);
             
             // 配置WebSocket客户端
@@ -132,7 +151,7 @@ public class NettyClientWebSocket extends NettyClient {
                 // WebSocket是基于HTTP协议的，所以需要HTTP编解码器
                 ch.pipeline().addLast(new HttpClientCodec());
                 // 聚合HTTP消息
-                ch.pipeline().addLast(new HttpObjectAggregator(8192));
+                ch.pipeline().addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
                 // WebSocket客户端协议处理器
                 ch.pipeline().addLast(new WebSocketClientProtocolHandler(
                         WebSocketClientHandshakerFactory.newHandshaker(
@@ -182,5 +201,61 @@ public class NettyClientWebSocket extends NettyClient {
      */
     public void setUseSSL(boolean useSSL) {
         this.useSSL = useSSL;
+    }
+    
+    /**
+     * 设置用户ID，用于发送心跳
+     * @param userId 用户ID
+     */
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+    
+    /**
+     * 启动心跳定时任务
+     */
+    public void startHeartbeat() {
+        if (userId == null || userId.isEmpty()) {
+            logger.warn("无法启动心跳，用户ID未设置");
+            return;
+        }
+        
+        if (heartbeatFuture != null && !heartbeatFuture.isCancelled()) {
+            logger.info("心跳定时任务已经在运行中");
+            return;
+        }
+        
+        logger.info("启动WebSocket心跳定时任务，间隔: {}秒", HEARTBEAT_INTERVAL);
+        heartbeatFuture = heartbeatScheduler.scheduleAtFixedRate(() -> {
+            if (isConnected()) {
+                try {
+                    // 发送心跳消息
+                    ChatMessage heartbeatMsg = MsgGenerator.generateHeartbeatMsg(userId);
+                    sendMessage(heartbeatMsg);
+                    logger.debug("发送WebSocket心跳包: {}", heartbeatMsg.getUid());
+                } catch (Exception e) {
+                    logger.error("发送WebSocket心跳包异常", e);
+                }
+            } else {
+                logger.warn("WebSocket连接已断开，无法发送心跳");
+                stopHeartbeat();
+            }
+        }, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL, TimeUnit.SECONDS);
+    }
+    
+    /**
+     * 停止心跳定时任务
+     */
+    public void stopHeartbeat() {
+        if (heartbeatFuture != null && !heartbeatFuture.isCancelled()) {
+            heartbeatFuture.cancel(true);
+            logger.info("WebSocket心跳定时任务已停止");
+        }
+    }
+    
+    @Override
+    public void disconnect() {
+        stopHeartbeat();
+        super.disconnect();
     }
 }

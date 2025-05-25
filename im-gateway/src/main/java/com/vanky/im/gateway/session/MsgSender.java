@@ -1,7 +1,7 @@
 package com.vanky.im.gateway.session;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.gateway.server.processor.OnlineProcessor;
+import com.vanky.im.gateway.server.processor.server.OnlineProcessor;
 import io.netty.channel.Channel;
 
 /**

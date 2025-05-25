@@ -27,4 +27,13 @@ public enum ClientToServerMessageType {
     public int getValue() {
         return value;
     }
+
+    public static String getLabelByValue(int value) {
+        for (ClientToServerMessageType type : ClientToServerMessageType.values()) {
+            if (type.getValue() == value) {
+                return type.getLabel();
+            }
+        }
+        return null;
+    }
 } 

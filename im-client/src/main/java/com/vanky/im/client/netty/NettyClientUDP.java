@@ -2,6 +2,7 @@ package com.vanky.im.client.netty;
 
 import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
 import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.common.util.MsgGenerator;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -14,6 +15,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.vanky.im.common.protocol.ChatMessage;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+import static com.vanky.im.common.constant.ChannelOptionConstant.SO_RCVBUF;
+import static com.vanky.im.common.constant.ChannelOptionConstant.SO_SNDBUF;
+import static com.vanky.im.common.constant.TimeConstant.HEARTBEAT_INTERVAL;
+
 /**
  * @author vanky
  * @create 2025/5/15 22:18
@@ -23,11 +33,19 @@ public class NettyClientUDP extends NettyClient {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyClientUDP.class);
 
+    // 心跳定时任务调度器
+    private ScheduledExecutorService heartbeatScheduler;
+    // 心跳任务的Future
+    private ScheduledFuture<?> heartbeatFuture;
+    // 用户ID，用于发送心跳
+    private String userId;
+
     /**
      * 默认构造函数
      */
     public NettyClientUDP() {
         super();
+        this.heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
     }
 
     /**
@@ -38,6 +56,7 @@ public class NettyClientUDP extends NettyClient {
      */
     public NettyClientUDP(String host, int port) {
         super(host, port);
+        this.heartbeatScheduler = Executors.newSingleThreadScheduledExecutor();
     }
 
     /**
@@ -49,8 +68,8 @@ public class NettyClientUDP extends NettyClient {
         bootstrap.group(group)
                 .channel(NioDatagramChannel.class)
                 .option(ChannelOption.SO_BROADCAST, true)
-                .option(ChannelOption.SO_RCVBUF, 1024 * 1024) // 设置接收缓冲区大小
-                .option(ChannelOption.SO_SNDBUF, 1024 * 1024) // 设置发送缓冲区大小
+                .option(ChannelOption.SO_RCVBUF, SO_RCVBUF) // 设置接收缓冲区大小
+                .option(ChannelOption.SO_SNDBUF, SO_SNDBUF) // 设置发送缓冲区大小
                 .handler(new UDPChannelInitializer());
     }
 
@@ -115,6 +134,62 @@ public class NettyClientUDP extends NettyClient {
     protected ChannelInitializer<SocketChannel> getChannelInitializer() {
         // UDP不使用SocketChannel，但为了满足父类抽象方法要求，返回null
         return null;
+    }
+    
+    /**
+     * 设置用户ID，用于发送心跳
+     * @param userId 用户ID
+     */
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+    
+    /**
+     * 启动心跳定时任务
+     */
+    public void startHeartbeat() {
+        if (userId == null || userId.isEmpty()) {
+            logger.warn("无法启动心跳，用户ID未设置");
+            return;
+        }
+        
+        if (heartbeatFuture != null && !heartbeatFuture.isCancelled()) {
+            logger.info("心跳定时任务已经在运行中");
+            return;
+        }
+        
+        logger.info("启动UDP心跳定时任务，间隔: {}秒", HEARTBEAT_INTERVAL);
+        heartbeatFuture = heartbeatScheduler.scheduleAtFixedRate(() -> {
+            if (isConnected()) {
+                try {
+                    // 发送心跳消息
+                    ChatMessage heartbeatMsg = MsgGenerator.generateHeartbeatMsg(userId);
+                    sendMessage(heartbeatMsg);
+                    logger.debug("发送UDP心跳包: {}", heartbeatMsg.getUid());
+                } catch (Exception e) {
+                    logger.error("发送UDP心跳包异常", e);
+                }
+            } else {
+                logger.warn("UDP连接已断开，无法发送心跳");
+                stopHeartbeat();
+            }
+        }, HEARTBEAT_INTERVAL, HEARTBEAT_INTERVAL, TimeUnit.SECONDS);
+    }
+    
+    /**
+     * 停止心跳定时任务
+     */
+    public void stopHeartbeat() {
+        if (heartbeatFuture != null && !heartbeatFuture.isCancelled()) {
+            heartbeatFuture.cancel(true);
+            logger.info("UDP心跳定时任务已停止");
+        }
+    }
+    
+    @Override
+    public void disconnect() {
+        stopHeartbeat();
+        super.disconnect();
     }
     
     /**

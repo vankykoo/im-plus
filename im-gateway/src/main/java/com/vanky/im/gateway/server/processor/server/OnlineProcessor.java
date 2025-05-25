@@ -1,4 +1,4 @@
-package com.vanky.im.gateway.server.processor;
+package com.vanky.im.gateway.server.processor.server;
 
 import com.vanky.im.gateway.session.UserSession;
 import io.netty.channel.Channel;

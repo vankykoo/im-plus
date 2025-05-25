@@ -2,6 +2,7 @@ package com.vanky.im.gateway.netty;
 
 import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
 import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.gateway.netty.handler.CommonHeartbeatHandler;
 import com.vanky.im.gateway.netty.websocket.WebSocketServerHandler;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
@@ -14,9 +15,18 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.vanky.im.common.protocol.ChatMessage;
+
+import java.util.concurrent.TimeUnit;
+
+import static com.vanky.im.common.constant.ChannelOptionConstant.MAX_CONTENT_LENGTH;
+import static com.vanky.im.common.constant.ChannelOptionConstant.SO_BACKLOG;
+import static com.vanky.im.common.constant.CommonConstant.WEBSOCKET_PROTOCOL;
+import static com.vanky.im.common.constant.TimeConstant.IDLE_TIME_DISABLE;
+import static com.vanky.im.common.constant.TimeConstant.SERVER_READ_IDLE_TIMEOUT;
 
 /**
  * @author vanky
@@ -39,7 +49,7 @@ public class NettyServerWebSocket extends NettyServer {
     public void init() {
         bootstrap.group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel.class)
-                .option(ChannelOption.SO_BACKLOG, 128)
+                .option(ChannelOption.SO_BACKLOG, SO_BACKLOG)
                 .childOption(ChannelOption.SO_KEEPALIVE, true)
                 .handler(new LoggingHandler(LogLevel.INFO))
                 .childHandler(getChannelInitializer());
@@ -77,9 +87,13 @@ public class NettyServerWebSocket extends NettyServer {
                 // 以块的方式来写的处理器
                 ch.pipeline().addLast(new ChunkedWriteHandler());
                 // Netty 是基于分段请求的，HttpObjectAggregator 的作用是将请求分段再聚合, 参数是聚合字节的最大长度
-                ch.pipeline().addLast(new HttpObjectAggregator(8192));
+                ch.pipeline().addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
                 // WebSocket 服务器处理的协议，用于指定给客户端连接访问的路由
                 ch.pipeline().addLast(new WebSocketServerProtocolHandler(websocketPath));
+                // 添加空闲状态处理器，设置读空闲超时时间
+                ch.pipeline().addLast(new IdleStateHandler(SERVER_READ_IDLE_TIMEOUT, IDLE_TIME_DISABLE, IDLE_TIME_DISABLE, TimeUnit.SECONDS));
+                // 添加通用心跳处理器
+                ch.pipeline().addLast(new CommonHeartbeatHandler(WEBSOCKET_PROTOCOL));
                 // 添加日志处理器
                 ch.pipeline().addLast(new LoggingHandler(LogLevel.INFO));
                 // 添加通用Protobuf编解码器

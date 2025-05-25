@@ -1,20 +1,22 @@
 package com.vanky.im.common.enums;
 
 /**
- * 客户端到客户端的消息类型
+ * 服务端到客户端的消息类型
  *
  * @author vanky
- * @date 2025/5/21
+ * @date 2025/5/25
  */
-public enum ClientToClientMessageType {
+public enum ServerToClientMessageType {
 
-    P2P_CHAT_MESSAGE("私信聊天消息", 1),
-    GROUP_CHAT_MESSAGE("群组聊天消息", 2);
+    LOGIN_RESPONSE("登录响应", 1),
+    KICKOUT_NOTIFICATION("踢人通知", 2),
+    HEARTBEAT_RESPONSE("心跳响应", 3),
+    SYSTEM_NOTIFICATION("系统通知", 4);
 
     private final String label;
     private final int value;
 
-    ClientToClientMessageType(String label, int value) {
+    ServerToClientMessageType(String label, int value) {
         this.label = label;
         this.value = value;
     }
@@ -28,7 +30,7 @@ public enum ClientToClientMessageType {
     }
 
     public static String getLabelByValue(int value) {
-        for (ClientToServerMessageType type : ClientToServerMessageType.values()) {
+        for (ServerToClientMessageType type : ServerToClientMessageType.values()) {
             if (type.getValue() == value) {
                 return type.getLabel();
             }

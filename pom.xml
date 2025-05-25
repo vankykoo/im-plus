@@ -15,6 +15,7 @@
         <module>im-client</module>
         <module>im-common</module>
         <module>im-server</module>
+        <module>im-user</module>
     </modules>
 
     <properties>

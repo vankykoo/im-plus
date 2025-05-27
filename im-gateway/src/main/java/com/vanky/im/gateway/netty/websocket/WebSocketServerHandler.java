@@ -29,6 +29,14 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<ChatMess
             System.out.println("[WebSocket] 用户[" + userId + "]已登录");
             // 发送登录成功响应（这里可以根据需求自定义响应）
             // ctx.writeAndFlush(loginResponse);
+        } else if (msg.getType() == ClientToServerMessageType.LOGOUT_REQUEST.getValue()) {
+            // 处理退出登录请求
+            String userId = msg.getFromId();
+            
+            // 处理用户退出登录
+            OnlineProcessor.getInstance().userOffline(userId);
+            
+            logger.info("[WebSocket] 用户 {} 已退出登录", userId);
         } else if (msg.getType() == ClientToServerMessageType.HEARTBEAT.getValue()) {
             // 处理心跳消息
             logger.info("[WebSocket] 处理心跳消息，来自: {}", msg.getFromId());

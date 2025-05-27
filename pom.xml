@@ -25,17 +25,18 @@
         <maven.compiler.target>17</maven.compiler.target>
 
         <!--主要依赖-->
-        <spring.boot.version>3.4.3</spring.boot.version>
-        <spring.cloud.version>2024.0.0</spring.cloud.version>
-        <spring-cloud-alibaba.version>2023.0.1.2</spring-cloud-alibaba.version>
+        <spring-boot.version>3.4.3</spring-boot.version>
+        <!--<spring.cloud.version>2021.0.8</spring.cloud.version>-->
+        <!--<spring-cloud-alibaba.version>2021.0.5.0</spring-cloud-alibaba.version>-->
 
         <!--次要依赖-->
         <nacos-client.version>2.4.3</nacos-client.version>
         <mybatis-plus.version>3.5.10.1</mybatis-plus.version>
+        <mybatis-spring.version>3.0.3</mybatis-spring.version>
         <netty.version>4.1.119.Final</netty.version>
         <mysql-connector-java.version>8.0.30</mysql-connector-java.version>
-        <redisson.version>3.26.0</redisson.version>
-        <protobuf-java.version>4.30.2</protobuf-java.version>
+        <redisson.version>3.44.0</redisson.version>
+        <protobuf-java.version>3.25.2</protobuf-java.version>
         <hutool.version>5.8.34</hutool.version>
         <lombok.version>1.18.34</lombok.version>
     </properties>
@@ -45,33 +46,39 @@
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring.boot.version}</version>
+                <version>${spring-boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
 
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring.cloud.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
+            <!--<dependency>-->
+            <!--    <groupId>org.springframework.cloud</groupId>-->
+            <!--    <artifactId>spring-cloud-dependencies</artifactId>-->
+            <!--    <version>${spring.cloud.version}</version>-->
+            <!--    <type>pom</type>-->
+            <!--    <scope>import</scope>-->
+            <!--</dependency>-->
 
             <!--spring-cloud-alibaba-dependencies-->
-            <dependency>
-                <groupId>com.alibaba.cloud</groupId>
-                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
-                <version>${spring-cloud-alibaba.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
+            <!--<dependency>-->
+            <!--    <groupId>com.alibaba.cloud</groupId>-->
+            <!--    <artifactId>spring-cloud-alibaba-dependencies</artifactId>-->
+            <!--    <version>${spring-cloud-alibaba.version}</version>-->
+            <!--    <type>pom</type>-->
+            <!--    <scope>import</scope>-->
+            <!--</dependency>-->
 
             <!--nacos-->
             <dependency>
                 <groupId>com.alibaba.nacos</groupId>
                 <artifactId>nacos-client</artifactId>
                 <version>${nacos-client.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mybatis</groupId>
+                <artifactId>mybatis-spring</artifactId>
+                <version>${mybatis-spring.version}</version>
             </dependency>
 
             <!--netty-->

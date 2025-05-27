@@ -57,6 +57,25 @@ public class MsgGenerator {
     }
 
     /**
+     * 生成退出登录消息
+     *
+     * @param userId
+     * @return
+     */
+    public static ChatMessage generateLogoutMsg(String userId) {
+        return ChatMessage.newBuilder()
+                .setType(ClientToServerMessageType.LOGOUT_REQUEST.getValue())
+                .setContent(MsgContentConstant.LOGOUT_MSG)
+                .setFromId(userId)
+                .setToId(ReceiveUserId.SYSTEM_ID)
+                .setUid(UUID.randomUUID().toString())
+                .setSeq(String.valueOf(System.currentTimeMillis()))
+                .setTimestamp(System.currentTimeMillis())
+                .setRetry(0)
+                .build();
+    }
+
+    /**
      * 生成踢人通知消息
      *
      * @param userId

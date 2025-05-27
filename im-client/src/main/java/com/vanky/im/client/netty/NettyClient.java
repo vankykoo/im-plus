@@ -1,5 +1,7 @@
 package com.vanky.im.client.netty;
 
+import com.vanky.im.common.protocol.ChatMessage;
+import com.vanky.im.common.util.MsgGenerator;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -25,6 +27,7 @@ public abstract class NettyClient {
     protected Channel channel;
     protected String host;
     protected int port;
+    protected String userId;
     
     /**
      * 构造函数，初始化事件循环组和引导类
@@ -101,6 +104,33 @@ public abstract class NettyClient {
     }
     
     /**
+     * 退出登录
+     */
+    public void logout() {
+        if (userId == null || userId.isEmpty()) {
+            logger.warn("无法退出登录，用户ID未设置");
+            return;
+        }
+        
+        if (channel == null || !channel.isActive()) {
+            logger.warn("无法发送退出消息，连接已断开");
+        } else {
+            try {
+                // 发送退出登录消息
+                ChatMessage logoutMsg = MsgGenerator.generateLogoutMsg(userId);
+                sendMessage(logoutMsg);
+                logger.info("已发送退出登录消息，用户ID: {}", userId);
+            } catch (Exception e) {
+                logger.error("发送退出登录消息失败", e);
+            }
+        }
+        
+        // 最后断开连接
+        disconnect();
+        logger.info("用户 {} 退出登录", userId);
+    }
+    
+    /**
      * 抽象方法，由子类实现，用于获取特定协议的 ChannelInitializer
      * 
      * @return ChannelInitializer<SocketChannel> Channel 初始化器
@@ -150,5 +180,23 @@ public abstract class NettyClient {
      */
     public void setPort(int port) {
         this.port = port;
+    }
+    
+    /**
+     * 获取用户ID
+     * 
+     * @return 用户ID
+     */
+    public String getUserId() {
+        return userId;
+    }
+    
+    /**
+     * 设置用户ID
+     * 
+     * @param userId 用户ID
+     */
+    public void setUserId(String userId) {
+        this.userId = userId;
     }
 }

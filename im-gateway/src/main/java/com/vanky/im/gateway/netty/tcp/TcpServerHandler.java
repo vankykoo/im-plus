@@ -41,8 +41,15 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
                 // 发送登录成功响应（这里可以根据需求自定义响应）
                 // ctx.writeAndFlush(loginResponse);
             } else if (msg.getType() == ClientToServerMessageType.LOGOUT_REQUEST.getValue()) {
-                log.info("处理登出请求消息");
-                // 登出请求处理逻辑
+                log.info("处理退出登录请求消息");
+                // 退出登录请求处理逻辑
+                String userId = msg.getFromId();
+                
+                // 处理用户退出登录
+                OnlineProcessor.getInstance().userOffline(userId);
+                
+                // 可以在这里发送退出成功的响应消息
+                log.info("用户 {} 已退出登录", userId);
             } else if (msg.getType() == ClientToServerMessageType.HEARTBEAT.getValue()) {
                 log.info("处理心跳消息，来自: {}", msg.getFromId());
                 // 心跳消息处理逻辑

@@ -20,3 +20,5 @@ im-chat的新版本
 ![[Pasted image 20250525155921.png]]
 
 ![[Pasted image 20250525155938.png]]
+
+6. 用户登录注册【5/27】

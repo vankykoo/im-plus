@@ -4,6 +4,7 @@ import com.vanky.im.user.entity.Users;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.vanky.im.user.model.request.UserLoginRequest;
 import com.vanky.im.user.model.request.UserRegisterRequest;
+import com.vanky.im.user.model.response.UserLoginResponse;
 
 /**
 * @author vanky
@@ -22,9 +23,9 @@ public interface UsersService extends IService<Users> {
     /**
      * 用户登录
      * @param request 登录请求
-     * @return 登录成功的用户信息(已脱敏)
+     * @return 登录成功的用户信息和token
      */
-    String login(UserLoginRequest request);
+    UserLoginResponse login(UserLoginRequest request);
     
     /**
      * 用户退出登录

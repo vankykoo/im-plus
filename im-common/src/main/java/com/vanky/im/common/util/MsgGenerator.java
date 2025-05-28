@@ -41,6 +41,27 @@ public class MsgGenerator {
      * 生成登录消息
      *
      * @param userId
+     * @param token 身份验证token
+     * @return
+     */
+    public static ChatMessage generateLoginMsg(String userId, String token) {
+        return ChatMessage.newBuilder()
+                .setType(ClientToServerMessageType.LOGIN_REQUEST.getValue())
+                .setContent(MsgContentConstant.LOGIN_MSG)
+                .setFromId(userId)
+                .setToId(ReceiveUserId.SYSTEM_ID)
+                .setUid(UUID.randomUUID().toString())
+                .setSeq(String.valueOf(System.currentTimeMillis()))
+                .setTimestamp(System.currentTimeMillis())
+                .setToken(token)
+                .setRetry(0)
+                .build();
+    }
+    
+    /**
+     * 生成登录消息（无token版本，兼容旧代码）
+     *
+     * @param userId
      * @return
      */
     public static ChatMessage generateLoginMsg(String userId) {

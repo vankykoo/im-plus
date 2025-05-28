@@ -3,6 +3,7 @@ package com.vanky.im.gateway.netty.websocket;
 import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
+import com.vanky.im.common.util.TokenUtil;
 import com.vanky.im.gateway.server.processor.server.OnlineProcessor;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -20,8 +21,25 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<ChatMess
         
         // 判断是否是登录请求
         if (msg.getType() == ClientToServerMessageType.LOGIN_REQUEST.getValue()) {
-            // 从消息中获取用户ID
+            // 从消息中获取用户ID和token
             String userId = msg.getFromId();
+            String token = msg.getToken();
+            
+            // 验证token
+            if (token == null || token.isEmpty()) {
+                logger.warn("[WebSocket] 用户 {} 登录失败: token为空", userId);
+                ctx.channel().close();
+                return;
+            }
+            
+            String validUserId = TokenUtil.verifyToken(token);
+            if (validUserId == null || !validUserId.equals(userId)) {
+                logger.warn("[WebSocket] 用户 {} 登录失败: token无效", userId);
+                ctx.channel().close();
+                return;
+            }
+            
+            logger.info("[WebSocket] 用户 {} token验证成功", userId);
 
             // 保存用户会话信息
             OnlineProcessor.getInstance().userOnline(userId, ctx.channel());

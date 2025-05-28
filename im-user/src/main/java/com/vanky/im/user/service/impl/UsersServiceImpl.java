@@ -1,7 +1,9 @@
 package com.vanky.im.user.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.vanky.im.common.util.TokenUtil;
 import com.vanky.im.user.entity.Users;
+import com.vanky.im.user.model.response.UserLoginResponse;
 import com.vanky.im.user.service.UsersService;
 import com.vanky.im.user.mapper.UsersMapper;
 import com.vanky.im.user.model.request.UserLoginRequest;
@@ -57,7 +59,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
     }
     
     @Override
-    public String login(UserLoginRequest request) {
+    public UserLoginResponse login(UserLoginRequest request) {
         // 根据用户ID查询用户
         Users user = this.lambdaQuery()
                 .eq(Users::getUserId, request.getUserId())
@@ -84,9 +86,11 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         user.setLastLoginTime(LocalDateTime.now());
         this.updateById(user);
         
-        // 返回用户信息（已脱敏）
-        user.setPassword(null);
-        return "success";
+        // 生成token
+        String token = TokenUtil.generateToken(user.getUserId());
+        
+        // 创建并返回用户登录响应（包含token）
+        return new UserLoginResponse(user.getUserId(), user.getUsername(), token);
     }
     
     @Override

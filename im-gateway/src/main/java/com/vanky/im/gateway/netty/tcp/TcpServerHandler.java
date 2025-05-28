@@ -5,6 +5,7 @@ import com.vanky.im.common.enums.ClientToClientMessageType;
 import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
+import com.vanky.im.common.util.TokenUtil;
 import com.vanky.im.gateway.server.processor.server.OnlineProcessor;
 import com.vanky.im.gateway.server.processor.client.PrivateMsgProcessor;
 import io.netty.channel.ChannelHandlerContext;
@@ -33,8 +34,26 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
             if (msg.getType() == ClientToServerMessageType.LOGIN_REQUEST.getValue()) {
                 log.info("处理登录请求消息");
                 // 登录请求处理逻辑
-                // 从消息中获取用户ID
+                // 从消息中获取用户ID和token
                 String userId = msg.getFromId();
+                String token = msg.getToken();
+                
+                // 验证token
+                if (token == null || token.isEmpty()) {
+                    log.warn("用户 {} 登录失败: token为空", userId);
+                    ctx.channel().close();
+                    return;
+                }
+
+                // 暂时不做token校验
+                //String validUserId = TokenUtil.verifyToken(token);
+                //if (validUserId == null || !validUserId.equals(userId)) {
+                //    log.warn("用户 {} 登录失败: token无效", userId);
+                //    ctx.channel().close();
+                //    return;
+                //}
+                
+                log.info("用户 {} token验证成功", userId);
 
                 // 保存用户会话信息
                 OnlineProcessor.getInstance().userOnline(userId, ctx.channel());

@@ -7,7 +7,11 @@ import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Scanner;
 
 import static com.vanky.im.common.constant.PortConstant.DEFAULT_TCP_PORT;
@@ -24,6 +28,8 @@ import static com.vanky.im.common.constant.UriConstant.DEFAULT_WEBSOCKET_PATH;
 public class ClientApplication {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientApplication.class);
+    private static final String USER_API_URL = "http://localhost:8090/users";
+    private static final RestTemplate restTemplate = new RestTemplate();
 
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
@@ -42,16 +48,29 @@ public class ClientApplication {
             userId = "user" + System.currentTimeMillis();
             logger.info("未输入用户ID，使用默认ID: {}", userId);
         }
+        
+        logger.info("请输入密码:");
+        String password = scanner.nextLine();
+        
+        // 登录获取token
+        String token = login(userId, password);
+        if (token == null) {
+            logger.error("登录失败，无法获取token");
+            scanner.close();
+            return;
+        }
+        
+        logger.info("登录成功，获取到token: {}", token);
 
         switch (clientType) {
             case "tcp":
-                startTcpClient(scanner, host, userId);
+                startTcpClient(scanner, host, userId, token);
                 break;
             case "udp":
-                startUdpClient(scanner, host, userId);
+                startUdpClient(scanner, host, userId, token);
                 break;
             case "websocket":
-                startWebSocketClient(scanner, host, userId);
+                startWebSocketClient(scanner, host, userId, token);
                 break;
             default:
                 logger.error("无效的客户端类型: {}", clientType);
@@ -59,8 +78,40 @@ public class ClientApplication {
         }
         scanner.close();
     }
+    
+    /**
+     * 登录获取token
+     * @param userId 用户ID
+     * @param password 密码
+     * @return token，如果登录失败返回null
+     */
+    @SuppressWarnings("unchecked")
+    private static String login(String userId, String password) {
+        try {
+            Map<String, String> request = new HashMap<>();
+            request.put("userId", userId);
+            request.put("password", password);
+            
+            // 使用通配符类型来处理泛型不匹配的问题
+            ResponseEntity<Map> response = restTemplate.postForEntity(USER_API_URL + "/login", request, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                Map<String, Object> responseBody = response.getBody();
+                if (responseBody != null && Integer.valueOf(200).equals(responseBody.get("code"))) {
+                    Map<String, String> data = (Map<String, String>) responseBody.get("data");
+                    return data.get("token");
+                }
+            }
+            
+            logger.error("登录失败: {}", response.getBody());
+            return null;
+        } catch (Exception e) {
+            logger.error("登录请求异常", e);
+            return null;
+        }
+    }
 
-    private static void startTcpClient(Scanner scanner, String host, String userId) {
+    private static void startTcpClient(Scanner scanner, String host, String userId, String token) {
         logger.info("请输入TCP服务器端口 (默认: {}):", DEFAULT_TCP_PORT);
         String portStr = scanner.nextLine();
         int port = portStr.isEmpty() ? DEFAULT_TCP_PORT : Integer.parseInt(portStr);
@@ -74,8 +125,8 @@ public class ClientApplication {
             // 设置用户ID
             tcpClient.setUserId(userId);
             
-            // 发送登录消息
-            sendLoginMessage(tcpClient, userId);
+            // 发送登录消息（带token）
+            sendLoginMessage(tcpClient, userId, token);
             
             // 启动心跳
             tcpClient.startHeartbeat();
@@ -101,7 +152,7 @@ public class ClientApplication {
         }
     }
 
-    private static void startUdpClient(Scanner scanner, String host, String userId) {
+    private static void startUdpClient(Scanner scanner, String host, String userId, String token) {
         logger.info("请输入UDP服务器端口 (默认: {}):", DEFAULT_UDP_PORT);
         String portStr = scanner.nextLine();
         int port = portStr.isEmpty() ? DEFAULT_UDP_PORT : Integer.parseInt(portStr);
@@ -115,8 +166,8 @@ public class ClientApplication {
             // 设置用户ID
             udpClient.setUserId(userId);
             
-            // 发送登录消息
-            sendLoginMessage(udpClient, userId);
+            // 发送登录消息（带token）
+            sendLoginMessage(udpClient, userId, token);
             
             // 启动心跳
             udpClient.startHeartbeat();
@@ -142,7 +193,7 @@ public class ClientApplication {
         }
     }
 
-    private static void startWebSocketClient(Scanner scanner, String host, String userId) {
+    private static void startWebSocketClient(Scanner scanner, String host, String userId, String token) {
         logger.info("请输入WebSocket服务器端口 (默认: {}):", DEFAULT_WEBSOCKET_PORT);
         String portStr = scanner.nextLine();
         int port = portStr.isEmpty() ? DEFAULT_WEBSOCKET_PORT : Integer.parseInt(portStr);
@@ -165,8 +216,8 @@ public class ClientApplication {
             // 设置用户ID
             wsClient.setUserId(userId);
             
-            // 发送登录消息
-            sendLoginMessage(wsClient, userId);
+            // 发送登录消息（带token）
+            sendLoginMessage(wsClient, userId, token);
             
             // 启动心跳
             wsClient.startHeartbeat();
@@ -196,9 +247,10 @@ public class ClientApplication {
      * 发送登录消息
      * @param client 客户端
      * @param userId 用户ID
+     * @param token 身份验证token
      */
-    private static void sendLoginMessage(Object client, String userId) {
-        ChatMessage loginMsg = MsgGenerator.generateLoginMsg(userId);
+    private static void sendLoginMessage(Object client, String userId, String token) {
+        ChatMessage loginMsg = MsgGenerator.generateLoginMsg(userId, token);
 
         // 根据客户端类型发送登录消息
         if (client instanceof NettyClientTCP) {

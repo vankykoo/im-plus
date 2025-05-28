@@ -15,4 +15,5 @@ message ChatMessage {
   string seq = 6;           // 客户端生成的消息ID
   int64 timestamp = 7;      // 时间戳
   int32 retry = 8;          // 重试次数
+  string token = 9;         // 身份验证token，用于连接验证
 } 

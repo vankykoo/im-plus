@@ -8,10 +8,10 @@ package com.vanky.im.common.enums;
  */
 public enum ServerToClientMessageType {
 
-    LOGIN_RESPONSE("登录响应", 1),
-    KICKOUT_NOTIFICATION("踢人通知", 2),
-    HEARTBEAT_RESPONSE("心跳响应", 3),
-    SYSTEM_NOTIFICATION("系统通知", 4);
+    LOGIN_RESPONSE("登录响应", 1001),
+    KICKOUT_NOTIFICATION("踢人通知", 1002),
+    HEARTBEAT_RESPONSE("心跳响应", 1003),
+    SYSTEM_NOTIFICATION("系统通知", 1004);
 
     private final String label;
     private final int value;

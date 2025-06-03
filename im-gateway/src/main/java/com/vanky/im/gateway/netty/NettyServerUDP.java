@@ -1,10 +1,11 @@
 package com.vanky.im.gateway.netty;
 
-import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
-import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageDecoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageEncoder;
 import com.vanky.im.gateway.netty.handler.CommonHeartbeatHandler;
 import com.vanky.im.gateway.netty.udp.UdpServerHandler;
 import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -18,6 +19,7 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 import com.vanky.im.common.protocol.ChatMessage;
 
 import java.util.concurrent.TimeUnit;
@@ -33,6 +35,7 @@ import static com.vanky.im.common.constant.TimeConstant.SERVER_READ_IDLE_TIMEOUT
  * @create 2025/5/13 22:41
  * @description UDP 服务端实现。
  */
+@Component
 public class NettyServerUDP extends NettyServer {
     
     private static final Logger logger = LoggerFactory.getLogger(NettyServerUDP.class);
@@ -67,21 +70,34 @@ public class NettyServerUDP extends NettyServer {
      * 启动UDP服务器
      *
      * @param port 服务器监听端口
-     * @throws InterruptedException 如果服务器启动过程中被中断
      */
     @Override
-    public void start(int port) throws InterruptedException {
-        try {
-            // 绑定端口，开始接收进来的连接
-            ChannelFuture future = udpBootstrap.bind(port).sync();
-            logger.info("UDP server started on port: {}", port);
-            
-            // 等待服务器 socket 关闭
-            future.channel().closeFuture().sync();
-        } finally {
-            // 优雅地关闭服务器
-            stop();
+    public void start(int port) {
+        if (isRunning) {
+            logger.warn("UDP server is already running on port: {}", this.port);
+            return;
         }
+        
+        this.port = port;
+        
+        new Thread(() -> {
+            try {
+                // 绑定端口，开始接收进来的连接
+                ChannelFuture future = udpBootstrap.bind(port).sync();
+                serverChannel = future.channel();
+                isRunning = true;
+                logger.info("UDP server started on port: {}", port);
+                
+                // 等待服务器 socket 关闭
+                serverChannel.closeFuture().sync();
+            } catch (InterruptedException e) {
+                logger.error("UDP server startup failed.", e);
+                Thread.currentThread().interrupt();
+            } finally {
+                // 优雅地关闭服务器
+                stop();
+            }
+        }, "UDP-Server-Thread").start();
     }
     
     /**
@@ -89,10 +105,32 @@ public class NettyServerUDP extends NettyServer {
      */
     @Override
     public void stop() {
+        if (!isRunning) {
+            return;
+        }
+        
+        isRunning = false;
+        
+        if (serverChannel != null) {
+            serverChannel.close();
+            serverChannel = null;
+        }
+        
         if (group != null) {
             group.shutdownGracefully();
         }
+        
         logger.info("UDP server stopped.");
+    }
+    
+    /**
+     * 获取服务器类型
+     * 
+     * @return 服务器类型名称
+     */
+    @Override
+    protected String getServerType() {
+        return "UDP";
     }
 
     /**

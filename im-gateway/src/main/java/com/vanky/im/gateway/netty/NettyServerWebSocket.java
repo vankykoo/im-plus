@@ -1,7 +1,7 @@
 package com.vanky.im.gateway.netty;
 
-import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
-import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageDecoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageEncoder;
 import com.vanky.im.gateway.netty.handler.CommonHeartbeatHandler;
 import com.vanky.im.gateway.netty.websocket.WebSocketServerHandler;
 import io.netty.channel.ChannelFuture;
@@ -19,6 +19,8 @@ import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.vanky.im.common.protocol.ChatMessage;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
@@ -33,13 +35,16 @@ import static com.vanky.im.common.constant.TimeConstant.SERVER_READ_IDLE_TIMEOUT
  * @create 2025/5/13 22:42
  * @description WebSocket 服务端实现，用于处理 WebSocket 连接请求。
  */
+@Component
 public class NettyServerWebSocket extends NettyServer {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyServerWebSocket.class);
-    private final String websocketPath;
+    
+    @Value("${netty.server.websocket.path:/websocket}")
+    private String websocketPath;
 
-    public NettyServerWebSocket(String websocketPath) {
-        this.websocketPath = websocketPath;
+    public NettyServerWebSocket() {
+        // Constructor is now empty as websocketPath is injected via @Value
     }
 
     /**
@@ -59,17 +64,34 @@ public class NettyServerWebSocket extends NettyServer {
      * 启动服务器
      *
      * @param port 服务器监听端口
-     * @throws InterruptedException 如果服务器启动过程中被中断
      */
     @Override
-    public void start(int port) throws InterruptedException {
-        try {
-            ChannelFuture future = bootstrap.bind(port).sync();
-            logger.info("WebSocket server started on port: {} with path: {}", port, websocketPath);
-            future.channel().closeFuture().sync();
-        } finally {
-            stop();
+    public void start(int port) {
+        if (isRunning) {
+            logger.warn("WebSocket server is already running on port: {}", this.port);
+            return;
         }
+        
+        this.port = port;
+        
+        new Thread(() -> {
+            try {
+                // 绑定端口，开始接收进来的连接
+                ChannelFuture future = bootstrap.bind(port).sync();
+                serverChannel = future.channel();
+                isRunning = true;
+                logger.info("WebSocket server started on port: {} with path: {}", port, websocketPath);
+                
+                // 等待服务器 socket 关闭
+                serverChannel.closeFuture().sync();
+            } catch (InterruptedException e) {
+                logger.error("WebSocket server startup failed.", e);
+                Thread.currentThread().interrupt();
+            } finally {
+                // 优雅地关闭服务器
+                stop();
+            }
+        }, "WebSocket-Server-Thread").start();
     }
 
     /**
@@ -89,7 +111,7 @@ public class NettyServerWebSocket extends NettyServer {
                 // Netty 是基于分段请求的，HttpObjectAggregator 的作用是将请求分段再聚合, 参数是聚合字节的最大长度
                 ch.pipeline().addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
                 // WebSocket 服务器处理的协议，用于指定给客户端连接访问的路由
-                ch.pipeline().addLast(new WebSocketServerProtocolHandler(websocketPath));
+                ch.pipeline().addLast(new WebSocketServerProtocolHandler(websocketPath, null, true));
                 // 添加空闲状态处理器，设置读空闲超时时间
                 ch.pipeline().addLast(new IdleStateHandler(SERVER_READ_IDLE_TIMEOUT, IDLE_TIME_DISABLE, IDLE_TIME_DISABLE, TimeUnit.SECONDS));
                 // 添加通用心跳处理器
@@ -103,5 +125,15 @@ public class NettyServerWebSocket extends NettyServer {
                 ch.pipeline().addLast(new WebSocketServerHandler());
             }
         };
+    }
+    
+    /**
+     * 获取服务器类型
+     * 
+     * @return 服务器类型名称
+     */
+    @Override
+    protected String getServerType() {
+        return "WebSocket";
     }
 }

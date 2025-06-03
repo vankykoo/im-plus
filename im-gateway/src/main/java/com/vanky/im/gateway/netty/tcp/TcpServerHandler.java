@@ -5,7 +5,8 @@ import com.vanky.im.common.enums.ClientToClientMessageType;
 import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
-import com.vanky.im.common.util.TokenUtil;
+import com.vanky.im.common.util.SnowflakeIdGenerator;
+import com.vanky.im.gateway.server.processor.client.GroupMsgProcessor;
 import com.vanky.im.gateway.server.processor.server.OnlineProcessor;
 import com.vanky.im.gateway.server.processor.client.PrivateMsgProcessor;
 import io.netty.channel.ChannelHandlerContext;
@@ -24,19 +25,26 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ChatMessage msg) throws Exception {
-        // 这里可以处理收到的消息
-        System.out.println("收到消息内容: " + msg.getContent() + "，完整消息: " + msg);
+        // 为接收到的消息生成全局唯一ID
+        String globalMsgId = SnowflakeIdGenerator.getInstance().nextIdString();
+        
+        // 创建新的消息对象，设置全局唯一ID
+        ChatMessage processedMsg = msg.toBuilder()
+                .setUid(globalMsgId)
+                .build();
+        
+        System.out.println("收到消息内容: " + processedMsg.getContent() + "，完整消息: " + processedMsg + "，全局消息ID: " + globalMsgId);
 
-        if (ReceiveUserId.SYSTEM_ID.equals(msg.getToId())) {
-            log.info("收到【系统】消息:  发送方ID:{}, 消息类型:{}", msg.getFromId(), ClientToServerMessageType.getLabelByValue(msg.getType()));
+        if (ReceiveUserId.SYSTEM_ID.equals(processedMsg.getToId())) {
+            log.info("收到【系统】消息:  发送方ID:{}, 消息类型:{}", processedMsg.getFromId(), ClientToServerMessageType.getLabelByValue(processedMsg.getType()));
 
             // 处理系统消息，根据消息类型进行分发
-            if (msg.getType() == ClientToServerMessageType.LOGIN_REQUEST.getValue()) {
+            if (processedMsg.getType() == ClientToServerMessageType.LOGIN_REQUEST.getValue()) {
                 log.info("处理登录请求消息");
                 // 登录请求处理逻辑
                 // 从消息中获取用户ID和token
-                String userId = msg.getFromId();
-                String token = msg.getToken();
+                String userId = processedMsg.getFromId();
+                String token = processedMsg.getToken();
                 
                 // 验证token
                 if (token == null || token.isEmpty()) {
@@ -59,30 +67,35 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
                 OnlineProcessor.getInstance().userOnline(userId, ctx.channel());
                 // 发送登录成功响应（这里可以根据需求自定义响应）
                 // ctx.writeAndFlush(loginResponse);
-            } else if (msg.getType() == ClientToServerMessageType.LOGOUT_REQUEST.getValue()) {
+            } else if (processedMsg.getType() == ClientToServerMessageType.LOGOUT_REQUEST.getValue()) {
                 log.info("处理退出登录请求消息");
                 // 退出登录请求处理逻辑
-                String userId = msg.getFromId();
+                String userId = processedMsg.getFromId();
                 
                 // 处理用户退出登录
                 OnlineProcessor.getInstance().userOffline(userId);
                 
                 // 可以在这里发送退出成功的响应消息
                 log.info("用户 {} 已退出登录", userId);
-            } else if (msg.getType() == ClientToServerMessageType.HEARTBEAT.getValue()) {
-                log.info("处理心跳消息，来自: {}", msg.getFromId());
+            } else if (processedMsg.getType() == ClientToServerMessageType.HEARTBEAT.getValue()) {
+                log.info("处理心跳消息，来自: {}", processedMsg.getFromId());
                 // 心跳消息处理逻辑
                 // 可以选择回复心跳响应包
-                ChatMessage heartbeatResponse = MsgGenerator.generateHeartbeatResponseMsg(msg.getFromId());
+                ChatMessage heartbeatResponse = MsgGenerator.generateHeartbeatResponseMsg(processedMsg.getFromId());
                 ctx.channel().writeAndFlush(heartbeatResponse);
                 log.debug("已回复心跳响应: {}", heartbeatResponse.getUid());
             } else {
-                log.warn("未知的系统消息类型: {}", msg.getType());
+                log.warn("未知的系统消息类型: {}", processedMsg.getType());
             }
         } else {
-            log.info("收到 [C2C] 消息:  from:{}, to:{}, type:{}", msg.getFromId(), msg.getToId(), ClientToClientMessageType.getLabelByValue(msg.getType()));
-            // 处理用户消息，调用相应的处理器
-            PrivateMsgProcessor.process(msg);
+            log.info("收到 [C2C] 消息:  from:{}, to:{}, type:{}", processedMsg.getFromId(), processedMsg.getToId(), ClientToClientMessageType.getLabelByValue(processedMsg.getType()));
+            if ( processedMsg.getType() == ClientToClientMessageType.P2P_CHAT_MESSAGE.getValue()) {
+                // 处理私聊消息
+                PrivateMsgProcessor.process(processedMsg);
+            } else {
+                // 处理群聊消息
+                GroupMsgProcessor.process(processedMsg);
+            }
         }
     }
 

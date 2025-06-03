@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vanky.im.server.mapper.GroupMessageMapper">
+
+    <resultMap id="BaseResultMap" type="com.vanky.im.server.entity.GroupMessage">
+            <id property="id" column="id" jdbcType="BIGINT"/>
+            <result property="msgId" column="msg_id" jdbcType="BIGINT"/>
+            <result property="conversationId" column="conversation_id" jdbcType="VARCHAR"/>
+            <result property="userId" column="user_id" jdbcType="BIGINT"/>
+            <result property="content" column="content" jdbcType="VARCHAR"/>
+            <result property="status" column="status" jdbcType="INTEGER"/>
+            <result property="sendTime" column="send_time" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,msg_id,conversation_id,
+        user_id,content,status,
+        send_time
+    </sql>
+</mapper>

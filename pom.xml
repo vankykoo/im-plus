@@ -30,6 +30,7 @@
         <!--<spring-cloud-alibaba.version>2021.0.5.0</spring-cloud-alibaba.version>-->
 
         <!--次要依赖-->
+        <rocketmq-client.version>4.9.6</rocketmq-client.version>
         <nacos-client.version>2.4.3</nacos-client.version>
         <mybatis-plus.version>3.5.10.1</mybatis-plus.version>
         <mybatis-spring.version>3.0.3</mybatis-spring.version>
@@ -67,6 +68,12 @@
             <!--    <type>pom</type>-->
             <!--    <scope>import</scope>-->
             <!--</dependency>-->
+
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-client</artifactId>
+                <version>${rocketmq-client.version}</version>
+            </dependency>
 
             <!--nacos-->
             <dependency>

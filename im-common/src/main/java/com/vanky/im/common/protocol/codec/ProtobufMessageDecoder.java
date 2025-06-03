@@ -1,4 +1,4 @@
-package com.vanky.im.common.protocal.codec;
+package com.vanky.im.common.protocol.codec;
 
 import com.google.protobuf.MessageLite;
 import com.google.protobuf.Parser;

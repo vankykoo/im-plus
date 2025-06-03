@@ -1,4 +1,4 @@
-package com.vanky.im.common.protocal.codec;
+package com.vanky.im.common.protocol.codec;
 
 import com.vanky.im.common.protocol.ChatMessage;
 import io.netty.buffer.ByteBuf;

@@ -8,9 +8,9 @@ package com.vanky.im.common.enums;
  */
 public enum ClientToServerMessageType {
 
-    LOGIN_REQUEST("登录请求", 1),
-    LOGOUT_REQUEST("登出请求", 2),
-    HEARTBEAT("心跳", 3);
+    LOGIN_REQUEST("登录请求", 2001),
+    LOGOUT_REQUEST("登出请求", 2002),
+    HEARTBEAT("心跳", 2003);
 
     private final String label;
     private final int value;

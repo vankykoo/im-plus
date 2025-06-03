@@ -1,7 +1,7 @@
 package com.vanky.im.client.netty;
 
-import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
-import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageDecoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageEncoder;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
 import io.netty.channel.ChannelFuture;

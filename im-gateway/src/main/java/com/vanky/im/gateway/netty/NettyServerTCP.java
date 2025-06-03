@@ -2,7 +2,6 @@ package com.vanky.im.gateway.netty;
 
 import com.vanky.im.gateway.netty.handler.CommonHeartbeatHandler;
 import com.vanky.im.gateway.netty.tcp.TcpServerHandler;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.socket.SocketChannel;
@@ -12,9 +11,10 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.common.protocal.codec.ProtobufMessageDecoder;
-import com.vanky.im.common.protocal.codec.ProtobufMessageEncoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageDecoder;
+import com.vanky.im.common.protocol.codec.ProtobufMessageEncoder;
 
 import java.util.concurrent.TimeUnit;
 
@@ -28,6 +28,7 @@ import static com.vanky.im.common.constant.TimeConstant.SERVER_READ_IDLE_TIMEOUT
  * @create 2025/5/13 22:38
  * @description TCP 服务端实现，用于处理 TCP 连接请求
  */
+@Component
 public class NettyServerTCP extends NettyServer {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyServerTCP.class);
@@ -48,24 +49,13 @@ public class NettyServerTCP extends NettyServer {
     }
 
     /**
-     * 启动服务器
-     *
-     * @param port 服务器监听端口
-     * @throws InterruptedException 如果服务器启动过程中被中断
+     * 获取服务器类型
+     * 
+     * @return 服务器类型名称
      */
     @Override
-    public void start(int port) throws InterruptedException {
-        try {
-            // 绑定端口，开始接收进来的连接
-            ChannelFuture future = bootstrap.bind(port).sync();
-            logger.info("TCP server started on port: {}", port);
-
-            // 等待服务器 socket 关闭
-            future.channel().closeFuture().sync();
-        } finally {
-            // 优雅地关闭服务器
-            stop();
-        }
+    protected String getServerType() {
+        return "TCP";
     }
 
     /**

@@ -1,10 +1,9 @@
 server:
-  port: 8080
-  node-id: gateway-node-1  # 服务器节点ID，在分布式环境中每个节点应不同
+  port: 8082
 
 spring:
   application:
-    name: im-gateway
+    name: im-server
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -50,30 +49,26 @@ spring:
           # 连接池中的最小空闲连接
           min-idle: 5
 
-# Netty 服务器配置
-netty:
-  server:
-    # TCP 服务器配置
-    tcp:
-      enabled: true
-      port: 8900
-    # UDP 服务器配置
-    udp:
-      enabled: true
-      port: 8901
-    # WebSocket 服务器配置
-    websocket:
-      enabled: true
-      port: 8902
-      path: /websocket
+# MyBatis Plus配置
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.vanky.im.server.entity
 
+# RocketMQ配置
 rocketmq:
   name-server: 192.168.200.137:9876
-  producer:
-    group: im-gateway-producer-group
-    send-message-timeout: 3000
-    compress-message-body-threshold: 4096
-    max-message-size: 4194304
-    retry-times-when-send-failed: 2
-    retry-times-when-send-async-failed: 2
-    retry-next-server: true
+  consumer:
+    group: im-server-consumer-group
+    consume-thread-min: 20
+    consume-thread-max: 64
+
+# 日志配置
+logging:
+  level:
+    com.vanky.im.server: DEBUG
+    org.apache.rocketmq: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{50} - %msg%n"

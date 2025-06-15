@@ -43,7 +43,7 @@ public class UserConversationList {
     /**
      * 加入时间
      */
-    @TableField(value = "join_time")
+    @TableField(value = "create_time")
     private Date createTime;
 
     /**

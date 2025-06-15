@@ -3,6 +3,7 @@ package com.vanky.im.gateway;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.ComponentScan;
 
 /**
  * @author vanky
@@ -14,6 +15,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * 它实现了 ApplicationRunner 接口，在 Spring Boot 应用启动完成后初始化并启动 Netty 服务器。
  */
 @SpringBootApplication
+@ComponentScan(basePackages = {"com.vanky.im.gateway", "com.vanky.im.common"})
 @MapperScan("com.vanky.im.gateway.mapper")
 public class ImGatewayApplication {
 

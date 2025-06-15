@@ -172,4 +172,43 @@ public class MsgGenerator {
                 .build();
     }
 
+    /**
+     * 生成消息投递成功响应
+     * @param userId 用户ID
+     * @param originalMsgId 原始消息ID
+     * @return 投递成功响应消息
+     */
+    public static ChatMessage generateMessageDeliverySuccessMsg(String userId, String originalMsgId) {
+        return ChatMessage.newBuilder()
+                .setType(ServerToClientMessageType.MESSAGE_DELIVERY_SUCCESS.getValue())
+                .setContent("消息投递成功，原始消息ID: " + originalMsgId)
+                .setFromId(ReceiveUserId.SYSTEM_ID)
+                .setToId(userId)
+                .setUid(UUID.randomUUID().toString())
+                .setTimestamp(System.currentTimeMillis())
+                .setSeq(originalMsgId)
+                .setRetry(0)
+                .build();
+    }
+
+    /**
+     * 生成消息投递失败响应
+     * @param userId 用户ID
+     * @param originalMsgId 原始消息ID
+     * @param errorMsg 错误信息
+     * @return 投递失败响应消息
+     */
+    public static ChatMessage generateMessageDeliveryFailedMsg(String userId, String originalMsgId, String errorMsg) {
+        return ChatMessage.newBuilder()
+                .setType(ServerToClientMessageType.MESSAGE_DELIVERY_FAILED.getValue())
+                .setContent("消息投递失败: " + errorMsg + "，原始消息ID: " + originalMsgId)
+                .setFromId(ReceiveUserId.SYSTEM_ID)
+                .setToId(userId)
+                .setUid(UUID.randomUUID().toString())
+                .setTimestamp(System.currentTimeMillis())
+                .setSeq(originalMsgId)
+                .setRetry(0)
+                .build();
+    }
+
 }

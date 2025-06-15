@@ -2,17 +2,23 @@ package com.vanky.im.gateway.session;
 
 import io.netty.channel.Channel;
 
+import java.io.Serializable;
+
 /**
  * @author vanky
  * @create 2025/5/22 21:43
  * @description 用户会话信息
  */
-public class UserSession {
+public class UserSession implements Serializable {
 
+    private static final long serialVersionUID = 1L;
+    
     private String userId;
     private String host;
     private int port;
-    private Channel channel;
+    private String nodeId; // 服务节点标识
+    // Channel不能序列化，因此不会存储在Redis中
+    private transient Channel channel;
 
     public UserSession() {
     }
@@ -21,6 +27,14 @@ public class UserSession {
         this.userId = userId;
         this.host = host;
         this.port = port;
+        this.channel = channel;
+    }
+
+    public UserSession(String userId, String host, int port, String nodeId, Channel channel) {
+        this.userId = userId;
+        this.host = host;
+        this.port = port;
+        this.nodeId = nodeId;
         this.channel = channel;
     }
 
@@ -54,5 +68,13 @@ public class UserSession {
 
     public void setChannel(Channel channel) {
         this.channel = channel;
+    }
+    
+    public String getNodeId() {
+        return nodeId;
+    }
+    
+    public void setNodeId(String nodeId) {
+        this.nodeId = nodeId;
     }
 }

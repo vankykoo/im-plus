@@ -18,7 +18,7 @@ public class IMLoadTester {
     
     public static void main(String[] args) throws InterruptedException {
         String host = "localhost";
-        int port = 8080; // TCP端口
+        int port = 8900; // TCP端口
         
         CountDownLatch latch = new CountDownLatch(USER_COUNT);
         

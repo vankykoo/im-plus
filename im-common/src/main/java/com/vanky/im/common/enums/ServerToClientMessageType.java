@@ -11,7 +11,9 @@ public enum ServerToClientMessageType {
     LOGIN_RESPONSE("登录响应", 1001),
     KICKOUT_NOTIFICATION("踢人通知", 1002),
     HEARTBEAT_RESPONSE("心跳响应", 1003),
-    SYSTEM_NOTIFICATION("系统通知", 1004);
+    SYSTEM_NOTIFICATION("系统通知", 1004),
+    MESSAGE_DELIVERY_SUCCESS("消息投递成功", 1005),
+    MESSAGE_DELIVERY_FAILED("消息投递失败", 1006);
 
     private final String label;
     private final int value;
@@ -37,4 +39,4 @@ public enum ServerToClientMessageType {
         }
         return null;
     }
-} 
+}

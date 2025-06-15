@@ -10,16 +10,16 @@ public interface PortConstant {
     /**
      * TCP服务器默认端口
      */
-    int DEFAULT_TCP_PORT = 8080;
+    int DEFAULT_TCP_PORT = 8900;
     
     /**
      * UDP服务器默认端口
      */
-    int DEFAULT_UDP_PORT = 8081;
+    int DEFAULT_UDP_PORT = 8901;
     
     /**
      * WebSocket服务器默认端口
      */
-    int DEFAULT_WEBSOCKET_PORT = 8082;
+    int DEFAULT_WEBSOCKET_PORT = 8902;
     
-} 
+}

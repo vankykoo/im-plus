@@ -11,6 +11,7 @@ import com.vanky.im.gateway.session.MsgSender;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import io.netty.channel.Channel;
 
 import java.util.Date;
 
@@ -43,13 +44,17 @@ public class PrivateMsgProcessor {
     }
 
     public static void process(ChatMessage msg) {
+        process(msg, null);
+    }
+    
+    public static void process(ChatMessage msg, Channel senderChannel) {
         try {
             // 检查并创建会话
             String conversationId = checkAndCreateConversation(msg.getFromId(), msg.getToId());
             log.info("私聊消息处理 - 发送方: {}, 接收方: {}, 会话ID: {}", msg.getFromId(), msg.getToId(), conversationId);
             
-            // 将消息投递到消息队列
-            messageQueueService.sendMessage(conversationId, msg);
+            // 将消息投递到消息队列，并传递发送方Channel用于响应投递结果
+            messageQueueService.sendMessage(conversationId, msg, senderChannel);
             log.info("消息已投递到消息队列 - 会话ID: {}, 消息ID: {}", conversationId, msg.getUid());
             
             // 发送消息给接收方

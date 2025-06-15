@@ -90,11 +90,11 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
         } else {
             log.info("收到 [C2C] 消息:  from:{}, to:{}, type:{}", processedMsg.getFromId(), processedMsg.getToId(), ClientToClientMessageType.getLabelByValue(processedMsg.getType()));
             if ( processedMsg.getType() == ClientToClientMessageType.P2P_CHAT_MESSAGE.getValue()) {
-                // 处理私聊消息
-                PrivateMsgProcessor.process(processedMsg);
+                // 处理私聊消息，传递发送方Channel用于响应投递结果
+                PrivateMsgProcessor.process(processedMsg, ctx.channel());
             } else {
-                // 处理群聊消息
-                GroupMsgProcessor.process(processedMsg);
+                // 处理群聊消息，传递发送方Channel用于响应投递结果
+                GroupMsgProcessor.process(processedMsg, ctx.channel());
             }
         }
     }

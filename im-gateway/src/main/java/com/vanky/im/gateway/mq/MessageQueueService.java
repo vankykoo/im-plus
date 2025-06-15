@@ -1,6 +1,7 @@
 package com.vanky.im.gateway.mq;
 
 import com.vanky.im.common.protocol.ChatMessage;
+import com.vanky.im.common.util.MsgGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendCallback;
@@ -8,6 +9,7 @@ import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.message.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import io.netty.channel.Channel;
 
 /**
  * @author vanky
@@ -39,6 +41,16 @@ public class MessageQueueService {
      * @param chatMessage 聊天消息
      */
     public void sendMessage(String conversationId, ChatMessage chatMessage) {
+        sendMessage(conversationId, chatMessage, null);
+    }
+    
+    /**
+     * 发送消息到消息队列，并向发送方响应投递结果
+     * @param conversationId 会话ID，作为消息Key
+     * @param chatMessage 聊天消息
+     * @param senderChannel 发送方的Channel，用于响应投递结果
+     */
+    public void sendMessage(String conversationId, ChatMessage chatMessage, Channel senderChannel) {
         try {
             // 将ChatMessage转换为字节数组
             byte[] messageBody = chatMessage.toByteArray();
@@ -55,18 +67,45 @@ public class MessageQueueService {
                 public void onSuccess(SendResult sendResult) {
                     log.info("消息发送成功 - 会话ID: {}, 消息ID: {}, 发送结果: {}", 
                             conversationId, chatMessage.getUid(), sendResult);
+                    
+                    // 向发送方响应投递成功
+                    if (senderChannel != null && senderChannel.isActive()) {
+                        ChatMessage successResponse = MsgGenerator.generateMessageDeliverySuccessMsg(
+                                chatMessage.getFromId(), chatMessage.getUid());
+                        senderChannel.writeAndFlush(successResponse);
+                        log.debug("已向发送方响应投递成功 - 用户: {}, 原始消息ID: {}", 
+                                chatMessage.getFromId(), chatMessage.getUid());
+                    }
                 }
 
                 @Override
                 public void onException(Throwable e) {
                     log.error("消息发送失败 - 会话ID: {}, 消息ID: {}, 错误: {}", 
                             conversationId, chatMessage.getUid(), e.getMessage(), e);
+                    
+                    // 向发送方响应投递失败
+                    if (senderChannel != null && senderChannel.isActive()) {
+                        ChatMessage failedResponse = MsgGenerator.generateMessageDeliveryFailedMsg(
+                                chatMessage.getFromId(), chatMessage.getUid(), e.getMessage());
+                        senderChannel.writeAndFlush(failedResponse);
+                        log.debug("已向发送方响应投递失败 - 用户: {}, 原始消息ID: {}, 错误: {}", 
+                                chatMessage.getFromId(), chatMessage.getUid(), e.getMessage());
+                    }
                 }
             });
             
         } catch (Exception e) {
             log.error("发送消息到RocketMQ时发生错误 - 会话ID: {}, 消息ID: {}, 错误: {}", 
                     conversationId, chatMessage.getUid(), e.getMessage(), e);
+            
+            // 向发送方响应投递失败
+            if (senderChannel != null && senderChannel.isActive()) {
+                ChatMessage failedResponse = MsgGenerator.generateMessageDeliveryFailedMsg(
+                        chatMessage.getFromId(), chatMessage.getUid(), e.getMessage());
+                senderChannel.writeAndFlush(failedResponse);
+                log.debug("已向发送方响应投递失败 - 用户: {}, 原始消息ID: {}, 错误: {}", 
+                        chatMessage.getFromId(), chatMessage.getUid(), e.getMessage());
+            }
         }
     }
 }

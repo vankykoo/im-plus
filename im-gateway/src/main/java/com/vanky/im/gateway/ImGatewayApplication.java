@@ -1,6 +1,5 @@
 package com.vanky.im.gateway;
 
-import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
@@ -16,7 +15,6 @@ import org.springframework.context.annotation.ComponentScan;
  */
 @SpringBootApplication
 @ComponentScan(basePackages = {"com.vanky.im.gateway", "com.vanky.im.common"})
-@MapperScan("com.vanky.im.gateway.mapper")
 public class ImGatewayApplication {
 
     public static void main(String[] args) {

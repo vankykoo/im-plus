@@ -19,6 +19,7 @@ import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.vanky.im.common.protocol.ChatMessage;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -42,6 +43,9 @@ public class NettyServerWebSocket extends NettyServer {
     
     @Value("${netty.server.websocket.path:/websocket}")
     private String websocketPath;
+    
+    @Autowired
+    private WebSocketServerHandler webSocketServerHandler;
 
     public NettyServerWebSocket() {
         // Constructor is now empty as websocketPath is injected via @Value
@@ -104,6 +108,8 @@ public class NettyServerWebSocket extends NettyServer {
         return new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) throws Exception {
+                // 添加日志处理器（放在最前面，记录所有事件）
+                ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG));
                 // WebSocket 协议本身是基于 http 协议的，所以这边也要使用 http 解编码器
                 ch.pipeline().addLast(new HttpServerCodec());
                 // 以块的方式来写的处理器
@@ -116,13 +122,8 @@ public class NettyServerWebSocket extends NettyServer {
                 ch.pipeline().addLast(new IdleStateHandler(SERVER_READ_IDLE_TIMEOUT, IDLE_TIME_DISABLE, IDLE_TIME_DISABLE, TimeUnit.SECONDS));
                 // 添加通用心跳处理器
                 ch.pipeline().addLast(new CommonHeartbeatHandler(WEBSOCKET_PROTOCOL));
-                // 添加日志处理器
-                ch.pipeline().addLast(new LoggingHandler(LogLevel.INFO));
-                // 添加通用Protobuf编解码器
-                ch.pipeline().addLast(new ProtobufMessageDecoder<>(ChatMessage.parser()));
-                ch.pipeline().addLast(new ProtobufMessageEncoder());
-                // 添加WebSocket业务处理器
-                ch.pipeline().addLast(new WebSocketServerHandler());
+                // WebSocket处理器直接处理BinaryWebSocketFrame，不再需要通用Protobuf编解码器 - 使用Spring管理的实例
+                ch.pipeline().addLast(webSocketServerHandler);
             }
         };
     }

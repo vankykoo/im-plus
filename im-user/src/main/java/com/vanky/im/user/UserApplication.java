@@ -10,11 +10,11 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * @date 2025/5/25
  * @description 用户服务启动类
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.vanky.im.user", "com.vanky.im.common"})
 @EnableTransactionManagement
 @MapperScan("com.vanky.im.user.mapper")
 public class UserApplication {
     public static void main(String[] args) {
         SpringApplication.run(UserApplication.class, args);
     }
-} 
+}

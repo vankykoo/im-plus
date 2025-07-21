@@ -1,5 +1,6 @@
 package com.vanky.im.gateway.util;
 
+import com.vanky.im.common.constant.TopicConstants;
 import org.apache.rocketmq.tools.admin.DefaultMQAdminExt;
 import org.apache.rocketmq.common.protocol.body.TopicList;
 
@@ -16,11 +17,15 @@ import java.util.List;
  */
 public class RocketMQTopicCreator {
     // NameServer地址（请根据实际情况修改）
-    private static final String NAMESRV_ADDR = "192.168.200.137:9876";
+    private static final String NAMESRV_ADDR = "localhost:9876";
     // 需要创建的Topic列表
     private static final List<String> TOPICS = Arrays.asList(
             "conversation_im_topic",
-            "user_im_topic"
+            "user_im_topic",
+            TopicConstants.TOPIC_MESSAGE_P2P,
+            TopicConstants.TOPIC_MESSAGE_GROUP,
+            TopicConstants.TOPIC_CONVERSATION_MESSAGE,
+            TopicConstants.TOPIC_PUSH_TO_GATEWAY
     );
 
     public static void main(String[] args) throws Exception {
@@ -50,17 +55,18 @@ public class RocketMQTopicCreator {
     /**
      * 列出当前NameServer下所有Topic
      */
-    public static void listTopics() throws Exception {
+    private static void listTopics() throws Exception {
         DefaultMQAdminExt admin = new DefaultMQAdminExt();
         admin.setNamesrvAddr(NAMESRV_ADDR);
         admin.setInstanceName("topicListInstance");
         try {
             admin.start();
             TopicList topicList = admin.fetchAllTopicList();
-            System.out.println("[RocketMQ Topics]");
+            System.out.println("===== Available Topics =====");
             for (String topic : topicList.getTopicList()) {
-                System.out.println("- " + topic);
+                System.out.println(topic);
             }
+            System.out.println("===========================");
         } finally {
             admin.shutdown();
         }

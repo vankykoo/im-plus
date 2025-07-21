@@ -1,31 +1,40 @@
 package com.vanky.im.common.util;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Component;
+
+import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author vanky
  * @date 2025/5/28
  * @description Token工具类，用于生成和验证token
  */
+@Component
 public class TokenUtil {
 
-    // token有效期，默认24小时（单位：毫秒）
-    private static final long TOKEN_EXPIRE_TIME = 24 * 60 * 60 * 1000;
+    // token有效期，默认24小时（单位：秒）
+    private static final long TOKEN_EXPIRE_TIME = 24 * 60 * 60;
     
-    // 存储token和用户ID的映射，用于验证token
-    private static final ConcurrentHashMap<String, TokenInfo> TOKEN_MAP = new ConcurrentHashMap<>();
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    // Redis中token的key前缀
+    private static final String TOKEN_PREFIX = "token:";
     
     /**
      * 生成token
      * @param userId 用户ID
      * @return token
      */
-    public static String generateToken(String userId) {
+    public String generateToken(String userId) {
         // 生成随机的UUID作为基础
         String base = UUID.randomUUID().toString();
         // 添加时间戳增加随机性
@@ -39,9 +48,9 @@ public class TokenUtil {
             // 将hash转为Base64编码作为token
             String token = Base64.getUrlEncoder().withoutPadding().encodeToString(hashBytes);
             
-            // 存储token信息
+            // 存储token信息到Redis
             TokenInfo tokenInfo = new TokenInfo(userId, System.currentTimeMillis());
-            TOKEN_MAP.put(token, tokenInfo);
+            redisTemplate.opsForValue().set(TOKEN_PREFIX + token, tokenInfo, TOKEN_EXPIRE_TIME, TimeUnit.SECONDS);
             
             return token;
         } catch (NoSuchAlgorithmException e) {
@@ -54,16 +63,9 @@ public class TokenUtil {
      * @param token token
      * @return 如果有效返回用户ID，否则返回null
      */
-    public static String verifyToken(String token) {
-        TokenInfo tokenInfo = TOKEN_MAP.get(token);
+    public String verifyToken(String token) {
+        TokenInfo tokenInfo = (TokenInfo) redisTemplate.opsForValue().get(TOKEN_PREFIX + token);
         if (tokenInfo == null) {
-            return null;
-        }
-        
-        // 检查token是否过期
-        if (System.currentTimeMillis() - tokenInfo.getCreateTime() > TOKEN_EXPIRE_TIME) {
-            // token过期，移除
-            TOKEN_MAP.remove(token);
             return null;
         }
         
@@ -74,24 +76,21 @@ public class TokenUtil {
      * 移除token
      * @param token token
      */
-    public static void removeToken(String token) {
-        TOKEN_MAP.remove(token);
-    }
-    
-    /**
-     * 清除所有过期的token
-     */
-    public static void cleanExpiredTokens() {
-        long now = System.currentTimeMillis();
-        TOKEN_MAP.entrySet().removeIf(entry -> (now - entry.getValue().getCreateTime() > TOKEN_EXPIRE_TIME));
+    public void removeToken(String token) {
+        redisTemplate.delete(TOKEN_PREFIX + token);
     }
     
     /**
      * Token信息类
      */
-    private static class TokenInfo {
+    public static class TokenInfo implements Serializable {
+        private static final long serialVersionUID = 1L;
+        
         private String userId;
         private long createTime;
+        
+        public TokenInfo() {
+        }
         
         public TokenInfo(String userId, long createTime) {
             this.userId = userId;
@@ -102,8 +101,16 @@ public class TokenUtil {
             return userId;
         }
         
+        public void setUserId(String userId) {
+            this.userId = userId;
+        }
+        
         public long getCreateTime() {
             return createTime;
         }
+        
+        public void setCreateTime(long createTime) {
+            this.createTime = createTime;
+        }
     }
-} 
+}

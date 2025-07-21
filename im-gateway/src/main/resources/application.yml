@@ -67,8 +67,9 @@ netty:
       port: 8902
       path: /websocket
 
+# RocketMQ配置
 rocketmq:
-  name-server: 192.168.200.137:9876
+  name-server: localhost:9876
   producer:
     group: im-gateway-producer-group
     send-message-timeout: 3000
@@ -77,3 +78,16 @@ rocketmq:
     retry-times-when-send-failed: 2
     retry-times-when-send-async-failed: 2
     retry-next-server: true
+  # 推送消息消费者配置
+  push-consumer:
+    group: im-gateway-push-consumer-group
+    consume-thread-min: 5
+    consume-thread-max: 20
+    consume-message-batch-max-size: 1
+    consume-timeout: 15000
+    max-reconsume-times: 3
+
+# 消息配置
+message:
+  push:
+    topic: TOPIC_PUSH_TO_GATEWAY

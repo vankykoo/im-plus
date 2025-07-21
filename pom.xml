@@ -12,10 +12,10 @@
 
     <modules>
         <module>im-gateway</module>
-        <module>im-client</module>
         <module>im-common</module>
-        <module>im-server</module>
         <module>im-user</module>
+        <module>im-message-server</module>
+        <module>im-client</module>
     </modules>
 
     <properties>

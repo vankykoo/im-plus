@@ -11,6 +11,7 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.timeout.IdleStateHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.protocol.codec.ProtobufMessageDecoder;
@@ -32,6 +33,9 @@ import static com.vanky.im.common.constant.TimeConstant.SERVER_READ_IDLE_TIMEOUT
 public class NettyServerTCP extends NettyServer {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyServerTCP.class);
+    
+    @Autowired
+    private TcpServerHandler tcpServerHandler;
 
     /**
      * 初始化服务器配置
@@ -68,17 +72,17 @@ public class NettyServerTCP extends NettyServer {
         return new ChannelInitializer<SocketChannel>() {
             @Override
             protected void initChannel(SocketChannel ch) throws Exception {
+                // 添加日志处理器（放在最前面，记录所有事件）
+                ch.pipeline().addLast(new LoggingHandler(LogLevel.DEBUG));
                 // 添加空闲状态处理器，设置读空闲超时时间
                 ch.pipeline().addLast(new IdleStateHandler(SERVER_READ_IDLE_TIMEOUT, IDLE_TIME_DISABLE, IDLE_TIME_DISABLE, TimeUnit.SECONDS));
                 // 添加通用心跳处理器
                 ch.pipeline().addLast(new CommonHeartbeatHandler(TCP_PROTOCOL));
-                // 添加日志处理器
-                ch.pipeline().addLast(new LoggingHandler(LogLevel.INFO));
                 // 添加通用Protobuf编解码器
                 ch.pipeline().addLast(new ProtobufMessageDecoder<>(ChatMessage.parser()));
                 ch.pipeline().addLast(new ProtobufMessageEncoder());
-                // 添加业务处理器
-                ch.pipeline().addLast(new TcpServerHandler());
+                // 添加业务处理器 - 使用Spring管理的实例
+                ch.pipeline().addLast(tcpServerHandler);
             }
         };
     }

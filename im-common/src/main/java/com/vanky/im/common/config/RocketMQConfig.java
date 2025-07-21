@@ -54,4 +54,17 @@ public class RocketMQConfig {
         producer.start();
         return producer;
     }
+
+    /**
+     * 网关推送消息生产者
+     */
+    @Bean(name = "gatewayPushProducer")
+    public DefaultMQProducer gatewayPushProducer() throws MQClientException {
+        DefaultMQProducer producer = new DefaultMQProducer("gateway-push-producer-group");
+        producer.setNamesrvAddr(nameServer);
+        producer.setSendMsgTimeout(sendMessageTimeout);
+        producer.setRetryTimesWhenSendFailed(retryTimesWhenSendFailed);
+        producer.start();
+        return producer;
+    }
 }

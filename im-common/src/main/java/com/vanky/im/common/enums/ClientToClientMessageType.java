@@ -8,7 +8,7 @@ package com.vanky.im.common.enums;
  */
 public enum ClientToClientMessageType {
 
-    P2P_CHAT_MESSAGE("私信聊天消息", 3001),
+    PRIVATE_CHAT_MESSAGE("私信聊天消息", 3001),
     GROUP_CHAT_MESSAGE("群组聊天消息", 3002);
 
     private final String label;

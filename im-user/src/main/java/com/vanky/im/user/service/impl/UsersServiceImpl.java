@@ -8,6 +8,7 @@ import com.vanky.im.user.service.UsersService;
 import com.vanky.im.user.mapper.UsersMapper;
 import com.vanky.im.user.model.request.UserLoginRequest;
 import com.vanky.im.user.model.request.UserRegisterRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.DigestUtils;
@@ -22,6 +23,9 @@ import java.time.LocalDateTime;
 */
 @Service
 public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements UsersService{
+
+    @Autowired
+    private TokenUtil tokenUtil;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -87,7 +91,7 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
         this.updateById(user);
         
         // 生成token
-        String token = TokenUtil.generateToken(user.getUserId());
+        String token = tokenUtil.generateToken(user.getUserId());
         
         // 创建并返回用户登录响应（包含token）
         return new UserLoginResponse(user.getUserId(), user.getUsername(), token);

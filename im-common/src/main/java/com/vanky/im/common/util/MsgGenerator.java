@@ -26,7 +26,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generatePrivateMsg(String fromUserId, String toUserId, String content) {
         return ChatMessage.newBuilder()
-                .setType(ClientToClientMessageType.P2P_CHAT_MESSAGE.getValue())
+                .setType(ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue())
                 .setContent(content)
                 .setFromId(fromUserId)
                 .setToId(toUserId)

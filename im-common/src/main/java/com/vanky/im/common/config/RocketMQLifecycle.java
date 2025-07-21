@@ -3,6 +3,7 @@ package com.vanky.im.common.config;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.stereotype.Component;
@@ -19,7 +20,7 @@ public class RocketMQLifecycle implements ApplicationListener<ContextClosedEvent
     private final DefaultMQProducer producer;
 
     @Autowired
-    public RocketMQLifecycle(DefaultMQProducer producer) {
+    public RocketMQLifecycle(@Qualifier("defaultMQProducer") DefaultMQProducer producer) {
         this.producer = producer;
     }
 

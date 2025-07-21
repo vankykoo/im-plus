@@ -4,6 +4,7 @@ import com.vanky.im.gateway.config.NettyServerConfig;
 import com.vanky.im.gateway.netty.NettyServerTCP;
 import com.vanky.im.gateway.netty.NettyServerUDP;
 import com.vanky.im.gateway.netty.NettyServerWebSocket;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,11 +26,10 @@ public class NettyServerRunner implements ApplicationRunner {
     private final NettyServerTCP tcpServer;
     private final NettyServerUDP udpServer;
     private final NettyServerWebSocket webSocketServer;
-
     @Autowired
-    public NettyServerRunner(NettyServerConfig serverConfig, 
-                            NettyServerTCP tcpServer, 
-                            NettyServerUDP udpServer, 
+    public NettyServerRunner(NettyServerConfig serverConfig,
+                            NettyServerTCP tcpServer,
+                            NettyServerUDP udpServer,
                             NettyServerWebSocket webSocketServer) {
         this.serverConfig = serverConfig;
         this.tcpServer = tcpServer;
@@ -45,7 +45,12 @@ public class NettyServerRunner implements ApplicationRunner {
         if (serverConfig.getTcp().isEnabled()) {
             int tcpPort = serverConfig.getTcp().getPort();
             logger.info("Starting TCP server on port: {}", tcpPort);
-            tcpServer.start(tcpPort);
+            try {
+                tcpServer.start(tcpPort);
+                logger.info("TCP server startup initiated successfully");
+            } catch (Exception e) {
+                logger.error("Failed to start TCP server on port: {}", tcpPort, e);
+            }
         } else {
             logger.info("TCP server is disabled");
         }
@@ -62,9 +67,14 @@ public class NettyServerRunner implements ApplicationRunner {
         // 启动 WebSocket 服务器
         if (serverConfig.getWebsocket().isEnabled()) {
             int wsPort = serverConfig.getWebsocket().getPort();
-            logger.info("Starting WebSocket server on port: {} with path: {}", 
+            logger.info("Starting WebSocket server on port: {} with path: {}",
                     wsPort, serverConfig.getWebsocket().getPath());
-            webSocketServer.start(wsPort);
+            try {
+                webSocketServer.start(wsPort);
+                logger.info("WebSocket server startup initiated successfully");
+            } catch (Exception e) {
+                logger.error("Failed to start WebSocket server on port: {}", wsPort, e);
+            }
         } else {
             logger.info("WebSocket server is disabled");
         }

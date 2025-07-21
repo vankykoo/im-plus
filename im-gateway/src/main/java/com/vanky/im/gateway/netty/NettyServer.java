@@ -35,10 +35,13 @@ public abstract class NettyServer {
      */
     public NettyServer() {
         // 负责处理客户端连接请求的线程组
-        this.bossGroup = new NioEventLoopGroup(1); // 通常设置为1，因为BossGroup只负责accept事件
+        this.bossGroup = new NioEventLoopGroup(1); // BossGroup通常设置为1
         // 负责处理网络IO操作的线程组
         this.workerGroup = new NioEventLoopGroup(); // 默认线程数是 CPU核心数 * 2
         this.bootstrap = new ServerBootstrap();
+
+        logger.info("创建NettyServer实例 - BossGroup线程数: 1, WorkerGroup线程数: {}",
+                Runtime.getRuntime().availableProcessors() * 2);
     }
 
     /**
@@ -57,22 +60,57 @@ public abstract class NettyServer {
             logger.warn("Server is already running on port: {}", this.port);
             return;
         }
-        
+
+        // 检查端口是否可用
+        if (!isPortAvailable(port)) {
+            logger.error("{} server cannot start: port {} is already in use", getServerType(), port);
+            return;
+        }
+
         this.port = port;
         
         new Thread(() -> {
             try {
                 // 绑定端口，开始接收进来的连接
-                ChannelFuture future = bootstrap.bind(port).sync();
-                serverChannel = future.channel();
-                isRunning = true;
-                logger.info("{} server started on port: {}", getServerType(), port);
-                
+                logger.info("正在启动 {} 服务器，绑定端口: {}", getServerType(), port);
+                ChannelFuture future = bootstrap.bind(port);
+
+                // 添加连接监听器
+                future.addListener(bindFuture -> {
+                    if (bindFuture.isSuccess()) {
+                        logger.info("{} server bind successful on port: {}", getServerType(), port);
+                    } else {
+                        logger.error("{} server bind failed on port: {}", getServerType(), port, bindFuture.cause());
+                    }
+                });
+
+                future.sync();
+
+                if (future.isSuccess()) {
+                    serverChannel = future.channel();
+                    isRunning = true;
+                    logger.info("{} server started successfully on port: {}", getServerType(), port);
+
+                    // 添加服务器Channel的监听器
+                    serverChannel.pipeline().addFirst(new io.netty.channel.ChannelInboundHandlerAdapter() {
+                        @Override
+                        public void channelRead(io.netty.channel.ChannelHandlerContext ctx, Object msg) throws Exception {
+                            logger.info("{} server接受新连接: {}", getServerType(), msg);
+                            super.channelRead(ctx, msg);
+                        }
+                    });
+                } else {
+                    logger.error("{} server failed to bind port: {}, cause: {}", getServerType(), port, future.cause());
+                    return;
+                }
+
                 // 等待服务器 socket 关闭
                 serverChannel.closeFuture().sync();
             } catch (InterruptedException e) {
-                logger.error("{} server startup failed.", getServerType(), e);
+                logger.error("{} server startup interrupted.", getServerType(), e);
                 Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                logger.error("{} server startup failed with exception.", getServerType(), e);
             } finally {
                 // 优雅地关闭服务器
                 stop();
@@ -135,6 +173,21 @@ public abstract class NettyServer {
      */
     public int getPort() {
         return port;
+    }
+
+    /**
+     * 检查端口是否可用
+     * @param port 端口号
+     * @return 如果端口可用返回true
+     */
+    private boolean isPortAvailable(int port) {
+        try (java.net.ServerSocket serverSocket = new java.net.ServerSocket(port)) {
+            serverSocket.setReuseAddress(true);
+            return true;
+        } catch (java.io.IOException e) {
+            logger.warn("Port {} is not available: {}", port, e.getMessage());
+            return false;
+        }
     }
 
 

@@ -17,7 +17,7 @@ import java.util.List;
  */
 public class RocketMQTopicCreator {
     // NameServer地址（请根据实际情况修改）
-    private static final String NAMESRV_ADDR = "localhost:9876";
+    private static final String NAMESRV_ADDR = "192.168.200.137:9876";
     // 需要创建的Topic列表
     private static final List<String> TOPICS = Arrays.asList(
             "conversation_im_topic",

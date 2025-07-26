@@ -1,5 +1,7 @@
 package com.vanky.im.message.service;
 
+import com.vanky.im.common.model.UserSession;
+
 import java.util.List;
 import java.util.Set;
 
@@ -53,4 +55,40 @@ public interface RedisService {
      * @param key 缓存键
      */
     void delete(String key);
+
+    // ========== 新增方法：用户在线状态管理 ==========
+
+    /**
+     * 获取用户在线状态
+     * @param userId 用户ID
+     * @return 用户会话信息，如果用户离线则返回null
+     */
+    UserSession getUserSession(String userId);
+
+    /**
+     * 检查用户是否在线
+     * @param userId 用户ID
+     * @return true-在线，false-离线
+     */
+    boolean isUserOnline(String userId);
+
+    // ========== 新增方法：会话列表管理 ==========
+
+    /**
+     * 更新会话的最新消息信息
+     * @param conversationId 会话ID
+     * @param latestMsgId 最新消息ID
+     * @param latestMsgContent 最新消息内容摘要
+     * @param latestMsgTime 最新消息时间戳
+     */
+    void updateConversationLatestMsg(String conversationId, String latestMsgId,
+                                   String latestMsgContent, long latestMsgTime);
+
+    /**
+     * 激活用户的会话（更新会话列表排序）
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @param timestamp 激活时间戳
+     */
+    void activateUserConversation(String userId, String conversationId, long timestamp);
 }

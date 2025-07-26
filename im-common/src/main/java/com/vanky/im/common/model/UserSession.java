@@ -1,13 +1,16 @@
-package com.vanky.im.gateway.session;
+package com.vanky.im.common.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.netty.channel.Channel;
 
 import java.io.Serializable;
 
 /**
+ * 用户会话信息
+ * 统一的用户会话模型，供所有模块使用
+ * 
  * @author vanky
  * @create 2025/5/22 21:43
- * @description 用户会话信息
  */
 public class UserSession implements Serializable {
 
@@ -16,11 +19,27 @@ public class UserSession implements Serializable {
     private String userId;
     private String host;
     private int port;
-    private String nodeId; // 服务节点标识
+    private String nodeId; // 服务节点标识（gateway_instance_id）
+    
     // Channel不能序列化，因此不会存储在Redis中
+    // 只在gateway模块中使用，其他模块忽略此字段
+    @JsonIgnore
     private transient Channel channel;
 
     public UserSession() {
+    }
+
+    public UserSession(String userId, String host, int port) {
+        this.userId = userId;
+        this.host = host;
+        this.port = port;
+    }
+
+    public UserSession(String userId, String host, int port, String nodeId) {
+        this.userId = userId;
+        this.host = host;
+        this.port = port;
+        this.nodeId = nodeId;
     }
 
     public UserSession(String userId, String host, int port, Channel channel) {
@@ -38,6 +57,8 @@ public class UserSession implements Serializable {
         this.channel = channel;
     }
 
+    // Getters and Setters
+    
     public String getUserId() {
         return userId;
     }
@@ -61,14 +82,6 @@ public class UserSession implements Serializable {
     public void setPort(int port) {
         this.port = port;
     }
-
-    public Channel getChannel() {
-        return channel;
-    }
-
-    public void setChannel(Channel channel) {
-        this.channel = channel;
-    }
     
     public String getNodeId() {
         return nodeId;
@@ -76,5 +89,26 @@ public class UserSession implements Serializable {
     
     public void setNodeId(String nodeId) {
         this.nodeId = nodeId;
+    }
+
+    @JsonIgnore
+    public Channel getChannel() {
+        return channel;
+    }
+
+    @JsonIgnore
+    public void setChannel(Channel channel) {
+        this.channel = channel;
+    }
+
+    @Override
+    public String toString() {
+        return "UserSession{" +
+                "userId='" + userId + '\'' +
+                ", host='" + host + '\'' +
+                ", port=" + port +
+                ", nodeId='" + nodeId + '\'' +
+                ", hasChannel=" + (channel != null) +
+                '}';
     }
 }

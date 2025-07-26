@@ -1,4 +1,4 @@
-package com.vanky.im.gateway.session;
+package com.vanky.im.common.constant;
 
 /**
  * @author vanky
@@ -49,4 +49,4 @@ public class SessionConstants {
     public static String getChannelUserKey(String channelId) {
         return CHANNEL_USER_KEY_PREFIX + channelId;
     }
-} 
+}

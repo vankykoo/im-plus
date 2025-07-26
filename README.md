@@ -54,7 +54,7 @@ IM Plus是一个基于Spring Boot + Netty的分布式即时通讯系统，支持
 ### 中间件端口
 - **MySQL数据库**: 3306
 - **Redis缓存**: 6379
-- **RocketMQ NameServer**: 9876 (localhost:9876)
+- **RocketMQ NameServer**: 9876 (192.168.200.137:9876)
 
 ### 客户端连接端口
 - **WebSocket连接**: ws://localhost:8080/websocket
@@ -179,7 +179,7 @@ GET  /users/logout/{userId} - 用户退出
 ```bash
 # 启动MySQL (端口3306)
 # 启动Redis (端口6379)
-# 启动RocketMQ NameServer (端口9876)
+# 启动RocketMQ NameServer (192.168.200.137:9876)
 ```
 
 ### 2. 数据库初始化

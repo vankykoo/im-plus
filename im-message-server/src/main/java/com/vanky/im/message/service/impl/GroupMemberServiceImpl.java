@@ -1,6 +1,6 @@
 package com.vanky.im.message.service.impl;
 
-import com.vanky.im.message.constant.SessionConstants;
+import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.message.service.GroupMemberService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

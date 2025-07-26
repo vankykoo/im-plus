@@ -1,10 +1,10 @@
 package com.vanky.im.message.processor;
 
+import com.vanky.im.common.constant.SessionConstants;
+import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.message.constant.SessionConstants;
 import com.vanky.im.message.entity.ConversationMsgList;
 import com.vanky.im.message.entity.GroupMessage;
-import com.vanky.im.message.model.UserSession;
 import com.vanky.im.message.service.*;
 import com.vanky.im.message.util.MessageConverter;
 import lombok.extern.slf4j.Slf4j;

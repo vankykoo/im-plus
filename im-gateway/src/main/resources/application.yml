@@ -69,7 +69,7 @@ netty:
 
 # RocketMQ配置
 rocketmq:
-  name-server: localhost:9876
+  name-server: 192.168.200.137:9876
   producer:
     group: im-gateway-producer-group
     send-message-timeout: 3000

@@ -30,6 +30,8 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<BinaryWe
     
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, BinaryWebSocketFrame frame) throws Exception {
+        logger.debug("WebSocket收到二进制帧 - Channel: {}", ctx.channel().id().asShortText());
+
         // 获取二进制数据
         ByteBuf content = frame.content();
 
@@ -37,9 +39,11 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<BinaryWe
         int length = content.readableBytes();
 
         if (length == 0) {
-            logger.warn("WebSocket收到空消息");
+            logger.warn("WebSocket收到空消息 - Channel: {}", ctx.channel().id().asShortText());
             return;
         }
+
+        logger.debug("WebSocket消息长度: {} bytes - Channel: {}", length, ctx.channel().id().asShortText());
 
         // 解析消息
         try {
@@ -50,13 +54,14 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<BinaryWe
             // 解析成ChatMessage对象
             ChatMessage msg = ChatMessage.parseFrom(msgBytes);
 
-            logger.info("WebSocket接收到消息 - 类型: {}, 发送方: {}, 接收方: {}, 消息ID: {}",
-                    msg.getType(), msg.getFromId(), msg.getToId(), msg.getUid());
+            logger.info("WebSocket接收到消息 - 类型: {}, 发送方: {}, 接收方: {}, 消息ID: {}, Channel: {}",
+                    msg.getType(), msg.getFromId(), msg.getToId(), msg.getUid(), ctx.channel().id().asShortText());
 
             // 委托给统一消息分发器处理
             imServiceHandler.handleMessage(msg, ctx.channel());
         } catch (Exception e) {
-            logger.error("WebSocket消息解析异常", e);
+            logger.error("WebSocket消息解析异常 - Channel: {}, 消息长度: {}",
+                    ctx.channel().id().asShortText(), length, e);
         }
     }
     

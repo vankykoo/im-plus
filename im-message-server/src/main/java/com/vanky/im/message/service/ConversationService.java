@@ -33,4 +33,22 @@ public interface ConversationService extends IService<Conversation> {
      * @param memberCount 群组成员数量
      */
     void handleGroupConversation(String conversationId, String fromUserId, String groupId, int memberCount);
+
+    /**
+     * 更新会话的最新消息信息
+     * @param conversationId 会话ID
+     * @param latestMsgId 最新消息ID
+     * @param latestMsgContent 最新消息内容摘要
+     * @param latestMsgTime 最新消息时间戳
+     * @param fromUserId 发送方用户ID
+     */
+    void updateConversationLatestMessage(String conversationId, String latestMsgId,
+                                       String latestMsgContent, long latestMsgTime, String fromUserId);
+
+    /**
+     * 激活用户的会话列表
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     */
+    void activateUserConversationList(String userId, String conversationId);
 }

@@ -71,10 +71,17 @@ public class RealWebSocketClient implements WebSocket.Listener {
         System.out.println("WebSocket连接已打开 - 用户: " + userId);
         connected.set(true);
         connectLatch.countDown();
-        
-        // 发送登录消息
-        sendLoginMessage();
-        
+
+        // 延迟发送登录消息，确保连接完全建立
+        new Thread(() -> {
+            try {
+                Thread.sleep(100); // 延迟100ms
+                sendLoginMessage();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
+
         webSocket.request(1);
     }
     

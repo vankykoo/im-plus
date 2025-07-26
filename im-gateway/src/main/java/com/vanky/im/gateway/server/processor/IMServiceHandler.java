@@ -1,12 +1,12 @@
 package com.vanky.im.gateway.server.processor;
 
 import com.vanky.im.common.constant.MsgContentConstant;
-import com.vanky.im.gateway.session.SessionConstants;
+import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.enums.ClientToClientMessageType;
 import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.enums.ServerToClientMessageType;
+import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.gateway.session.UserSession;
 import com.vanky.im.common.util.MsgGenerator;
 import com.vanky.im.common.util.TokenUtil;
 import com.vanky.im.gateway.session.UserChannelManager;
@@ -115,10 +115,13 @@ public class IMServiceHandler {
     private void handleLogin(ChatMessage msg, Channel channel) {
         String userId = msg.getFromId();
         String token = msg.getToken();
-        
+
+        log.info("处理用户登录请求 - 用户: {}, Channel: {}, Token长度: {}",
+                userId, channel.id().asShortText(), token != null ? token.length() : 0);
+
         // 验证token有效性
         if (!validateToken(userId, token)) {
-            log.warn("用户登录Token无效 - 用户: {}, 关闭连接", userId);
+            log.warn("用户登录Token无效 - 用户: {}, Channel: {}, 关闭连接", userId, channel.id().asShortText());
             // 发送登录失败消息
             ChatMessage loginFailedMsg = ChatMessage.newBuilder()
                     .setType(ServerToClientMessageType.LOGIN_RESPONSE.getValue())
@@ -132,7 +135,7 @@ public class IMServiceHandler {
 
             // 发送失败消息后关闭连接
             channel.writeAndFlush(loginFailedMsg).addListener(future -> {
-                log.info("登录失败消息已发送，关闭连接 - 用户: {}", userId);
+                log.info("登录失败消息已发送，关闭连接 - 用户: {}, Channel: {}", userId, channel.id().asShortText());
                 channel.close();
             });
             return;

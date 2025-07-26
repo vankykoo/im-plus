@@ -15,4 +15,10 @@ import org.springframework.stereotype.Service;
 public class GroupMessageServiceImpl extends ServiceImpl<GroupMessageMapper, GroupMessage>
     implements GroupMessageService{
 
-} 
+    @Override
+    public GroupMessage getByMsgId(String msgId) {
+        return this.lambdaQuery()
+                .eq(GroupMessage::getMsgId, msgId)
+                .one();
+    }
+}

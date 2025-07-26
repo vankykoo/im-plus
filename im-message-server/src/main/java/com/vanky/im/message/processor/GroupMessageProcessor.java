@@ -3,6 +3,7 @@ package com.vanky.im.message.processor;
 import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
+import com.vanky.im.message.constant.MessageConstants;
 import com.vanky.im.message.entity.ConversationMsgList;
 import com.vanky.im.message.entity.GroupMessage;
 import com.vanky.im.message.service.*;
@@ -118,6 +119,7 @@ public class GroupMessageProcessor {
     private void saveMessageData(ChatMessage chatMessage, String msgId, String conversationId, Long seq) {
         // 1. 保存消息主体到group_message表
         GroupMessage groupMessage = MessageConverter.convertToGroupMessage(chatMessage, msgId, conversationId);
+        groupMessage.setStatus(MessageConstants.MESSAGE_STATUS_SENT); // 初始状态为已发送，等待客户端确认
         groupMessageService.save(groupMessage);
         log.debug("保存群聊消息主体完成 - 消息ID: {}", msgId);
         

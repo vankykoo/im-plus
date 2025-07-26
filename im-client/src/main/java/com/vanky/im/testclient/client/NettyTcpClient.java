@@ -128,7 +128,13 @@ public class NettyTcpClient {
                     System.err.println("用户 " + userId + " 登录失败: " + chatMessage.getContent());
                 }
             }
-            
+            // 处理聊天消息，需要发送ACK确认
+            else if (chatMessage.getType() == ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue() ||
+                     chatMessage.getType() == ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue()) {
+                // 发送ACK确认消息
+                sendAckMessage(chatMessage.getUid(), chatMessage.getSeq());
+            }
+
             // 委托给消息处理器
             if (messageHandler != null) {
                 messageHandler.handleMessage(chatMessage);
@@ -322,7 +328,35 @@ public class NettyTcpClient {
             group.shutdownGracefully();
         }
     }
-    
+
+    /**
+     * 发送ACK确认消息
+     * @param originalMsgId 原始消息ID
+     * @param originalSeq 原始消息序列号
+     */
+    private void sendAckMessage(String originalMsgId, String originalSeq) {
+        try {
+            ChatMessage ackMessage = ChatMessage.newBuilder()
+                    .setType(ClientToServerMessageType.MESSAGE_ACK.getValue())
+                    .setContent("ACK")
+                    .setFromId(userId)
+                    .setToId("system")
+                    .setUid(originalMsgId) // 使用原始消息ID
+                    .setSeq(originalSeq)   // 使用原始消息序列号
+                    .setTimestamp(System.currentTimeMillis())
+                    .setRetry(0)
+                    .build();
+
+            if (channel != null && channel.isActive()) {
+                channel.writeAndFlush(ackMessage);
+                System.out.println("发送ACK确认 - 消息ID: " + originalMsgId + ", 序列号: " + originalSeq);
+            }
+
+        } catch (Exception e) {
+            System.err.println("发送ACK确认失败: " + e.getMessage());
+        }
+    }
+
     /**
      * 消息处理接口
      */

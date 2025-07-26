@@ -10,4 +10,10 @@ import com.vanky.im.message.entity.PrivateMessage;
 */
 public interface PrivateMessageService extends IService<PrivateMessage> {
 
-} 
+    /**
+     * 根据消息ID查询私聊消息
+     * @param msgId 消息ID
+     * @return 私聊消息实体
+     */
+    PrivateMessage getByMsgId(String msgId);
+}

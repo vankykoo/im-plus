@@ -268,4 +268,52 @@ public class MessageQueueService {
             }
         }
     }
+
+    /**
+     * 发送ACK确认消息到消息服务器
+     * @param msgId 消息ID
+     * @param seq 消息序列号
+     * @param userId 用户ID
+     */
+    public void sendAckToMessageServer(String msgId, String seq, String userId) {
+        try {
+            // 构建ACK消息
+            ChatMessage ackMessage = ChatMessage.newBuilder()
+                    .setType(com.vanky.im.common.enums.ClientToServerMessageType.MESSAGE_ACK.getValue())
+                    .setContent("ACK")
+                    .setFromId(userId)
+                    .setToId("system")
+                    .setUid(msgId)
+                    .setSeq(seq)
+                    .setTimestamp(System.currentTimeMillis())
+                    .build();
+
+            // 序列化消息
+            byte[] messageBody = ackMessage.toByteArray();
+
+            // 创建RocketMQ消息
+            Message message = new Message(
+                    TopicConstants.IM_MESSAGE_TOPIC,
+                    "MESSAGE_ACK",
+                    messageBody
+            );
+
+            // 异步发送消息
+            producer.send(message, new SendCallback() {
+                @Override
+                public void onSuccess(SendResult sendResult) {
+                    log.debug("ACK消息发送成功 - 消息ID: {}, 序列号: {}, 用户: {}, MQ消息ID: {}",
+                            msgId, seq, userId, sendResult.getMsgId());
+                }
+
+                @Override
+                public void onException(Throwable e) {
+                    log.error("ACK消息发送失败 - 消息ID: {}, 序列号: {}, 用户: {}", msgId, seq, userId, e);
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("发送ACK消息到消息队列失败 - 消息ID: {}, 序列号: {}, 用户: {}", msgId, seq, userId, e);
+        }
+    }
 }

@@ -15,4 +15,10 @@ import org.springframework.stereotype.Service;
 public class PrivateMessageServiceImpl extends ServiceImpl<PrivateMessageMapper, PrivateMessage>
     implements PrivateMessageService{
 
-} 
+    @Override
+    public PrivateMessage getByMsgId(String msgId) {
+        return this.lambdaQuery()
+                .eq(PrivateMessage::getMsgId, msgId)
+                .one();
+    }
+}

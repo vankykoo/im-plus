@@ -1,8 +1,10 @@
 package com.vanky.im.message.mq;
 
 import com.vanky.im.common.enums.ClientToClientMessageType;
+import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.processor.GroupMessageProcessor;
+import com.vanky.im.message.processor.MessageAckProcessor;
 import com.vanky.im.message.processor.PrivateMessageProcessor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
@@ -27,6 +29,9 @@ public class ConversationMessageConsumer implements MessageListenerConcurrently 
     
     @Autowired
     private GroupMessageProcessor groupMsgProcessor;
+
+    @Autowired
+    private MessageAckProcessor messageAckProcessor;
 
     @Override
     public ConsumeConcurrentlyStatus consumeMessage(
@@ -81,8 +86,12 @@ public class ConversationMessageConsumer implements MessageListenerConcurrently 
                 // 处理群聊消息
                 groupMsgProcessor.processGroupMessage(chatMessage, conversationId);
                 log.info("群聊消息已处理 - 会话ID: {}, 消息ID: {}", conversationId, chatMessage.getUid());
+            } else if (messageType == ClientToServerMessageType.MESSAGE_ACK.getValue()) {
+                // 处理消息确认
+                messageAckProcessor.processMessageAck(chatMessage);
+                log.info("消息确认已处理 - 消息ID: {}, 用户: {}", chatMessage.getUid(), chatMessage.getFromId());
             } else {
-                log.warn("未知消息类型: {}, 会话ID: {}, 消息ID: {}", 
+                log.warn("未知消息类型: {}, 会话ID: {}, 消息ID: {}",
                         messageType, conversationId, chatMessage.getUid());
             }
         } catch (Exception e) {

@@ -180,6 +180,7 @@ public class PrivateMessageProcessor {
                                 Long seq, String fromUserId, String toUserId) {
         // 1. 保存消息主体到message表
         PrivateMessage privateMessage = MessageConverter.convertToPrivateMessage(chatMessage, msgId, conversationId);
+        privateMessage.setStatus(MessageConstants.MESSAGE_STATUS_SENT); // 初始状态为已发送，等待客户端确认
         privateMessageService.save(privateMessage);
         log.debug("保存消息主体完成 - 消息ID: {}", msgId);
         

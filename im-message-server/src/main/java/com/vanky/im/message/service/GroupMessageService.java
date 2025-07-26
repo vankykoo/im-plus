@@ -10,4 +10,10 @@ import com.vanky.im.message.entity.GroupMessage;
 */
 public interface GroupMessageService extends IService<GroupMessage> {
 
-} 
+    /**
+     * 根据消息ID查询群聊消息
+     * @param msgId 消息ID
+     * @return 群聊消息实体
+     */
+    GroupMessage getByMsgId(String msgId);
+}

@@ -37,6 +37,9 @@ public class IMServiceHandler {
     
     @Autowired
     private GroupMsgProcessor groupMsgProcessor;
+
+    @Autowired
+    private com.vanky.im.gateway.mq.MessageQueueService messageQueueService;
     
     @Autowired
     private UserChannelManager userChannelManager;
@@ -72,6 +75,9 @@ public class IMServiceHandler {
             } else if (messageType == ClientToServerMessageType.HEARTBEAT.getValue()) {
                 // 处理心跳消息
                 handleHeartbeat(msg, channel);
+            } else if (messageType == ClientToServerMessageType.MESSAGE_ACK.getValue()) {
+                // 处理消息确认
+                handleMessageAck(msg, channel);
             }
             // 客户端到客户端消息处理
             else if (messageType == ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue() ||
@@ -265,6 +271,30 @@ public class IMServiceHandler {
         } catch (Exception e) {
             log.error("Token验证异常 - 用户: {}, Token: {}", userId, token, e);
             return false;
+        }
+    }
+
+    /**
+     * 处理消息确认
+     * @param msg 确认消息
+     * @param channel 客户端连接通道
+     */
+    private void handleMessageAck(ChatMessage msg, Channel channel) {
+        String userId = msg.getFromId();
+        String msgId = msg.getUid();
+        String seq = msg.getSeq();
+
+        log.info("收到消息确认 - 用户: {}, 消息ID: {}, 序列号: {}, Channel: {}",
+                userId, msgId, seq, channel.id().asShortText());
+
+        try {
+            // 将ACK消息发送到消息队列，由im-message-server处理
+            messageQueueService.sendAckToMessageServer(msgId, seq, userId);
+
+            log.debug("ACK消息已转发到消息服务器 - 消息ID: {}, 序列号: {}, 用户: {}", msgId, seq, userId);
+
+        } catch (Exception e) {
+            log.error("处理消息确认失败 - 用户: {}, 消息ID: {}, 序列号: {}", userId, msgId, seq, e);
         }
     }
 }

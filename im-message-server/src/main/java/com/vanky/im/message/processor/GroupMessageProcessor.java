@@ -64,10 +64,10 @@ public class GroupMessageProcessor {
             String fromUserId = chatMessage.getFromId();
             String groupId = chatMessage.getToId();
 
-            // 1. 生成消息ID（会话ID已由调用方提供）
-            String msgId = MessageConverter.generateMsgId();
-            
-            log.info("开始处理群聊消息 - 会话ID: {}, 消息ID: {}, 发送方: {}, 群组ID: {}", 
+            // 1. 使用传入的消息ID（雪花算法生成，保持ID一致性）
+            String msgId = chatMessage.getUid(); // 使用gateway传入的消息ID，避免重复生成
+
+            log.info("开始处理群聊消息 - 会话ID: {}, 消息ID: {}, 发送方: {}, 群组ID: {}",
                     conversationId, msgId, fromUserId, groupId);
             
             // 2. 校验发送者是否为群成员

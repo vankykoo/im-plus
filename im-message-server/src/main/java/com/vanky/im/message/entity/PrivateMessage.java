@@ -47,7 +47,7 @@ public class PrivateMessage {
     private String content;
 
     /**
-     * 状态：0-未读，1-已读，2-撤回
+     * 状态：0-已发送（等待推送），1-推送成功（客户端已确认），2-已读，3-撤回，4-推送失败
      */
     @TableField(value = "status")
     private Integer status;

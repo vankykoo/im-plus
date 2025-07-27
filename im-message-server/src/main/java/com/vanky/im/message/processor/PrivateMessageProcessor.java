@@ -160,12 +160,12 @@ public class PrivateMessageProcessor {
         String fromUserId = chatMessage.getFromId();
         String toUserId = chatMessage.getToId();
 
-        // 2.1. 生成消息元数据
-        String msgId = MessageConverter.generateMsgId(); // 全局唯一的服务端消息ID
+        // 2.1. 使用传入的消息ID（雪花算法生成，保持ID一致性）
+        String msgId = chatMessage.getUid(); // 使用gateway传入的消息ID，避免重复生成
         Long seq = redisService.generateSeq(conversationId); // 会话内有序的序列号
         long timestamp = System.currentTimeMillis();
 
-        log.debug("生成消息元数据 - 消息ID: {}, 会话ID: {}, Seq: {}", msgId, conversationId, seq);
+        log.debug("使用传入消息ID - 消息ID: {}, 会话ID: {}, Seq: {}", msgId, conversationId, seq);
 
         // 2.2. 消息入库
         saveMessageData(chatMessage, msgId, conversationId, seq, fromUserId, toUserId);

@@ -91,3 +91,13 @@ rocketmq:
 message:
   push:
     topic: TOPIC_PUSH_TO_GATEWAY
+  # 超时重发配置
+  timeout:
+    enabled: true                # 是否启用超时重发机制
+    wheel-size: 512             # 时间轮大小，必须是2的幂
+    tick-duration: 100          # 每个tick的时间间隔(ms)
+    default-timeout: 5000       # 默认超时时间(ms)
+    max-retry-count: 3          # 最大重试次数
+    retry-backoff-base: 2       # 重试退避基数
+    retry-backoff-max: 30000    # 最大退避时间(ms)
+    ticker-thread-name: message-timeout-ticker  # 时间轮线程名称

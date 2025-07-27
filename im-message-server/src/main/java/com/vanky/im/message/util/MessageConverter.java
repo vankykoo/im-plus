@@ -28,7 +28,7 @@ public class MessageConverter {
     public static PrivateMessage convertToPrivateMessage(ChatMessage chatMessage, String msgId, String conversationId) {
         PrivateMessage privateMessage = new PrivateMessage();
         
-        privateMessage.setMsgId(Long.valueOf(msgId.hashCode())); // 将String转换为Long
+        privateMessage.setMsgId(Long.valueOf(msgId)); // 雪花算法生成的ID直接转换为Long
         privateMessage.setConversationId(conversationId);
         privateMessage.setUserId(Long.valueOf(chatMessage.getFromId())); // 将String转换为Long
         privateMessage.setContent(chatMessage.getContent());
@@ -104,7 +104,7 @@ public class MessageConverter {
     public static GroupMessage convertToGroupMessage(ChatMessage chatMessage, String msgId, String conversationId) {
         GroupMessage groupMessage = new GroupMessage();
         
-        groupMessage.setMsgId(Long.valueOf(msgId.hashCode())); // 将String转换为Long
+        groupMessage.setMsgId(Long.valueOf(msgId)); // 雪花算法生成的ID直接转换为Long
         groupMessage.setConversationId(conversationId);
         groupMessage.setUserId(Long.valueOf(chatMessage.getFromId())); // 将String转换为Long
         groupMessage.setContent(chatMessage.getContent());

@@ -12,6 +12,7 @@ import com.vanky.im.common.util.TokenUtil;
 import com.vanky.im.gateway.session.UserChannelManager;
 import com.vanky.im.gateway.server.processor.client.PrivateMsgProcessor;
 import com.vanky.im.gateway.server.processor.client.GroupMsgProcessor;
+import com.vanky.im.gateway.timeout.TimeoutManager;
 import io.netty.channel.Channel;
 import io.netty.channel.socket.DatagramChannel;
 import lombok.extern.slf4j.Slf4j;
@@ -40,16 +41,19 @@ public class IMServiceHandler {
 
     @Autowired
     private com.vanky.im.gateway.mq.MessageQueueService messageQueueService;
-    
+
     @Autowired
     private UserChannelManager userChannelManager;
-    
+
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
-    
+
     @Autowired
     private TokenUtil tokenUtil;
-    
+
+    @Autowired
+    private TimeoutManager timeoutManager;
+
     @Value("${server.node-id}")
     private String gatewayNodeId;
 
@@ -288,6 +292,14 @@ public class IMServiceHandler {
                 userId, msgId, seq, channel.id().asShortText());
 
         try {
+            // 取消超时重发任务
+            boolean cancelled = timeoutManager.cancelTask(msgId);
+            if (cancelled) {
+                log.debug("取消超时任务成功 - 消息ID: {}, 用户: {}", msgId, userId);
+            } else {
+                log.debug("取消超时任务失败，任务可能不存在 - 消息ID: {}, 用户: {}", msgId, userId);
+            }
+
             // 将ACK消息发送到消息队列，由im-message-server处理
             messageQueueService.sendAckToMessageServer(msgId, seq, userId);
 

@@ -3,6 +3,7 @@ package com.vanky.im.gateway;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * @author vanky
@@ -15,6 +16,7 @@ import org.springframework.context.annotation.ComponentScan;
  */
 @SpringBootApplication
 @ComponentScan(basePackages = {"com.vanky.im.gateway", "com.vanky.im.common"})
+@EnableScheduling
 public class ImGatewayApplication {
 
     public static void main(String[] args) {

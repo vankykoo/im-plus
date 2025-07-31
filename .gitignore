@@ -32,6 +32,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+log/
 
 # Runtime data
 pids
@@ -42,23 +43,45 @@ pids
 # Temporary files
 *.tmp
 *.temp
+*.swp
+*.swo
 *~
 
-# Java
-*.class
+# Application specific
+im-client-data/
+*.properties.bak
+*.yml.bak
+*.yaml.bak
+
+# Test files
+**/test/
+**/*Test.java
+**/*Tests.java
+**/*.test.*
+**/*.spec.*
+
+# Build artifacts
 *.jar
 *.war
 *.ear
 *.zip
 *.tar.gz
 *.rar
-hs_err_pid*
 
-# Spring Boot
-application-local.yml
-application-dev.yml
-application-test.yml
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Redis dump
+dump.rdb
+
+# Node modules (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 /.obsidian
-/.trae
-/.vercel
 /docs
+/.vercel
+/.trae

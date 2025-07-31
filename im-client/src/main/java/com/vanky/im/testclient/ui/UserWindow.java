@@ -7,6 +7,8 @@ import com.vanky.im.testclient.client.HttpClient;
 import com.vanky.im.testclient.client.IMWebSocketClient;
 import com.vanky.im.testclient.client.RealWebSocketClient;
 import com.vanky.im.testclient.client.NettyTcpClient;
+import com.vanky.im.testclient.storage.LocalMessageStorage;
+import com.vanky.im.testclient.sync.OfflineMessageSyncManager;
 
 
 import javax.swing.*;
@@ -37,6 +39,8 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
     private JButton disconnectButton;
     private JButton sendPrivateButton;
     private JButton sendGroupButton;
+    private JButton registerButton;
+    private JButton createGroupButton;
     private JLabel statusLabel;
     private JComboBox<String> protocolComboBox;
     
@@ -45,10 +49,20 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
     private RealWebSocketClient realWebSocketClient;
     private NettyTcpClient tcpClient;
     private ScheduledExecutorService heartbeatExecutor;
+
+    // 离线消息同步相关
+    private LocalMessageStorage localStorage;
+    private OfflineMessageSyncManager syncManager;
+    private JLabel syncStatusLabel;
     
     public UserWindow(String userId) {
         this.userId = userId;
         this.httpClient = new HttpClient();
+
+        // 初始化离线消息同步组件
+        this.localStorage = new LocalMessageStorage();
+        this.syncManager = new OfflineMessageSyncManager(httpClient, localStorage);
+
         initUI();
     }
     
@@ -66,33 +80,52 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
         JPanel topPanel = new JPanel(new BorderLayout());
         
         // 状态显示
+        JPanel statusPanel = new JPanel();
+        statusPanel.setLayout(new BoxLayout(statusPanel, BoxLayout.Y_AXIS));
+
         statusLabel = new JLabel("状态: 未连接");
         statusLabel.setForeground(Color.RED);
         statusLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+
+        syncStatusLabel = new JLabel("同步: 未开始");
+        syncStatusLabel.setForeground(Color.GRAY);
+        syncStatusLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+
+        statusPanel.add(statusLabel);
+        statusPanel.add(syncStatusLabel);
         
         // 协议选择和连接控制面板
         JPanel controlPanel = new JPanel(new FlowLayout());
-        
+
         // 协议选择
         JLabel protocolLabel = new JLabel("协议:");
         String[] protocols = {"WebSocket", "TCP"};
         protocolComboBox = new JComboBox<>(protocols);
         protocolComboBox.setSelectedIndex(0); // 默认选择WebSocket
-        
+
         // 连接控制按钮
         connectButton = new JButton("连接");
         disconnectButton = new JButton("断开");
         disconnectButton.setEnabled(false);
-        
+
+        // 新功能按钮
+        registerButton = new JButton("用户注册");
+        createGroupButton = new JButton("创建群聊");
+
         connectButton.addActionListener(e -> connect());
         disconnectButton.addActionListener(e -> disconnect());
-        
+        registerButton.addActionListener(e -> showRegisterDialog());
+        createGroupButton.addActionListener(e -> showCreateGroupDialog());
+
         controlPanel.add(protocolLabel);
         controlPanel.add(protocolComboBox);
         controlPanel.add(connectButton);
         controlPanel.add(disconnectButton);
+        controlPanel.add(new JSeparator(SwingConstants.VERTICAL));
+        controlPanel.add(registerButton);
+        controlPanel.add(createGroupButton);
         
-        topPanel.add(statusLabel, BorderLayout.WEST);
+        topPanel.add(statusPanel, BorderLayout.WEST);
         topPanel.add(controlPanel, BorderLayout.EAST);
         
         // 消息显示区域
@@ -274,9 +307,12 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
                 sendGroupButton.setEnabled(true);
                 protocolComboBox.setEnabled(false); // 连接后禁用协议选择
             });
-            
+
             // 启动心跳
             startHeartbeat();
+
+            // 启动离线消息同步
+            startOfflineMessageSync();
         }
     }
     
@@ -491,4 +527,373 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
     public void setGroupId(String groupId) {
         SwingUtilities.invokeLater(() -> groupIdInput.setText(groupId));
     }
+
+    // ========== 离线消息同步相关方法 ==========
+
+    /**
+     * 启动离线消息同步
+     */
+    private void startOfflineMessageSync() {
+        appendMessage("启动离线消息同步...");
+        updateSyncStatus("检查中...", Color.ORANGE);
+
+        // 启动同步，带进度回调
+        syncManager.startSyncIfNeeded(userId, new OfflineMessageSyncManager.SyncProgressCallback() {
+            @Override
+            public void onProgress(OfflineMessageSyncManager.SyncStatus status, String message) {
+                SwingUtilities.invokeLater(() -> {
+                    switch (status) {
+                        case STARTED:
+                            updateSyncStatus("同步开始", Color.BLUE);
+                            appendMessage("离线消息同步开始: " + message);
+                            break;
+                        case SYNCING:
+                            updateSyncStatus("同步中...", Color.BLUE);
+                            appendMessage("同步进度: " + message);
+                            break;
+                        case COMPLETED:
+                            updateSyncStatus("同步完成", Color.GREEN);
+                            appendMessage("离线消息同步完成: " + message);
+                            break;
+                        case ERROR:
+                            updateSyncStatus("同步失败", Color.RED);
+                            appendMessage("离线消息同步失败: " + message);
+                            break;
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * 更新同步状态显示
+     */
+    private void updateSyncStatus(String status, Color color) {
+        if (syncStatusLabel != null) {
+            syncStatusLabel.setText("同步: " + status);
+            syncStatusLabel.setForeground(color);
+        }
+    }
+
+    /**
+     * 获取本地存储统计信息
+     */
+    public void showStorageStats() {
+        if (localStorage != null) {
+            LocalMessageStorage.StorageStats stats = localStorage.getStorageStats();
+            String message = String.format("存储统计 - 总大小: %d bytes, 用户数: %d",
+                                          stats.getTotalSize(), stats.getUserCount());
+            appendMessage(message);
+        }
+    }
+
+    /**
+     * 清理用户本地数据
+     */
+    public void clearLocalData() {
+        if (localStorage != null) {
+            localStorage.clearUserData(userId);
+            appendMessage("本地数据已清理");
+            updateSyncStatus("已清理", Color.GRAY);
+        }
+    }
+
+    /**
+     * 显示用户注册对话框
+     */
+    private void showRegisterDialog() {
+        JDialog registerDialog = new JDialog(this, "用户注册", true);
+        registerDialog.setSize(400, 250);
+        registerDialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        // 用户ID输入
+        gbc.gridx = 0; gbc.gridy = 0;
+        panel.add(new JLabel("用户ID:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JTextField userIdField = new JTextField(20);
+        panel.add(userIdField, gbc);
+
+        // 用户名输入
+        gbc.gridx = 0; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE;
+        panel.add(new JLabel("用户名:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JTextField usernameField = new JTextField(20);
+        panel.add(usernameField, gbc);
+
+        // 密码输入
+        gbc.gridx = 0; gbc.gridy = 2; gbc.fill = GridBagConstraints.NONE;
+        panel.add(new JLabel("密码:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JPasswordField passwordField = new JPasswordField(20);
+        panel.add(passwordField, gbc);
+
+        // 确认密码输入
+        gbc.gridx = 0; gbc.gridy = 3; gbc.fill = GridBagConstraints.NONE;
+        panel.add(new JLabel("确认密码:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JPasswordField confirmPasswordField = new JPasswordField(20);
+        panel.add(confirmPasswordField, gbc);
+
+        // 按钮面板
+        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+
+        JButton registerBtn = new JButton("注册");
+        JButton cancelBtn = new JButton("取消");
+
+        registerBtn.addActionListener(e -> {
+            String userIdInput = userIdField.getText().trim();
+            String username = usernameField.getText().trim();
+            String password = new String(passwordField.getPassword());
+            String confirmPassword = new String(confirmPasswordField.getPassword());
+
+            // 验证输入
+            if (userIdInput.isEmpty() || username.isEmpty() || password.isEmpty()) {
+                JOptionPane.showMessageDialog(registerDialog, "用户ID、用户名和密码不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            if (!password.equals(confirmPassword)) {
+                JOptionPane.showMessageDialog(registerDialog, "两次输入的密码不一致！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // 执行注册
+            performUserRegistration(userIdInput, username, password, registerDialog);
+        });
+
+        cancelBtn.addActionListener(e -> registerDialog.dispose());
+
+        buttonPanel.add(registerBtn);
+        buttonPanel.add(cancelBtn);
+        panel.add(buttonPanel, gbc);
+
+        registerDialog.add(panel);
+        registerDialog.setVisible(true);
+    }
+
+    /**
+     * 执行用户注册
+     */
+    private void performUserRegistration(String userIdInput, String username, String password, JDialog dialog) {
+        try {
+            appendMessage("[系统] 正在注册用户: " + userIdInput + " (" + username + ")");
+
+            // 调用真实的注册API
+            boolean success = httpClient.register(userIdInput, username, password);
+
+            if (success) {
+                appendMessage("[系统] 用户注册成功！用户ID: " + userIdInput + ", 用户名: " + username);
+                JOptionPane.showMessageDialog(dialog,
+                    "注册成功！\n用户ID: " + userIdInput + "\n用户名: " + username,
+                    "注册成功", JOptionPane.INFORMATION_MESSAGE);
+                dialog.dispose();
+            } else {
+                appendMessage("[系统] 用户注册失败！可能用户ID已存在或服务异常");
+                JOptionPane.showMessageDialog(dialog,
+                    "注册失败！\n可能原因：\n1. 用户ID已存在\n2. 用户服务未启动\n3. 网络连接异常",
+                    "注册失败", JOptionPane.ERROR_MESSAGE);
+            }
+
+        } catch (Exception e) {
+            appendMessage("[系统] 注册异常: " + e.getMessage());
+            JOptionPane.showMessageDialog(dialog,
+                "注册异常: " + e.getMessage() + "\n请检查用户服务是否正常运行",
+                "注册异常", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+
+
+    /**
+     * 显示创建群聊对话框
+     */
+    private void showCreateGroupDialog() {
+        JDialog groupDialog = new JDialog(this, "创建群聊", true);
+        groupDialog.setSize(500, 400);
+        groupDialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // 顶部信息输入面板
+        JPanel topPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        // 群聊名称
+        gbc.gridx = 0; gbc.gridy = 0;
+        topPanel.add(new JLabel("群聊名称:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JTextField groupNameField = new JTextField(20);
+        topPanel.add(groupNameField, gbc);
+
+        // 群聊描述
+        gbc.gridx = 0; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        topPanel.add(new JLabel("群聊描述:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JTextField groupDescField = new JTextField(20);
+        topPanel.add(groupDescField, gbc);
+
+        // 中间成员选择面板
+        JPanel memberPanel = new JPanel(new BorderLayout(5, 5));
+        memberPanel.setBorder(BorderFactory.createTitledBorder("群聊成员"));
+
+        // 成员输入区域
+        JPanel memberInputPanel = new JPanel(new BorderLayout(5, 5));
+        JTextField memberInput = new JTextField();
+        memberInput.setBorder(BorderFactory.createTitledBorder("输入用户ID（回车添加）"));
+        JButton addMemberBtn = new JButton("添加成员");
+
+        memberInputPanel.add(memberInput, BorderLayout.CENTER);
+        memberInputPanel.add(addMemberBtn, BorderLayout.EAST);
+
+        // 成员列表
+        DefaultListModel<String> memberListModel = new DefaultListModel<>();
+        memberListModel.addElement(userId + " (群主)"); // 添加当前用户作为群主
+        JList<String> memberList = new JList<>(memberListModel);
+        memberList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane memberScrollPane = new JScrollPane(memberList);
+        memberScrollPane.setPreferredSize(new Dimension(400, 150));
+
+        // 删除成员按钮
+        JButton removeMemberBtn = new JButton("移除选中成员");
+        removeMemberBtn.addActionListener(e -> {
+            int selectedIndex = memberList.getSelectedIndex();
+            if (selectedIndex > 0) { // 不能删除群主
+                memberListModel.remove(selectedIndex);
+            } else if (selectedIndex == 0) {
+                JOptionPane.showMessageDialog(groupDialog, "不能移除群主！", "提示", JOptionPane.WARNING_MESSAGE);
+            }
+        });
+
+        // 添加成员事件
+        ActionListener addMemberAction = e -> {
+            String memberId = memberInput.getText().trim();
+            if (!memberId.isEmpty()) {
+                // 检查是否已存在
+                boolean exists = false;
+                for (int i = 0; i < memberListModel.size(); i++) {
+                    String existingMember = memberListModel.getElementAt(i);
+                    if (existingMember.startsWith(memberId + " ") || existingMember.equals(memberId)) {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists) {
+                    memberListModel.addElement(memberId);
+                    memberInput.setText("");
+                } else {
+                    JOptionPane.showMessageDialog(groupDialog, "成员已存在！", "提示", JOptionPane.WARNING_MESSAGE);
+                }
+            }
+        };
+
+        memberInput.addActionListener(addMemberAction);
+        addMemberBtn.addActionListener(addMemberAction);
+
+        JPanel memberButtonPanel = new JPanel(new FlowLayout());
+        memberButtonPanel.add(removeMemberBtn);
+
+        memberPanel.add(memberInputPanel, BorderLayout.NORTH);
+        memberPanel.add(memberScrollPane, BorderLayout.CENTER);
+        memberPanel.add(memberButtonPanel, BorderLayout.SOUTH);
+
+        // 底部按钮面板
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JButton createBtn = new JButton("创建群聊");
+        JButton cancelBtn = new JButton("取消");
+
+        createBtn.addActionListener(e -> {
+            String groupName = groupNameField.getText().trim();
+            String groupDesc = groupDescField.getText().trim();
+
+            if (groupName.isEmpty()) {
+                JOptionPane.showMessageDialog(groupDialog, "群聊名称不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            if (memberListModel.size() < 2) {
+                JOptionPane.showMessageDialog(groupDialog, "群聊至少需要2个成员！", "错误", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // 收集成员列表
+            java.util.List<String> members = new java.util.ArrayList<>();
+            for (int i = 0; i < memberListModel.size(); i++) {
+                String member = memberListModel.getElementAt(i);
+                // 提取用户ID（去掉后缀）
+                if (member.contains(" (")) {
+                    member = member.substring(0, member.indexOf(" ("));
+                }
+                members.add(member);
+            }
+
+            // 执行创建群聊
+            performCreateGroup(groupName, groupDesc, members, groupDialog);
+        });
+
+        cancelBtn.addActionListener(e -> groupDialog.dispose());
+
+        buttonPanel.add(createBtn);
+        buttonPanel.add(cancelBtn);
+
+        // 组装对话框
+        panel.add(topPanel, BorderLayout.NORTH);
+        panel.add(memberPanel, BorderLayout.CENTER);
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+
+        groupDialog.add(panel);
+        groupDialog.setVisible(true);
+    }
+
+    /**
+     * 执行创建群聊
+     */
+    private void performCreateGroup(String groupName, String groupDesc, java.util.List<String> members, JDialog dialog) {
+        try {
+            appendMessage("[系统] 正在创建群聊: " + groupName);
+            appendMessage("[系统] 群聊成员: " + String.join(", ", members));
+
+            // 调用真实的创建群聊API
+            String groupId = httpClient.createGroup(groupName, groupDesc, members, userId);
+
+            if (groupId != null && !groupId.isEmpty()) {
+                appendMessage("[系统] 群聊创建成功！群聊ID: " + groupId);
+                appendMessage("[系统] 已在conversation表中创建会话记录");
+                appendMessage("[系统] 已在user_conversation_list表中添加所有群成员");
+
+                // 自动填充群聊ID到群聊输入框
+                groupIdInput.setText(groupId);
+
+                JOptionPane.showMessageDialog(dialog,
+                    "群聊创建成功！\n群聊ID: " + groupId + "\n群聊名称: " + groupName +
+                    "\n成员数量: " + members.size() + "\n\n数据库操作：\n" +
+                    "✓ conversation表已添加会话记录\n" +
+                    "✓ user_conversation_list表已添加群成员",
+                    "创建成功", JOptionPane.INFORMATION_MESSAGE);
+                dialog.dispose();
+            } else {
+                appendMessage("[系统] 群聊创建失败！可能原因：消息服务未启动或网络异常");
+                JOptionPane.showMessageDialog(dialog,
+                    "创建失败！\n可能原因：\n1. 消息服务未启动\n2. 网络连接异常\n3. 数据库连接失败\n4. 部分成员不存在",
+                    "创建失败", JOptionPane.ERROR_MESSAGE);
+            }
+
+        } catch (Exception e) {
+            appendMessage("[系统] 创建群聊异常: " + e.getMessage());
+            JOptionPane.showMessageDialog(dialog,
+                "创建异常: " + e.getMessage() + "\n请检查消息服务是否正常运行",
+                "创建异常", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+
 }

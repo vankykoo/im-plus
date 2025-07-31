@@ -3,6 +3,7 @@ package com.vanky.im.gateway.netty.tcp;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.gateway.server.processor.IMServiceHandler;
 import com.vanky.im.gateway.session.UserChannelManager;
+import com.vanky.im.gateway.service.UserOfflineService;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -24,9 +25,12 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
     
     @Autowired
     private IMServiceHandler imServiceHandler;
-    
+
     @Autowired
     private UserChannelManager userChannelManager;
+
+    @Autowired
+    private UserOfflineService userOfflineService;
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ChatMessage msg) throws Exception {
@@ -54,8 +58,7 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
 
         // 连接断开时，处理用户下线逻辑
         if (userId != null) {
-            log.info("用户连接断开，执行下线处理 - 用户ID: {}", userId);
-            userChannelManager.unbindChannel(userId);
+            userOfflineService.handleUserOffline(userId, "TCP连接断开");
         }
 
         super.channelInactive(ctx);
@@ -68,8 +71,7 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
         // 处理用户下线逻辑
         String userId = userChannelManager.getUserId(ctx.channel());
         if (userId != null) {
-            log.info("连接异常，执行用户下线处理 - 用户ID: {}", userId);
-            userChannelManager.unbindChannel(userId);
+            userOfflineService.handleUserOffline(userId, "TCP连接异常: " + cause.getMessage());
         }
 
         ctx.close();

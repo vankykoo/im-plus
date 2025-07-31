@@ -123,19 +123,19 @@ public class MessageConstants {
     // ========== 消息推送状态常量 ==========
 
     /** 消息状态：已发送（等待推送） */
-    public static final int MESSAGE_STATUS_SENT = 0;
+    public static final byte MESSAGE_STATUS_SENT = 0;
 
     /** 消息状态：推送成功（客户端已确认） */
-    public static final int MESSAGE_STATUS_DELIVERED = 1;
+    public static final byte MESSAGE_STATUS_DELIVERED = 1;
 
     /** 消息状态：已读 */
-    public static final int MESSAGE_STATUS_READ = 2;
+    public static final byte MESSAGE_STATUS_READ = 2;
 
     /** 消息状态：撤回 */
-    public static final int MESSAGE_STATUS_RECALLED = 3;
+    public static final byte MESSAGE_STATUS_RECALLED = 3;
 
     /** 消息状态：推送失败 */
-    public static final int MESSAGE_STATUS_FAILED = 4;
+    public static final byte MESSAGE_STATUS_FAILED = 4;
 
     // ========== 私有构造函数 ==========
     

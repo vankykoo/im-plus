@@ -16,6 +16,14 @@ public interface MessageStatusService {
     boolean updateMessageDelivered(String msgId, String seq, String userId);
 
     /**
+     * 批量更新消息推送状态为已送达（客户端已确认）
+     * @param msgIds 消息ID数组
+     * @param userId 确认用户ID
+     * @return 成功更新的消息数量
+     */
+    int batchUpdateMessageDelivered(String[] msgIds, String userId);
+
+    /**
      * 更新消息状态为已读
      * @param msgId 消息ID
      * @param userId 读取用户ID

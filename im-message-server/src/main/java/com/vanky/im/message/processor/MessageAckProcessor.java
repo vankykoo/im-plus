@@ -1,5 +1,6 @@
 package com.vanky.im.message.processor;
 
+import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.service.MessageStatusService;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,41 @@ public class MessageAckProcessor {
     }
 
     /**
+     * 处理批量消息确认
+     * @param chatMessage 批量ACK确认消息，消息内容包含多个消息ID，用逗号分隔
+     */
+    public void processBatchMessageAck(ChatMessage chatMessage) {
+        String userId = chatMessage.getFromId();
+        String msgIdsStr = chatMessage.getContent(); // 消息内容包含多个消息ID，用逗号分隔
+
+        log.info("开始处理批量消息确认 - 用户: {}, 消息ID列表: {}", userId, msgIdsStr);
+
+        try {
+            // 验证批量ACK消息的有效性
+            if (!validateBatchAckMessage(chatMessage)) {
+                log.warn("批量ACK消息验证失败 - 用户: {}, 消息ID列表: {}", userId, msgIdsStr);
+                return;
+            }
+
+            // 解析消息ID列表
+            String[] msgIds = msgIdsStr.split(",");
+            if (msgIds.length == 0) {
+                log.warn("批量ACK消息ID列表为空 - 用户: {}", userId);
+                return;
+            }
+
+            // 批量更新消息状态为已送达
+            int updatedCount = messageStatusService.batchUpdateMessageDelivered(msgIds, userId);
+
+            log.info("批量消息确认处理完成 - 用户: {}, 总消息数: {}, 成功更新: {}",
+                    userId, msgIds.length, updatedCount);
+
+        } catch (Exception e) {
+            log.error("处理批量消息确认异常 - 用户: {}, 消息ID列表: {}", userId, msgIdsStr, e);
+        }
+    }
+
+    /**
      * 验证ACK消息的有效性
      * @param chatMessage ACK消息
      * @return 验证结果
@@ -79,6 +115,33 @@ public class MessageAckProcessor {
             return false;
         }
         
+        return true;
+    }
+
+    /**
+     * 验证批量ACK消息的有效性
+     * @param chatMessage 批量ACK消息
+     * @return 是否有效
+     */
+    private boolean validateBatchAckMessage(ChatMessage chatMessage) {
+        // 检查用户ID
+        if (chatMessage.getFromId() == null || chatMessage.getFromId().trim().isEmpty()) {
+            log.warn("批量ACK消息缺少用户ID");
+            return false;
+        }
+
+        // 检查消息内容（消息ID列表）
+        if (chatMessage.getContent() == null || chatMessage.getContent().trim().isEmpty()) {
+            log.warn("批量ACK消息缺少消息ID列表");
+            return false;
+        }
+
+        // 检查消息类型
+        if (chatMessage.getType() != ClientToServerMessageType.BATCH_MESSAGE_ACK.getValue()) {
+            log.warn("批量ACK消息类型不正确: {}", chatMessage.getType());
+            return false;
+        }
+
         return true;
     }
 }

@@ -18,6 +18,13 @@ public interface RedisService {
     Long generateSeq(String conversationId);
 
     /**
+     * 原子生成用户级全局序列号
+     * @param userId 用户ID
+     * @return 用户级全局序列号
+     */
+    Long generateUserGlobalSeq(String userId);
+
+    /**
      * 缓存消息
      * @param msgId 消息ID
      * @param messageJson 消息JSON
@@ -91,4 +98,14 @@ public interface RedisService {
      * @param timestamp 激活时间戳
      */
     void activateUserConversation(String userId, String conversationId, long timestamp);
+
+    // ========== 新增方法：离线消息同步支持 ==========
+
+    /**
+     * 获取用户的最大全局序列号
+     * 用于离线消息同步时判断是否有新消息
+     * @param userId 用户ID
+     * @return 用户最大全局序列号，如果用户无消息则返回0
+     */
+    Long getUserMaxGlobalSeq(String userId);
 }

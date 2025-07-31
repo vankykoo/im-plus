@@ -53,8 +53,8 @@ IM Plus是一个基于Spring Boot + Netty的分布式即时通讯系统，支持
 
 ### 中间件端口
 - **MySQL数据库**: 3306
-- **Redis缓存**: 6379
-- **RocketMQ NameServer**: 9876 (192.168.200.137:9876)
+- **Redis缓存**: 6379 (192.168.200.137:6379)
+- **RocketMQ NameServer**: 9876 (localhost:9876)
 
 ### 客户端连接端口
 - **WebSocket连接**: ws://localhost:8080/websocket
@@ -178,17 +178,17 @@ GET  /users/logout/{userId} - 用户退出
 ### 1. 环境准备
 ```bash
 # 启动MySQL (端口3306)
-# 启动Redis (端口6379)
-# 启动RocketMQ NameServer (192.168.200.137:9876)
+# 启动Redis (端口6379, 地址192.168.200.137)
+# 启动RocketMQ NameServer (localhost:9876)
 ```
 
 ### 2. 数据库初始化
 ```sql
 -- 创建数据库
-CREATE DATABASE im_plus DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE `im-plus` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- 导入数据库表结构
--- 执行 docs/ 目录下的SQL脚本
+-- 执行相应的SQL脚本创建表结构
 ```
 
 ### 3. 配置文件
@@ -290,9 +290,11 @@ im-plus/
 │   └── src/main/java/
 │       └── com/vanky/im/client/
 ├── docs/                # 项目文档
-│   ├── memory_bank.md
-│   ├── test-message-consumer.md
-│   └── unified-message-consumer-guide.md
+│   ├── memory_bank.md           # 项目记忆库
+│   ├── offline-message-sync-*.md # 离线消息同步文档
+│   ├── quick_test_guide.md      # 快速测试指南
+│   ├── task_*.md               # 任务开发文档
+│   └── unified-message-consumer-guide.md # 消息消费指南
 └── pom.xml             # 父级POM文件
 ```
 

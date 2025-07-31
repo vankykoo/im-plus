@@ -11,8 +11,10 @@ import java.util.Date;
 /**
  * 私聊消息表
  *
+ * @deprecated 该类已被统一的 Message 类替代，请使用 com.vanky.im.message.entity.Message
  * @TableName private_message
  */
+@Deprecated
 @TableName(value ="private_message")
 @Data
 public class PrivateMessage {

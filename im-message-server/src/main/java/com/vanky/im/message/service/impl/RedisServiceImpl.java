@@ -23,6 +23,7 @@ public class RedisServiceImpl implements RedisService {
     private RedisTemplate<String, Object> redisTemplate;
 
     private static final String CONVERSATION_SEQ_PREFIX = "conversation:seq:";
+    private static final String USER_GLOBAL_SEQ_PREFIX = "user:global:seq:";
     private static final String MESSAGE_CACHE_PREFIX = "msg:";
     private static final String USER_MSG_LIST_PREFIX = "user:msg:list:";
     private static final String CONVERSATION_LATEST_MSG_PREFIX = "conversation:latest:";
@@ -37,6 +38,22 @@ public class RedisServiceImpl implements RedisService {
             log.error("生成会话序列号失败, conversationId: {}", conversationId, e);
             throw new RuntimeException("生成会话序列号失败", e);
         }
+    }
+
+    @Override
+    public Long generateUserGlobalSeq(String userId) {
+        // {{CHENGQI:
+        // Action: Added; Timestamp: 2025-07-28 23:08:31 +08:00; Reason: 实现用户级全局序列号生成;
+        // }}
+        // {{START MODIFICATIONS}}
+        String key = USER_GLOBAL_SEQ_PREFIX + userId;
+        try {
+            return redisTemplate.opsForValue().increment(key);
+        } catch (Exception e) {
+            log.error("生成用户全局序列号失败, userId: {}", userId, e);
+            throw new RuntimeException("生成用户全局序列号失败", e);
+        }
+        // {{END MODIFICATIONS}}
     }
 
     @Override
@@ -191,5 +208,37 @@ public class RedisServiceImpl implements RedisService {
         } catch (Exception e) {
             log.error("激活用户会话失败 - 用户ID: {}, 会话ID: {}", userId, conversationId, e);
         }
+    }
+
+    // ========== 新增方法实现：离线消息同步支持 ==========
+
+    @Override
+    public Long getUserMaxGlobalSeq(String userId) {
+        // {{CHENGQI:
+        // Action: Added; Timestamp: 2025-07-29 14:15:29 +08:00; Reason: 实现获取用户最大全局序列号方法，支持离线消息同步功能;
+        // }}
+        // {{START MODIFICATIONS}}
+        try {
+            String key = USER_GLOBAL_SEQ_PREFIX + userId;
+            Object value = redisTemplate.opsForValue().get(key);
+
+            if (value instanceof Long) {
+                Long maxSeq = (Long) value;
+                log.debug("获取用户最大全局序列号 - 用户ID: {}, 最大序列号: {}", userId, maxSeq);
+                return maxSeq;
+            } else if (value instanceof Integer) {
+                Long maxSeq = ((Integer) value).longValue();
+                log.debug("获取用户最大全局序列号 - 用户ID: {}, 最大序列号: {}", userId, maxSeq);
+                return maxSeq;
+            }
+
+            log.debug("用户最大全局序列号不存在，返回默认值0 - 用户ID: {}", userId);
+            return 0L;
+
+        } catch (Exception e) {
+            log.error("获取用户最大全局序列号失败 - 用户ID: {}", userId, e);
+            return 0L;
+        }
+        // {{END MODIFICATIONS}}
     }
 }

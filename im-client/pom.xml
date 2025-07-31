@@ -15,6 +15,18 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>central</id>
+            <name>Maven Central Repository</name>
+            <url>https://repo1.maven.org/maven2</url>
+            <layout>default</layout>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
     <dependencies>
         <!-- im-common模块依赖 -->
         <dependency>
@@ -53,6 +65,15 @@
             <artifactId>logback-classic</artifactId>
             <version>1.5.16</version>
         </dependency>
+
+        <!-- Redis Client - 临时注释，网络问题 -->
+        <!--
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>4.4.3</version>
+        </dependency>
+        -->
 
         <!-- Lombok已移除，手动实现getter/setter -->
     </dependencies>

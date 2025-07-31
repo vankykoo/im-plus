@@ -11,7 +11,8 @@ public enum ClientToServerMessageType {
     LOGIN_REQUEST("登录请求", 2001),
     LOGOUT_REQUEST("登出请求", 2002),
     HEARTBEAT("心跳", 2003),
-    MESSAGE_ACK("消息确认", 2004);
+    MESSAGE_ACK("消息确认", 2004),
+    BATCH_MESSAGE_ACK("批量消息确认", 2005);
 
     private final String label;
     private final int value;

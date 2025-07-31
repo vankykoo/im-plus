@@ -11,10 +11,57 @@
             <result property="lastReadSeq" column="last_read_seq" jdbcType="BIGINT"/>
             <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
             <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+            <result property="unreadCount" column="unread_count" jdbcType="INTEGER"/>
+            <result property="lastMsgId" column="last_msg_id" jdbcType="BIGINT"/>
+            <result property="lastUpdateTime" column="last_update_time" jdbcType="TIMESTAMP"/>
     </resultMap>
 
     <sql id="Base_Column_List">
         id,user_id,conversation_id,
-        last_read_seq,create_time,update_time
+        last_read_seq,create_time,update_time,
+        unread_count,last_msg_id,last_update_time
     </sql>
-</mapper> 
+
+    <!-- 会话概览查询结果映射 -->
+    <resultMap id="ConversationOverviewResultMap" type="com.vanky.im.message.dto.ConversationOverviewDTO">
+        <result property="conversationId" column="conversation_id" jdbcType="VARCHAR"/>
+        <result property="unreadCount" column="unread_count" jdbcType="INTEGER"/>
+        <result property="lastUpdateTime" column="last_update_time" jdbcType="TIMESTAMP"/>
+        <result property="lastMsgContent" column="last_msg_content" jdbcType="VARCHAR"/>
+        <result property="lastMsgContentType" column="last_msg_content_type" jdbcType="INTEGER"/>
+        <result property="lastMsgSender" column="last_msg_sender" jdbcType="VARCHAR"/>
+        <result property="conversationType" column="conversation_type" jdbcType="INTEGER"/>
+        <result property="conversationName" column="conversation_name" jdbcType="VARCHAR"/>
+        <result property="conversationAvatar" column="conversation_avatar" jdbcType="VARCHAR"/>
+        <result property="lastMsgTime" column="last_msg_time" jdbcType="TIMESTAMP"/>
+        <result property="lastMsgId" column="last_msg_id" jdbcType="BIGINT"/>
+    </resultMap>
+
+    <!-- 高效的会话概览查询 -->
+    <select id="selectConversationOverviews" resultMap="ConversationOverviewResultMap">
+        SELECT
+            ucl.conversation_id,
+            ucl.unread_count,
+            ucl.last_update_time,
+            msg.content AS last_msg_content,
+            msg.content_type AS last_msg_content_type,
+            CAST(msg.sender_id AS CHAR) AS last_msg_sender,
+            conv.type AS conversation_type,
+            conv.name AS conversation_name,
+            conv.avatar AS conversation_avatar,
+            msg.send_time AS last_msg_time,
+            ucl.last_msg_id
+        FROM
+            user_conversation_list AS ucl
+        -- 基于 last_msg_id 的高效JOIN
+        LEFT JOIN message AS msg ON ucl.last_msg_id = msg.msg_id
+        LEFT JOIN conversation AS conv ON ucl.conversation_id = conv.conversation_id
+        WHERE
+            ucl.user_id = #{userId}
+        ORDER BY
+            ucl.last_update_time DESC
+        <if test="limit != null and limit > 0">
+            LIMIT #{limit}
+        </if>
+    </select>
+</mapper>

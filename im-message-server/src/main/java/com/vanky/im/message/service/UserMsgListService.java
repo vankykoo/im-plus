@@ -19,4 +19,13 @@ public interface UserMsgListService extends IService<UserMsgList> {
      * @param toUserId 接收方用户ID
      */
     void saveWriteExpandRecords(String msgId, String conversationId, Long seq, String fromUserId, String toUserId);
+
+    /**
+     * 为单个用户插入消息记录并获得用户级全局seq
+     * @param userId 用户ID
+     * @param msgId 消息ID
+     * @param conversationId 会话ID
+     * @return 用户级全局seq
+     */
+    Long saveUserMessageRecord(String userId, String msgId, String conversationId);
 }

@@ -3,6 +3,7 @@ package com.vanky.im.gateway.netty.websocket;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.gateway.server.processor.IMServiceHandler;
 import com.vanky.im.gateway.session.UserChannelManager;
+import com.vanky.im.gateway.service.UserOfflineService;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -24,9 +25,12 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<BinaryWe
     
     @Autowired
     private IMServiceHandler imServiceHandler;
-    
+
     @Autowired
     private UserChannelManager userChannelManager;
+
+    @Autowired
+    private UserOfflineService userOfflineService;
     
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, BinaryWebSocketFrame frame) throws Exception {
@@ -74,14 +78,13 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<BinaryWe
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         logger.info("[WebSocket] 客户端连接断开: {}", ctx.channel().remoteAddress());
-        
+
         // 连接断开时，处理用户下线逻辑
         String userId = userChannelManager.getUserId(ctx.channel());
         if (userId != null) {
-            logger.info("用户连接断开，执行下线处理 - 用户ID: {}", userId);
-            userChannelManager.unbindChannel(userId);
+            userOfflineService.handleUserOffline(userId, "WebSocket连接断开");
         }
-        
+
         super.channelInactive(ctx);
     }
 
@@ -92,8 +95,7 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<BinaryWe
         // 处理用户下线逻辑
         String userId = userChannelManager.getUserId(ctx.channel());
         if (userId != null) {
-            logger.info("连接异常，执行用户下线处理 - 用户ID: {}", userId);
-            userChannelManager.unbindChannel(userId);
+            userOfflineService.handleUserOffline(userId, "WebSocket连接异常: " + cause.getMessage());
         }
 
         ctx.close();

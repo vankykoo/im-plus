@@ -291,24 +291,28 @@ public class MessageQueueService {
             // 序列化消息
             byte[] messageBody = ackMessage.toByteArray();
 
-            // 创建RocketMQ消息
+            // 创建RocketMQ消息，使用统一的会话消息Topic
             Message message = new Message(
-                    TopicConstants.IM_MESSAGE_TOPIC,
+                    TopicConstants.TOPIC_CONVERSATION_MESSAGE,
                     "MESSAGE_ACK",
                     messageBody
             );
+
+            // 为ACK消息设置Key，使用消息ID作为标识
+            message.setKeys("ack_" + msgId);
 
             // 异步发送消息
             producer.send(message, new SendCallback() {
                 @Override
                 public void onSuccess(SendResult sendResult) {
-                    log.debug("ACK消息发送成功 - 消息ID: {}, 序列号: {}, 用户: {}, MQ消息ID: {}",
-                            msgId, seq, userId, sendResult.getMsgId());
+                    log.info("ACK消息发送成功 - 消息ID: {}, 序列号: {}, 用户: {}, Topic: {}, MQ消息ID: {}",
+                            msgId, seq, userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, sendResult.getMsgId());
                 }
 
                 @Override
                 public void onException(Throwable e) {
-                    log.error("ACK消息发送失败 - 消息ID: {}, 序列号: {}, 用户: {}", msgId, seq, userId, e);
+                    log.error("ACK消息发送失败 - 消息ID: {}, 序列号: {}, 用户: {}, Topic: {}",
+                            msgId, seq, userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, e);
                 }
             });
 

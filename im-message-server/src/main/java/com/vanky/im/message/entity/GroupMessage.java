@@ -11,8 +11,10 @@ import java.util.Date;
 /**
  * 群聊消息表
  *
+ * @deprecated 该类已被统一的 Message 类替代，请使用 com.vanky.im.message.entity.Message
  * @TableName group_message
  */
+@Deprecated
 @TableName(value ="group_message")
 @Data
 public class GroupMessage {

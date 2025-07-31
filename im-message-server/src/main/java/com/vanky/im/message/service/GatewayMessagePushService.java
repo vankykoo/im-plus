@@ -1,7 +1,8 @@
 package com.vanky.im.message.service;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendCallback;
 import org.apache.rocketmq.client.producer.SendResult;
@@ -15,9 +16,10 @@ import org.springframework.stereotype.Service;
  * 网关消息推送服务
  * 负责将消息推送到指定的网关进行用户投递
  */
-@Slf4j
 @Service
 public class GatewayMessagePushService {
+
+    private static final Logger log = LoggerFactory.getLogger(GatewayMessagePushService.class);
     
     @Value("${message.push.topic}")
     private String pushToGatewayTopic;

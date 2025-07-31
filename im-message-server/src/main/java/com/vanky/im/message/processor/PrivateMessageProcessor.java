@@ -3,12 +3,17 @@ package com.vanky.im.message.processor;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.constant.MessageConstants;
+import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.entity.PrivateMessage;
 import com.vanky.im.message.service.*;
 import com.vanky.im.message.util.MessageConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.util.Arrays;
+import java.util.List;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -24,6 +29,12 @@ public class PrivateMessageProcessor {
     
     @Autowired
     private PrivateMessageService privateMessageService;
+
+    @Autowired
+    private MessageService messageService;
+
+    @Autowired
+    private MessageReceiverService messageReceiverService;
     
     @Autowired
     private UserMsgListService userMsgListService;
@@ -176,20 +187,26 @@ public class PrivateMessageProcessor {
     /**
      * 保存消息数据到数据库
      */
-    private void saveMessageData(ChatMessage chatMessage, String msgId, String conversationId, 
+    private void saveMessageData(ChatMessage chatMessage, String msgId, String conversationId,
                                 Long seq, String fromUserId, String toUserId) {
-        // 1. 保存消息主体到message表
-        PrivateMessage privateMessage = MessageConverter.convertToPrivateMessage(chatMessage, msgId, conversationId);
-        privateMessage.setStatus(MessageConstants.MESSAGE_STATUS_SENT); // 初始状态为已发送，等待客户端确认
-        privateMessageService.save(privateMessage);
-        log.debug("保存消息主体完成 - 消息ID: {}", msgId);
-        
-        // 2. 写扩散：为发送方和接收方在user_msg_list表中插入记录
-        userMsgListService.saveWriteExpandRecords(msgId, conversationId, seq, fromUserId, toUserId);
-        log.debug("写扩散记录保存完成 - 发送方: {}, 接收方: {}", fromUserId, toUserId);
-        
+        // {{CHENGQI:
+        // Action: Modified; Timestamp: 2025-07-28 23:08:31 +08:00; Reason: 使用统一的消息接收者处理逻辑;
+        // }}
+        // {{START MODIFICATIONS}}
+        // 1. 保存消息主体到统一的message表
+        Message message = MessageConverter.convertToMessage(chatMessage, msgId, conversationId, MessageTypeConstants.MSG_TYPE_PRIVATE);
+        message.setStatus(MessageConstants.MESSAGE_STATUS_SENT); // 初始状态为已发送，等待客户端确认
+        messageService.save(message);
+        log.debug("保存私聊消息主体完成 - 消息ID: {}, 消息类型: {}", msgId, MessageTypeConstants.MSG_TYPE_PRIVATE);
+
+        // 2. 使用统一的消息接收者处理逻辑
+        List<String> receiverIds = Arrays.asList(fromUserId, toUserId); // 私聊：发送方和接收方都是接收者
+        messageReceiverService.processMessageReceivers(msgId, conversationId, receiverIds);
+        log.debug("消息接收者处理完成 - 发送方: {}, 接收方: {}", fromUserId, toUserId);
+
         // 3. 处理会话信息
         conversationService.handleConversation(conversationId, fromUserId, toUserId);
+        // {{END MODIFICATIONS}}
     }
 
     /**
@@ -249,8 +266,8 @@ public class PrivateMessageProcessor {
         String conversationId = generateConversationId(fromUserId, toUserId);
 
         // 1. 将新消息缓存到Redis (String, msgId -> message_json, TTL 1天)
-        PrivateMessage privateMessage = MessageConverter.convertToPrivateMessage(chatMessage, persistResult.msgId, conversationId);
-        String messageJson = MessageConverter.toJson(privateMessage);
+        Message message = MessageConverter.convertToMessage(chatMessage, persistResult.msgId, conversationId, MessageTypeConstants.MSG_TYPE_PRIVATE);
+        String messageJson = MessageConverter.toJson(message);
         redisService.cacheMessage(persistResult.msgId, messageJson, MessageConstants.MESSAGE_CACHE_TTL_SECONDS);
 
         // 2. 将消息的msgId和seq存入用户消息链的缓存中(ZSet)

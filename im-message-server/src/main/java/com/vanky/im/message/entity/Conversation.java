@@ -30,7 +30,7 @@ public class Conversation {
     private String conversationId;
 
     /**
-     * 会话类型：1-私聊，2-群聊
+     * 会话类型：0-私聊，1-群聊
      */
     @TableField(value = "type")
     private Integer type;
@@ -66,7 +66,7 @@ public class Conversation {
     private String createBy;
 
     /**
-     * 更新人
+     * 修改人
      */
     @TableField(value = "update_by")
     private String updateBy;

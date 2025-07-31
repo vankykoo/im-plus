@@ -3,6 +3,8 @@ package com.vanky.im.testclient.client;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.enums.ClientToServerMessageType;
 import com.vanky.im.common.enums.ClientToClientMessageType;
+import com.vanky.im.testclient.storage.LocalMessageStorage;
+import java.util.List;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
@@ -43,12 +45,20 @@ public class NettyTcpClient {
     
     private EventLoopGroup group;
     private Channel channel;
+
+    // 用于更新本地同步点
+    private HttpClient httpClient;
+    private LocalMessageStorage localStorage;
     
     public NettyTcpClient(String userId, String token, MessageHandler messageHandler) {
         this.userId = userId;
         this.token = token;
         this.messageHandler = messageHandler;
         this.connectLatch = new CountDownLatch(1);
+
+        // 初始化HTTP客户端和本地存储
+        this.httpClient = new HttpClient();
+        this.localStorage = new LocalMessageStorage();
     }
     
     /**
@@ -133,6 +143,9 @@ public class NettyTcpClient {
                      chatMessage.getType() == ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue()) {
                 // 发送ACK确认消息
                 sendAckMessage(chatMessage.getUid(), chatMessage.getSeq());
+
+                // 更新本地用户级全局seq，避免重复拉取
+                updateLocalSyncSeqForRealTimeMessage(chatMessage);
             }
 
             // 委托给消息处理器
@@ -354,6 +367,63 @@ public class NettyTcpClient {
 
         } catch (Exception e) {
             System.err.println("发送ACK确认失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 更新本地用户级全局seq，避免实时推送的消息被重复拉取
+     * @param chatMessage 接收到的聊天消息
+     */
+    private void updateLocalSyncSeqForRealTimeMessage(ChatMessage chatMessage) {
+        try {
+            // 临时解决方案：通过HTTP API查询当前用户的最大全局seq
+            if (httpClient != null) {
+                HttpClient.SyncCheckResponse response = httpClient.checkSyncNeeded(userId, 0L);
+                if (response != null && response.isSuccess()) {
+                    Long serverMaxSeq = response.getTargetSeq();
+                    if (serverMaxSeq != null && serverMaxSeq > 0) {
+                        localStorage.updateLastSyncSeq(userId, serverMaxSeq);
+                        System.out.println("更新本地同步点 - 用户ID: " + userId + ", 新序列号: " + serverMaxSeq);
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            System.err.println("更新本地同步点失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 发送批量ACK确认消息
+     * @param msgIds 消息ID列表
+     */
+    public void sendBatchAckMessage(List<String> msgIds) {
+        try {
+            if (msgIds == null || msgIds.isEmpty()) {
+                return;
+            }
+
+            // 将消息ID列表转换为逗号分隔的字符串
+            String msgIdsStr = String.join(",", msgIds);
+
+            ChatMessage batchAckMessage = ChatMessage.newBuilder()
+                    .setType(com.vanky.im.common.enums.ClientToServerMessageType.BATCH_MESSAGE_ACK.getValue())
+                    .setContent(msgIdsStr) // 消息内容包含所有消息ID
+                    .setFromId(userId)
+                    .setToId("system")
+                    .setUid("batch_ack_" + System.currentTimeMillis()) // 生成唯一ID
+                    .setSeq(String.valueOf(System.currentTimeMillis()))
+                    .setTimestamp(System.currentTimeMillis())
+                    .setRetry(0)
+                    .build();
+
+            if (channel != null && channel.isActive()) {
+                channel.writeAndFlush(batchAckMessage);
+                System.out.println("发送批量ACK确认 - 消息数量: " + msgIds.size());
+            }
+
+        } catch (Exception e) {
+            System.err.println("发送批量ACK确认失败: " + e.getMessage());
         }
     }
 

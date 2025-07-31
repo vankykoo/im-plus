@@ -31,4 +31,12 @@ public interface UserConversationListService extends IService<UserConversationLi
      * @param conversationId 会话ID
      */
     void updateUserConversationList(Long userId, String conversationId);
+
+    /**
+     * 更新用户会话列表的消息相关信息
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @param msgId 最新消息ID
+     */
+    void updateUserConversationMessage(Long userId, String conversationId, String msgId);
 }

@@ -3,6 +3,7 @@ package com.vanky.im.gateway.netty.udp;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.gateway.server.processor.IMServiceHandler;
 import com.vanky.im.gateway.session.UserChannelManager;
+import com.vanky.im.gateway.service.UserOfflineService;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import org.slf4j.Logger;
@@ -22,9 +23,12 @@ public class UdpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
     
     @Autowired
     private IMServiceHandler imServiceHandler;
-    
+
     @Autowired
     private UserChannelManager userChannelManager;
+
+    @Autowired
+    private UserOfflineService userOfflineService;
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ChatMessage msg) throws Exception {
@@ -48,8 +52,7 @@ public class UdpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
         // 连接断开时，处理用户下线逻辑
         String userId = userChannelManager.getUserId(ctx.channel());
         if (userId != null) {
-            logger.info("用户连接断开，执行下线处理 - 用户ID: {}", userId);
-            userChannelManager.unbindChannel(userId);
+            userOfflineService.handleUserOffline(userId, "UDP连接断开");
         }
 
         super.channelInactive(ctx);

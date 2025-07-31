@@ -4,13 +4,16 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vanky.im.common.enums.ClientToClientMessageType;
+import com.vanky.im.message.constants.MessageTypeConstants;
 import com.vanky.im.message.entity.ConversationMsgList;
 import com.vanky.im.message.entity.GroupMessage;
+import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.entity.PrivateMessage;
 import com.vanky.im.message.entity.UserMsgList;
 import com.vanky.im.message.mapper.ConversationMapper;
 import com.vanky.im.message.mapper.ConversationMsgListMapper;
 import com.vanky.im.message.mapper.GroupMessageMapper;
+import com.vanky.im.message.mapper.MessageMapper;
 import com.vanky.im.message.mapper.PrivateMessageMapper;
 import com.vanky.im.message.mapper.UserMsgListMapper;
 import com.vanky.im.message.model.dto.MessageDTO;
@@ -38,12 +41,16 @@ public class MessageQueryServiceImpl implements MessageQueryService {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
     
+    // 注意：以下Mapper已被统一的MessageMapper替代，保留是为了兼容性
     @Autowired
     private PrivateMessageMapper privateMessageMapper;
-    
+
     @Autowired
     private GroupMessageMapper groupMessageMapper;
-    
+
+    @Autowired
+    private MessageMapper messageMapper;
+
     @Autowired
     private UserMsgListMapper userMsgListMapper;
     
@@ -212,11 +219,11 @@ public class MessageQueryServiceImpl implements MessageQueryService {
             int conversationType = getConversationType(conversationId);
             
             if (conversationType == CONVERSATION_TYPE_PRIVATE) {
-                // 私聊消息查询（写扩散）
-                result = queryPrivateMessagesFromDb(conversationId, startSeq, endSeq, limit);
+                // 私聊消息查询（写扩散）- 使用统一的message表
+                result = queryUnifiedMessagesFromDb(conversationId, (int)MessageTypeConstants.MSG_TYPE_PRIVATE, startSeq, endSeq, limit);
             } else {
-                // 群聊消息查询（读扩散）
-                result = queryGroupMessagesFromDb(conversationId, startSeq, endSeq, limit);
+                // 群聊消息查询（读扩散）- 使用统一的message表
+                result = queryUnifiedMessagesFromDb(conversationId, (int)MessageTypeConstants.MSG_TYPE_GROUP, startSeq, endSeq, limit);
             }
             
             // 按序列号排序
@@ -386,5 +393,190 @@ public class MessageQueryServiceImpl implements MessageQueryService {
         }
         
         return result;
+    }
+
+    /**
+     * 从统一的message表查询消息（新方法）
+     * @param conversationId 会话ID
+     * @param msgType 消息类型
+     * @param startSeq 起始序列号
+     * @param endSeq 结束序列号
+     * @param limit 限制数量
+     * @return 消息列表
+     */
+    private List<MessageDTO> queryUnifiedMessagesFromDb(String conversationId, Integer msgType,
+                                                       Long startSeq, Long endSeq, Integer limit) {
+        List<MessageDTO> result = new ArrayList<>();
+
+        try {
+            if (MessageTypeConstants.isPrivateMessage(msgType != null ? msgType.byteValue() : null)) {
+                // 私聊消息查询（写扩散）
+                result = queryPrivateMessagesFromUnifiedTable(conversationId, startSeq, endSeq, limit);
+            } else if (MessageTypeConstants.isGroupMessage(msgType != null ? msgType.byteValue() : null)) {
+                // 群聊消息查询（读扩散）
+                result = queryGroupMessagesFromUnifiedTable(conversationId, startSeq, endSeq, limit);
+            }
+
+            log.debug("从统一message表查询到 {} 条消息，消息类型: {}", result.size(), msgType);
+
+        } catch (Exception e) {
+            log.error("从统一message表查询消息失败 - 会话ID: {}, 消息类型: {}, 序列号范围: [{}, {}]",
+                    conversationId, msgType, startSeq, endSeq, e);
+        }
+
+        return result;
+    }
+
+    /**
+     * 从统一message表查询私聊消息
+     */
+    private List<MessageDTO> queryPrivateMessagesFromUnifiedTable(String conversationId,
+                                                                 Long startSeq, Long endSeq, Integer limit) {
+        List<MessageDTO> result = new ArrayList<>();
+
+        // 1. 从user_msg_list表获取序列号范围内的消息ID
+        LambdaQueryWrapper<UserMsgList> userMsgWrapper = new LambdaQueryWrapper<UserMsgList>()
+                .eq(UserMsgList::getConversationId, conversationId)
+                .between(UserMsgList::getSeq, startSeq, endSeq)
+                .orderByAsc(UserMsgList::getSeq);
+
+        if (limit != null && limit > 0) {
+            userMsgWrapper.last("LIMIT " + limit);
+        }
+
+        List<UserMsgList> userMsgList = userMsgListMapper.selectList(userMsgWrapper);
+
+        if (userMsgList.isEmpty()) {
+            return result;
+        }
+
+        // 2. 根据消息ID从统一message表查询消息详情
+        List<Long> msgIds = userMsgList.stream().map(UserMsgList::getMsgId).collect(Collectors.toList());
+
+        LambdaQueryWrapper<Message> messageWrapper = new LambdaQueryWrapper<Message>()
+                .in(Message::getMsgId, msgIds)
+                .eq(Message::getMsgType, MessageTypeConstants.MSG_TYPE_PRIVATE)
+                .orderByAsc(Message::getSendTime);
+
+        List<Message> messages = messageMapper.selectList(messageWrapper);
+
+        // 3. 转换为MessageDTO
+        for (Message message : messages) {
+            MessageDTO messageDTO = new MessageDTO();
+            messageDTO.setType(ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue());
+            messageDTO.setContent(message.getContent());
+            messageDTO.setFromId(String.valueOf(message.getSenderId()));
+
+            // 从会话ID中解析接收方ID
+            String toId = parseToIdFromConversationId(conversationId, String.valueOf(message.getSenderId()));
+            messageDTO.setToId(toId);
+
+            messageDTO.setUid(String.valueOf(message.getMsgId()));
+
+            // 从userMsgList中找到对应的序列号
+            UserMsgList userMsg = userMsgList.stream()
+                    .filter(um -> um.getMsgId().equals(message.getMsgId()))
+                    .findFirst().orElse(null);
+            if (userMsg != null) {
+                messageDTO.setSeq(String.valueOf(userMsg.getSeq()));
+            }
+
+            messageDTO.setTimestamp(message.getSendTime().getTime());
+            messageDTO.setStatus(message.getStatus() != null ? message.getStatus().intValue() : null);
+
+            result.add(messageDTO);
+        }
+
+        return result;
+    }
+
+    /**
+     * 从统一message表查询群聊消息
+     */
+    private List<MessageDTO> queryGroupMessagesFromUnifiedTable(String conversationId,
+                                                               Long startSeq, Long endSeq, Integer limit) {
+        List<MessageDTO> result = new ArrayList<>();
+
+        // 1. 从conversation_msg_list表获取序列号范围内的消息ID
+        LambdaQueryWrapper<ConversationMsgList> conversationWrapper = new LambdaQueryWrapper<ConversationMsgList>()
+                .eq(ConversationMsgList::getConversationId, conversationId)
+                .between(ConversationMsgList::getSeq, startSeq, endSeq)
+                .orderByAsc(ConversationMsgList::getSeq);
+
+        if (limit != null && limit > 0) {
+            conversationWrapper.last("LIMIT " + limit);
+        }
+
+        List<ConversationMsgList> conversationMsgList = conversationMsgListMapper.selectList(conversationWrapper);
+
+        if (conversationMsgList.isEmpty()) {
+            return result;
+        }
+
+        // 2. 根据消息ID从统一message表查询消息详情
+        List<Long> msgIds = conversationMsgList.stream().map(ConversationMsgList::getMsgId).collect(Collectors.toList());
+
+        LambdaQueryWrapper<Message> messageWrapper = new LambdaQueryWrapper<Message>()
+                .in(Message::getMsgId, msgIds)
+                .eq(Message::getMsgType, MessageTypeConstants.MSG_TYPE_GROUP)
+                .orderByAsc(Message::getSendTime);
+
+        List<Message> messages = messageMapper.selectList(messageWrapper);
+
+        // 3. 转换为MessageDTO
+        String groupId = conversationId.replace("group_", "");
+
+        for (Message message : messages) {
+            MessageDTO messageDTO = new MessageDTO();
+            messageDTO.setType(ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue());
+            messageDTO.setContent(message.getContent());
+            messageDTO.setFromId(String.valueOf(message.getSenderId()));
+            messageDTO.setToId(groupId); // 接收方为群组ID
+            messageDTO.setUid(String.valueOf(message.getMsgId()));
+
+            // 从conversationMsgList中找到对应的序列号
+            ConversationMsgList conversationMsg = conversationMsgList.stream()
+                    .filter(cm -> cm.getMsgId().equals(message.getMsgId()))
+                    .findFirst().orElse(null);
+            if (conversationMsg != null) {
+                messageDTO.setSeq(String.valueOf(conversationMsg.getSeq()));
+            }
+
+            messageDTO.setTimestamp(message.getSendTime().getTime());
+            messageDTO.setStatus(message.getStatus() != null ? message.getStatus().intValue() : null);
+
+            result.add(messageDTO);
+        }
+
+        return result;
+    }
+
+    /**
+     * 从私聊会话ID中解析接收方ID
+     * 私聊会话ID格式通常为：较小ID_较大ID
+     *
+     * @param conversationId 会话ID
+     * @param senderId 发送方ID
+     * @return 接收方ID
+     */
+    private String parseToIdFromConversationId(String conversationId, String senderId) {
+        if (conversationId == null || senderId == null) {
+            return null;
+        }
+
+        // 会话ID格式：user1_user2 (按ID大小排序)
+        String[] parts = conversationId.split("_");
+        if (parts.length != 2) {
+            return null;
+        }
+
+        // 返回不是发送方的那个ID
+        if (senderId.equals(parts[0])) {
+            return parts[1];
+        } else if (senderId.equals(parts[1])) {
+            return parts[0];
+        }
+
+        return null;
     }
 }

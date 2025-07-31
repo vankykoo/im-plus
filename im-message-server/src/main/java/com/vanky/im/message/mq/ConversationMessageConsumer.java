@@ -39,23 +39,30 @@ public class ConversationMessageConsumer implements MessageListenerConcurrently 
             ConsumeConcurrentlyContext context) {
         try {
             for (MessageExt messageExt : messages) {
-                // 获取会话ID（从消息Key中）
-                String conversationId = messageExt.getKeys();
-                if (conversationId == null || conversationId.isEmpty()) {
-                    log.error("消息缺少会话ID: {}", messageExt);
-                    continue;
-                }
-                
                 // 解析消息体
                 byte[] body = messageExt.getBody();
                 if (body == null || body.length == 0) {
                     log.error("消息体为空: {}", messageExt);
                     continue;
                 }
-                
+
                 // 将字节数组转换为ChatMessage对象
                 ChatMessage chatMessage = ChatMessage.parseFrom(body);
-                
+
+                // 获取会话ID（从消息Key中，对于ACK消息特殊处理）
+                String conversationId = getConversationId(messageExt, chatMessage);
+                if (conversationId == null || conversationId.isEmpty()) {
+                    // 对于ACK消息，会话ID不是必需的，可以直接处理
+                    if (chatMessage.getType() == ClientToServerMessageType.MESSAGE_ACK.getValue()) {
+                        log.debug("处理ACK消息，无需会话ID - 消息ID: {}", chatMessage.getUid());
+                        processMessage(chatMessage, null);
+                        continue;
+                    } else {
+                        log.error("消息缺少会话ID: {}", messageExt);
+                        continue;
+                    }
+                }
+
                 // 处理消息
                 processMessage(chatMessage, conversationId);
             }
@@ -87,16 +94,39 @@ public class ConversationMessageConsumer implements MessageListenerConcurrently 
                 groupMsgProcessor.processGroupMessage(chatMessage, conversationId);
                 log.info("群聊消息已处理 - 会话ID: {}, 消息ID: {}", conversationId, chatMessage.getUid());
             } else if (messageType == ClientToServerMessageType.MESSAGE_ACK.getValue()) {
-                // 处理消息确认
+                // 处理单个消息确认
                 messageAckProcessor.processMessageAck(chatMessage);
                 log.info("消息确认已处理 - 消息ID: {}, 用户: {}", chatMessage.getUid(), chatMessage.getFromId());
+            } else if (messageType == ClientToServerMessageType.BATCH_MESSAGE_ACK.getValue()) {
+                // 处理批量消息确认
+                messageAckProcessor.processBatchMessageAck(chatMessage);
+                log.info("批量消息确认已处理 - 用户: {}", chatMessage.getFromId());
             } else {
                 log.warn("未知消息类型: {}, 会话ID: {}, 消息ID: {}",
                         messageType, conversationId, chatMessage.getUid());
             }
         } catch (Exception e) {
-            log.error("处理消息失败 - 会话ID: {}, 消息ID: {}, 错误: {}", 
+            log.error("处理消息失败 - 会话ID: {}, 消息ID: {}, 错误: {}",
                     conversationId, chatMessage.getUid(), e.getMessage(), e);
         }
+    }
+
+    /**
+     * 获取会话ID，对ACK消息进行特殊处理
+     * @param messageExt RocketMQ消息
+     * @param chatMessage 聊天消息
+     * @return 会话ID
+     */
+    private String getConversationId(MessageExt messageExt, ChatMessage chatMessage) {
+        String keys = messageExt.getKeys();
+
+        // 对于ACK消息，Key格式为"ack_消息ID"，需要特殊处理
+        if (keys != null && keys.startsWith("ack_")) {
+            // ACK消息不需要会话ID，返回null让上层逻辑处理
+            return null;
+        }
+
+        // 普通聊天消息直接返回Key作为会话ID
+        return keys;
     }
 }

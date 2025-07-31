@@ -4,11 +4,14 @@ import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.constant.MessageConstants;
+import com.vanky.im.message.constants.MessageTypeConstants;
 import com.vanky.im.message.entity.ConversationMsgList;
 import com.vanky.im.message.entity.GroupMessage;
+import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.service.*;
 import com.vanky.im.message.util.MessageConverter;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
@@ -22,15 +25,19 @@ import java.util.Set;
  * 群聊消息处理器
  * 实现读扩散模式的消息存储逻辑
  */
-@Slf4j
 @Component
 public class GroupMessageProcessor {
+
+    private static final Logger log = LoggerFactory.getLogger(GroupMessageProcessor.class);
 
     @Autowired
     private RedisService redisService;
     
     @Autowired
     private GroupMessageService groupMessageService;
+
+    @Autowired
+    private MessageService messageService;
     
     @Autowired
     private ConversationMsgListService conversationMsgListService;
@@ -43,6 +50,9 @@ public class GroupMessageProcessor {
     
     @Autowired
     private GatewayMessagePushService gatewayMessagePushService;
+
+    @Autowired
+    private MessageReceiverService messageReceiverService;
     
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -110,28 +120,41 @@ public class GroupMessageProcessor {
     /**
      * 保存消息数据到数据库（读扩散）
      * 群聊采用读扩散模式，只保存一条消息记录到group_message表
-     * 
+     *
      * @param chatMessage 原始消息
      * @param msgId 消息ID
      * @param conversationId 会话ID
      * @param seq 序列号
      */
     private void saveMessageData(ChatMessage chatMessage, String msgId, String conversationId, Long seq) {
-        // 1. 保存消息主体到group_message表
-        GroupMessage groupMessage = MessageConverter.convertToGroupMessage(chatMessage, msgId, conversationId);
-        groupMessage.setStatus(MessageConstants.MESSAGE_STATUS_SENT); // 初始状态为已发送，等待客户端确认
-        groupMessageService.save(groupMessage);
-        log.debug("保存群聊消息主体完成 - 消息ID: {}", msgId);
-        
+        // {{CHENGQI:
+        // Action: Modified; Timestamp: 2025-07-28 23:08:31 +08:00; Reason: 使用统一的消息接收者处理逻辑;
+        // }}
+        // {{START MODIFICATIONS}}
+        // 1. 保存消息主体到统一的message表
+        Message message = MessageConverter.convertToMessage(chatMessage, msgId, conversationId, MessageTypeConstants.MSG_TYPE_GROUP);
+        message.setStatus(MessageConstants.MESSAGE_STATUS_SENT); // 初始状态为已发送，等待客户端确认
+        messageService.save(message);
+        log.debug("保存群聊消息主体完成 - 消息ID: {}, 消息类型: {}", msgId, MessageTypeConstants.MSG_TYPE_GROUP);
+
         // 2. 保存一条会话消息记录到conversation_msg_list表
         ConversationMsgList conversationMsgList = new ConversationMsgList();
         conversationMsgList.setConversationId(conversationId);
-        conversationMsgList.setMsgId(Long.valueOf(msgId.hashCode())); // 将String转换为Long
+        conversationMsgList.setMsgId(Long.valueOf(msgId)); // 直接使用雪花算法生成的ID
         conversationMsgList.setSeq(seq);
-        conversationMsgList.setCreateTime(new Date());
-        conversationMsgList.setUpdateTime(new Date());
         conversationMsgListService.save(conversationMsgList);
         log.debug("保存会话消息记录完成 - 会话ID: {}, Seq: {}", conversationId, seq);
+
+        // 3. 使用统一的消息接收者处理逻辑
+        String groupId = chatMessage.getToId();
+        List<String> groupMemberIds = groupMemberService.getGroupMemberIds(groupId);
+        if (!groupMemberIds.isEmpty()) {
+            messageReceiverService.processMessageReceivers(msgId, conversationId, groupMemberIds);
+            log.debug("群聊消息接收者处理完成 - 群组ID: {}, 成员数量: {}", groupId, groupMemberIds.size());
+        } else {
+            log.warn("群组成员列表为空 - 群组ID: {}", groupId);
+        }
+        // {{END MODIFICATIONS}}
     }
     
     /**
@@ -145,8 +168,8 @@ public class GroupMessageProcessor {
      */
     private void updateCache(ChatMessage chatMessage, String msgId, String conversationId, Long seq) {
         // 1. 将新消息缓存到Redis (String, msgId -> message_json, TTL 1天)
-        GroupMessage groupMessage = MessageConverter.convertToGroupMessage(chatMessage, msgId, conversationId);
-        String messageJson = MessageConverter.toJson(groupMessage);
+        Message message = MessageConverter.convertToMessage(chatMessage, msgId, conversationId, MessageTypeConstants.MSG_TYPE_GROUP);
+        String messageJson = MessageConverter.toJson(message);
         redisService.cacheMessage(msgId, messageJson, MESSAGE_CACHE_TTL);
         
         // 2. 为消息发送者添加消息索引到缓存 (ZSet, user:msg:list:{userId} -> {msgId, seq})

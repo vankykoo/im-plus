@@ -4,9 +4,7 @@ import java.util.UUID;
 
 import com.vanky.im.common.constant.MsgContentConstant;
 import com.vanky.im.common.constant.ReceiveUserId;
-import com.vanky.im.common.enums.ClientToClientMessageType;
-import com.vanky.im.common.enums.ClientToServerMessageType;
-import com.vanky.im.common.enums.ServerToClientMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.protocol.ChatMessage;
 
 /**
@@ -26,7 +24,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generatePrivateMsg(String fromUserId, String toUserId, String content) {
         return ChatMessage.newBuilder()
-                .setType(ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue())
+                .setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE)
                 .setContent(content)
                 .setFromId(fromUserId)
                 .setToId(toUserId)
@@ -46,7 +44,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateLoginMsg(String userId, String token) {
         return ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.LOGIN_REQUEST.getValue())
+                .setType(MessageTypeConstants.LOGIN_REQUEST)
                 .setContent(MsgContentConstant.LOGIN_MSG)
                 .setFromId(userId)
                 .setToId(ReceiveUserId.SYSTEM_ID)
@@ -66,7 +64,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateLoginMsg(String userId) {
         return ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.LOGIN_REQUEST.getValue())
+                .setType(MessageTypeConstants.LOGIN_REQUEST)
                 .setContent(MsgContentConstant.LOGIN_MSG)
                 .setFromId(userId)
                 .setToId(ReceiveUserId.SYSTEM_ID)
@@ -85,7 +83,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateLogoutMsg(String userId) {
         return ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.LOGOUT_REQUEST.getValue())
+                .setType(MessageTypeConstants.LOGOUT_REQUEST)
                 .setContent(MsgContentConstant.LOGOUT_MSG)
                 .setFromId(userId)
                 .setToId(ReceiveUserId.SYSTEM_ID)
@@ -104,7 +102,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateKickoutMsg(String userId) {
         return ChatMessage.newBuilder()
-                .setType(ServerToClientMessageType.KICKOUT_NOTIFICATION.getValue())
+                .setType(MessageTypeConstants.KICKOUT_NOTIFICATION)
                 .setContent("你已被踢下线，不允许多方登录")
                 .setFromId(ReceiveUserId.SYSTEM_ID)
                 .setToId(userId)
@@ -123,7 +121,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateLoginSuccessMsg(String userId) {
         return ChatMessage.newBuilder()
-                .setType(ServerToClientMessageType.LOGIN_RESPONSE.getValue())
+                .setType(MessageTypeConstants.LOGIN_RESPONSE)
                 .setContent("登录成功")
                 .setFromId(ReceiveUserId.SYSTEM_ID)
                 .setToId(userId)
@@ -142,7 +140,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateHeartbeatMsg(String userId) {
         return ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.HEARTBEAT.getValue())
+                .setType(MessageTypeConstants.HEARTBEAT)
                 .setContent(MsgContentConstant.HEARTBEAT_PING)
                 .setFromId(userId)
                 .setToId(ReceiveUserId.SYSTEM_ID)
@@ -161,7 +159,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateHeartbeatResponseMsg(String userId) {
         return ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.HEARTBEAT.getValue())
+                .setType(MessageTypeConstants.HEARTBEAT)
                 .setContent(MsgContentConstant.HEARTBEAT_PONG)
                 .setFromId(ReceiveUserId.SYSTEM_ID)
                 .setToId(userId)
@@ -180,7 +178,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateMessageDeliverySuccessMsg(String userId, String originalMsgId) {
         return ChatMessage.newBuilder()
-                .setType(ServerToClientMessageType.MESSAGE_DELIVERY_SUCCESS.getValue())
+                .setType(MessageTypeConstants.MESSAGE_DELIVERY_SUCCESS)
                 .setContent("消息投递成功，原始消息ID: " + originalMsgId)
                 .setFromId(ReceiveUserId.SYSTEM_ID)
                 .setToId(userId)
@@ -200,7 +198,7 @@ public class MsgGenerator {
      */
     public static ChatMessage generateMessageDeliveryFailedMsg(String userId, String originalMsgId, String errorMsg) {
         return ChatMessage.newBuilder()
-                .setType(ServerToClientMessageType.MESSAGE_DELIVERY_FAILED.getValue())
+                .setType(MessageTypeConstants.MESSAGE_DELIVERY_FAILED)
                 .setContent("消息投递失败: " + errorMsg + "，原始消息ID: " + originalMsgId)
                 .setFromId(ReceiveUserId.SYSTEM_ID)
                 .setToId(userId)

@@ -2,9 +2,8 @@ package com.vanky.im.gateway.server.processor;
 
 import com.vanky.im.common.constant.MsgContentConstant;
 import com.vanky.im.common.constant.SessionConstants;
-import com.vanky.im.common.enums.ClientToClientMessageType;
-import com.vanky.im.common.enums.ClientToServerMessageType;
-import com.vanky.im.common.enums.ServerToClientMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
+
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
@@ -70,22 +69,22 @@ public class IMServiceHandler {
                     messageType, msg.getFromId(), msg.getToId(), msg.getUid(), channel.id().asShortText());
             
             // 客户端到服务端消息处理
-            if (messageType == ClientToServerMessageType.LOGIN_REQUEST.getValue()) {
+            if (messageType == MessageTypeConstants.LOGIN_REQUEST) {
                 // 处理登录请求
                 handleLogin(msg, channel);
-            } else if (messageType == ClientToServerMessageType.LOGOUT_REQUEST.getValue()) {
+            } else if (messageType == MessageTypeConstants.LOGOUT_REQUEST) {
                 // 处理登出请求
                 handleLogout(msg, channel);
-            } else if (messageType == ClientToServerMessageType.HEARTBEAT.getValue()) {
+            } else if (messageType == MessageTypeConstants.HEARTBEAT) {
                 // 处理心跳消息
                 handleHeartbeat(msg, channel);
-            } else if (messageType == ClientToServerMessageType.MESSAGE_ACK.getValue()) {
+            } else if (messageType == MessageTypeConstants.MESSAGE_ACK) {
                 // 处理消息确认
                 handleMessageAck(msg, channel);
             }
             // 客户端到客户端消息处理
-            else if (messageType == ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue() ||
-                     messageType == ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue()) {
+            else if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE ||
+                     messageType == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
                 
                 // 对于UDP连接，需要额外的Token验证
                 if (isUdpChannel(channel)) {
@@ -95,7 +94,7 @@ public class IMServiceHandler {
                     }
                 }
                 
-                if (messageType == ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue()) {
+                if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
                     // 私聊消息
                     privateMsgProcessor.process(msg, channel);
                 } else {
@@ -134,7 +133,7 @@ public class IMServiceHandler {
             log.warn("用户登录Token无效 - 用户: {}, Channel: {}, 关闭连接", userId, channel.id().asShortText());
             // 发送登录失败消息
             ChatMessage loginFailedMsg = ChatMessage.newBuilder()
-                    .setType(ServerToClientMessageType.LOGIN_RESPONSE.getValue())
+                    .setType(MessageTypeConstants.LOGIN_RESPONSE)
                     .setContent("登录失败：无效的Token")
                     .setFromId("system")
                     .setToId(userId)

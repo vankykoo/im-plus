@@ -3,8 +3,7 @@ package com.vanky.im.message.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vanky.im.common.enums.ClientToClientMessageType;
-import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.entity.ConversationMsgList;
 import com.vanky.im.message.entity.GroupMessage;
 import com.vanky.im.message.entity.Message;
@@ -287,7 +286,7 @@ public class MessageQueryServiceImpl implements MessageQueryService {
                 MessageDTO messageDTO = new MessageDTO();
                 
                 // 手动转换字段
-                messageDTO.setType(ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue());
+                messageDTO.setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE);
                 messageDTO.setContent(privateMessage.getContent());
                 messageDTO.setFromId(String.valueOf(privateMessage.getUserId()));
                 
@@ -379,7 +378,7 @@ public class MessageQueryServiceImpl implements MessageQueryService {
             if (groupMessage != null) {
                 MessageDTO messageDTO = new MessageDTO();
                 
-                messageDTO.setType(ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue());
+                messageDTO.setType(MessageTypeConstants.GROUP_CHAT_MESSAGE);
                 messageDTO.setContent(groupMessage.getContent());
                 messageDTO.setFromId(String.valueOf(groupMessage.getUserId()));
                 messageDTO.setToId(groupId); // 接收方为群组ID
@@ -463,7 +462,7 @@ public class MessageQueryServiceImpl implements MessageQueryService {
         // 3. 转换为MessageDTO
         for (Message message : messages) {
             MessageDTO messageDTO = new MessageDTO();
-            messageDTO.setType(ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue());
+            messageDTO.setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE);
             messageDTO.setContent(message.getContent());
             messageDTO.setFromId(String.valueOf(message.getSenderId()));
 
@@ -528,7 +527,7 @@ public class MessageQueryServiceImpl implements MessageQueryService {
 
         for (Message message : messages) {
             MessageDTO messageDTO = new MessageDTO();
-            messageDTO.setType(ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue());
+            messageDTO.setType(MessageTypeConstants.GROUP_CHAT_MESSAGE);
             messageDTO.setContent(message.getContent());
             messageDTO.setFromId(String.valueOf(message.getSenderId()));
             messageDTO.setToId(groupId); // 接收方为群组ID

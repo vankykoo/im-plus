@@ -4,7 +4,7 @@ import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.constant.MessageConstants;
-import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.entity.ConversationMsgList;
 import com.vanky.im.message.entity.GroupMessage;
 import com.vanky.im.message.entity.Message;

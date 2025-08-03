@@ -1,8 +1,8 @@
 package com.vanky.im.testclient.client;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.common.enums.ClientToServerMessageType;
-import com.vanky.im.common.enums.ClientToClientMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
+
 
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -69,7 +69,7 @@ public class IMWebSocketClient {
             System.out.println("收到消息 - 类型: " + chatMessage.getType() + ", 发送方: " + chatMessage.getFromId() + ", 内容: " + chatMessage.getContent());
             
             // 处理登录响应
-            if (chatMessage.getType() == 1001) { // LOGIN_RESPONSE
+            if (chatMessage.getType() == MessageTypeConstants.LOGIN_RESPONSE) {
                 if ("登录成功".equals(chatMessage.getContent())) {
                     isLoggedIn = true;
                     System.out.println("用户 " + userId + " 登录成功");
@@ -121,7 +121,7 @@ public class IMWebSocketClient {
      */
     private void sendLoginMessage() {
         ChatMessage loginMsg = ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.LOGIN_REQUEST.getValue())
+                .setType(MessageTypeConstants.LOGIN_REQUEST)
                 .setContent("登录请求")
                 .setFromId(userId)
                 .setToId("system")
@@ -145,7 +145,7 @@ public class IMWebSocketClient {
         }
         
         ChatMessage privateMsg = ChatMessage.newBuilder()
-                .setType(ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue())
+                .setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE)
                 .setContent(content)
                 .setFromId(userId)
                 .setToId(toUserId)
@@ -169,7 +169,7 @@ public class IMWebSocketClient {
         }
         
         ChatMessage groupMsg = ChatMessage.newBuilder()
-                .setType(ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue())
+                .setType(MessageTypeConstants.GROUP_CHAT_MESSAGE)
                 .setContent(content)
                 .setFromId(userId)
                 .setToId(groupId)
@@ -193,7 +193,7 @@ public class IMWebSocketClient {
         }
         
         ChatMessage heartbeatMsg = ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.HEARTBEAT.getValue())
+                .setType(MessageTypeConstants.HEARTBEAT)
                 .setContent("heartbeat")
                 .setFromId(userId)
                 .setToId("system")
@@ -245,7 +245,7 @@ public class IMWebSocketClient {
         if (isOpen()) {
             // 发送登出消息
             ChatMessage logoutMsg = ChatMessage.newBuilder()
-                    .setType(ClientToServerMessageType.LOGOUT_REQUEST.getValue())
+                    .setType(MessageTypeConstants.LOGOUT_REQUEST)
                     .setContent("登出请求")
                     .setFromId(userId)
                     .setToId("system")

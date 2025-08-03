@@ -1,7 +1,7 @@
 package com.vanky.im.message.service.impl;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.service.GroupNotificationService;
 import com.vanky.im.message.service.GatewayMessagePushService;
 import lombok.extern.slf4j.Slf4j;

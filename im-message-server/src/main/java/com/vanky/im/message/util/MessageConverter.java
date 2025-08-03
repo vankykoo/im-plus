@@ -3,7 +3,7 @@ package com.vanky.im.message.util;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.entity.GroupMessage;
 import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.entity.PrivateMessage;

@@ -1,7 +1,6 @@
 package com.vanky.im.message.mq;
 
-import com.vanky.im.common.enums.ClientToClientMessageType;
-import com.vanky.im.common.enums.ClientToServerMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.processor.GroupMessageProcessor;
 import com.vanky.im.message.processor.MessageAckProcessor;
@@ -53,7 +52,7 @@ public class ConversationMessageConsumer implements MessageListenerConcurrently 
                 String conversationId = getConversationId(messageExt, chatMessage);
                 if (conversationId == null || conversationId.isEmpty()) {
                     // 对于ACK消息，会话ID不是必需的，可以直接处理
-                    if (chatMessage.getType() == ClientToServerMessageType.MESSAGE_ACK.getValue()) {
+                    if (chatMessage.getType() == MessageTypeConstants.MESSAGE_ACK) {
                         log.debug("处理ACK消息，无需会话ID - 消息ID: {}", chatMessage.getUid());
                         processMessage(chatMessage, null);
                         continue;
@@ -85,19 +84,19 @@ public class ConversationMessageConsumer implements MessageListenerConcurrently 
             int messageType = chatMessage.getType();
             
             // 根据消息类型分发处理
-            if (messageType == ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue()) {
+            if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
                 // 处理私聊消息
                 privateMsgProcessor.processPrivateMessage(chatMessage, conversationId);
                 log.info("私聊消息已处理 - 会话ID: {}, 消息ID: {}", conversationId, chatMessage.getUid());
-            } else if (messageType == ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue()) {
+            } else if (messageType == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
                 // 处理群聊消息
                 groupMsgProcessor.processGroupMessage(chatMessage, conversationId);
                 log.info("群聊消息已处理 - 会话ID: {}, 消息ID: {}", conversationId, chatMessage.getUid());
-            } else if (messageType == ClientToServerMessageType.MESSAGE_ACK.getValue()) {
+            } else if (messageType == MessageTypeConstants.MESSAGE_ACK) {
                 // 处理单个消息确认
                 messageAckProcessor.processMessageAck(chatMessage);
                 log.info("消息确认已处理 - 消息ID: {}, 用户: {}", chatMessage.getUid(), chatMessage.getFromId());
-            } else if (messageType == ClientToServerMessageType.BATCH_MESSAGE_ACK.getValue()) {
+            } else if (messageType == MessageTypeConstants.BATCH_MESSAGE_ACK) {
                 // 处理批量消息确认
                 messageAckProcessor.processBatchMessageAck(chatMessage);
                 log.info("批量消息确认已处理 - 用户: {}", chatMessage.getFromId());

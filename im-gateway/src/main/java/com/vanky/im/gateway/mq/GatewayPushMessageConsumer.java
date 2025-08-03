@@ -1,7 +1,7 @@
 package com.vanky.im.gateway.mq;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import com.vanky.im.common.enums.ClientToClientMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.gateway.session.MsgSender;
 import com.vanky.im.gateway.session.UserChannelManager;
@@ -101,8 +101,8 @@ public class GatewayPushMessageConsumer implements MessageListenerConcurrently {
         try {
             // 只为聊天消息添加超时任务，不为系统消息添加
             int messageType = chatMessage.getType();
-            if (messageType == ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue() ||
-                messageType == ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue()) {
+            if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE ||
+                messageType == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
 
                 String ackId = chatMessage.getUid();
 

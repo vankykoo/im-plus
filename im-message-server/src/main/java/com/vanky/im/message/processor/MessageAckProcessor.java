@@ -1,6 +1,6 @@
 package com.vanky.im.message.processor;
 
-import com.vanky.im.common.enums.ClientToServerMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.service.MessageStatusService;
 import lombok.extern.slf4j.Slf4j;
@@ -108,9 +108,9 @@ public class MessageAckProcessor {
         }
         
         // 检查消息类型
-        if (chatMessage.getType() != com.vanky.im.common.enums.ClientToServerMessageType.MESSAGE_ACK.getValue()) {
-            log.warn("ACK消息类型不正确 - 期望: {}, 实际: {}", 
-                    com.vanky.im.common.enums.ClientToServerMessageType.MESSAGE_ACK.getValue(), 
+        if (chatMessage.getType() != MessageTypeConstants.MESSAGE_ACK) {
+            log.warn("ACK消息类型不正确 - 期望: {}, 实际: {}",
+                    MessageTypeConstants.MESSAGE_ACK,
                     chatMessage.getType());
             return false;
         }
@@ -137,7 +137,7 @@ public class MessageAckProcessor {
         }
 
         // 检查消息类型
-        if (chatMessage.getType() != ClientToServerMessageType.BATCH_MESSAGE_ACK.getValue()) {
+        if (chatMessage.getType() != MessageTypeConstants.BATCH_MESSAGE_ACK) {
             log.warn("批量ACK消息类型不正确: {}", chatMessage.getType());
             return false;
         }

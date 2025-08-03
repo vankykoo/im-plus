@@ -1,6 +1,6 @@
 package com.vanky.im.message.service.impl;
 
-import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.dto.ConversationOverviewDTO;
 import com.vanky.im.message.dto.SyncConversationRequest;
 import com.vanky.im.message.mapper.UserConversationListMapper;

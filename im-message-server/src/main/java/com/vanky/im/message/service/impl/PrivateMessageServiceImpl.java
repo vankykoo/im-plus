@@ -1,7 +1,7 @@
 package com.vanky.im.message.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.entity.PrivateMessage;
 import com.vanky.im.message.mapper.PrivateMessageMapper;

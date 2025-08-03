@@ -1,8 +1,7 @@
 package com.vanky.im.testclient.client;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.common.enums.ClientToServerMessageType;
-import com.vanky.im.common.enums.ClientToClientMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 import java.util.List;
 
@@ -124,8 +123,8 @@ public class RealWebSocketClient implements WebSocket.Listener {
                 }
             }
             // 处理聊天消息，需要发送ACK确认
-            else if (chatMessage.getType() == ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue() ||
-                     chatMessage.getType() == ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue()) {
+            else if (chatMessage.getType() == MessageTypeConstants.PRIVATE_CHAT_MESSAGE ||
+                     chatMessage.getType() == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
                 // 发送ACK确认消息
                 sendAckMessage(chatMessage.getUid(), chatMessage.getSeq());
 
@@ -180,7 +179,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
      */
     private void sendLoginMessage() {
         ChatMessage loginMsg = ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.LOGIN_REQUEST.getValue())
+                .setType(MessageTypeConstants.LOGIN_REQUEST)
                 .setContent("登录请求")
                 .setFromId(userId)
                 .setToId("system")
@@ -205,7 +204,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
         }
         
         ChatMessage privateMsg = ChatMessage.newBuilder()
-                .setType(ClientToClientMessageType.PRIVATE_CHAT_MESSAGE.getValue())
+                .setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE)
                 .setContent(content)
                 .setFromId(userId)
                 .setToId(toUserId)
@@ -229,7 +228,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
         }
         
         ChatMessage groupMsg = ChatMessage.newBuilder()
-                .setType(ClientToClientMessageType.GROUP_CHAT_MESSAGE.getValue())
+                .setType(MessageTypeConstants.GROUP_CHAT_MESSAGE)
                 .setContent(content)
                 .setFromId(userId)
                 .setToId(groupId)
@@ -253,7 +252,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
         }
         
         ChatMessage heartbeatMsg = ChatMessage.newBuilder()
-                .setType(ClientToServerMessageType.HEARTBEAT.getValue())
+                .setType(MessageTypeConstants.HEARTBEAT)
                 .setContent("heartbeat")
                 .setFromId(userId)
                 .setToId("system")
@@ -313,7 +312,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
         if (isOpen() && webSocket != null) {
             // 发送登出消息
             ChatMessage logoutMsg = ChatMessage.newBuilder()
-                    .setType(ClientToServerMessageType.LOGOUT_REQUEST.getValue())
+                    .setType(MessageTypeConstants.LOGOUT_REQUEST)
                     .setContent("登出请求")
                     .setFromId(userId)
                     .setToId("system")
@@ -341,7 +340,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
     private void sendAckMessage(String originalMsgId, String originalSeq) {
         try {
             ChatMessage ackMessage = ChatMessage.newBuilder()
-                    .setType(ClientToServerMessageType.MESSAGE_ACK.getValue())
+                    .setType(MessageTypeConstants.MESSAGE_ACK)
                     .setContent("ACK")
                     .setFromId(userId)
                     .setToId("system")
@@ -400,7 +399,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
             String msgIdsStr = String.join(",", msgIds);
 
             ChatMessage batchAckMessage = ChatMessage.newBuilder()
-                    .setType(com.vanky.im.common.enums.ClientToServerMessageType.BATCH_MESSAGE_ACK.getValue())
+                    .setType(MessageTypeConstants.BATCH_MESSAGE_ACK)
                     .setContent(msgIdsStr) // 消息内容包含所有消息ID
                     .setFromId(userId)
                     .setToId("system")

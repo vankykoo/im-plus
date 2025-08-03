@@ -2,6 +2,7 @@ package com.vanky.im.gateway.mq;
 
 import com.vanky.im.common.constant.TopicConstants;
 import com.vanky.im.common.protocol.ChatMessage;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.util.MsgGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -279,7 +280,7 @@ public class MessageQueueService {
         try {
             // 构建ACK消息
             ChatMessage ackMessage = ChatMessage.newBuilder()
-                    .setType(com.vanky.im.common.enums.ClientToServerMessageType.MESSAGE_ACK.getValue())
+                    .setType(MessageTypeConstants.MESSAGE_ACK)
                     .setContent("ACK")
                     .setFromId(userId)
                     .setToId("system")

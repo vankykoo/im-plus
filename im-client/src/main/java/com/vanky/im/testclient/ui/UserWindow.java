@@ -1,8 +1,7 @@
 package com.vanky.im.testclient.ui;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.common.enums.ClientToClientMessageType;
-import com.vanky.im.common.enums.ServerToClientMessageType;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.client.HttpClient;
 import com.vanky.im.testclient.client.IMWebSocketClient;
 import com.vanky.im.testclient.client.RealWebSocketClient;
@@ -471,23 +470,26 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
         String messageText;
         
         switch (message.getType()) {
-            case 3001: // PRIVATE_CHAT_MESSAGE
+            case MessageTypeConstants.PRIVATE_CHAT_MESSAGE:
                 messageText = String.format("[私聊] %s: %s", message.getFromId(), message.getContent());
                 break;
-            case 3002: // GROUP_CHAT_MESSAGE
+            case MessageTypeConstants.GROUP_CHAT_MESSAGE:
                 messageText = String.format("[群聊] %s@%s: %s", message.getFromId(), message.getToId(), message.getContent());
                 break;
-            case 1001: // LOGIN_RESPONSE
+            case MessageTypeConstants.LOGIN_RESPONSE:
                 messageText = String.format("[系统] 登录响应: %s", message.getContent());
                 break;
-            case 1005: // MESSAGE_DELIVERY_SUCCESS
+            case MessageTypeConstants.MESSAGE_DELIVERY_SUCCESS:
                 messageText = String.format("[系统] 消息投递成功: %s", message.getContent());
                 break;
-            case 1006: // MESSAGE_DELIVERY_FAILED
+            case MessageTypeConstants.MESSAGE_DELIVERY_FAILED:
                 messageText = String.format("[系统] 消息投递失败: %s", message.getContent());
                 break;
-            case 1004: // SYSTEM_NOTIFICATION
+            case MessageTypeConstants.SYSTEM_NOTIFICATION:
                 messageText = String.format("[系统通知] %s", message.getContent());
+                break;
+            case MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION:
+                messageText = String.format("[群聊通知] %s@%s: %s", message.getFromId(), message.getConversationId(), message.getContent());
                 break;
             default:
                 messageText = String.format("[未知类型%d] %s: %s", message.getType(), message.getFromId(), message.getContent());

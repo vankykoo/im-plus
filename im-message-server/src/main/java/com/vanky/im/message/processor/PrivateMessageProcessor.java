@@ -3,7 +3,7 @@ package com.vanky.im.message.processor;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.constant.MessageConstants;
-import com.vanky.im.message.constants.MessageTypeConstants;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.entity.PrivateMessage;
 import com.vanky.im.message.service.*;

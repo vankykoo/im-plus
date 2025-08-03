@@ -23,6 +23,11 @@ public class MessageTypeConstants {
      * 群聊消息
      */
     public static final byte MSG_TYPE_GROUP = 2;
+
+    /**
+     * 群聊消息通知（读扩散模式）
+     */
+    public static final int GROUP_MESSAGE_NOTIFICATION = 1001;
     
     // ==================== 内容类型 ====================
     /**

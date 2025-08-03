@@ -30,4 +30,18 @@ public interface GroupMemberService {
      * @return 在线成员ID集合
      */
     Set<String> getOnlineGroupMembers(String groupId);
-} 
+
+    /**
+     * 添加群组成员
+     * @param groupId 群组ID
+     * @param userId 用户ID
+     */
+    void addGroupMember(String groupId, String userId);
+
+    /**
+     * 移除群组成员
+     * @param groupId 群组ID
+     * @param userId 用户ID
+     */
+    void removeGroupMember(String groupId, String userId);
+}

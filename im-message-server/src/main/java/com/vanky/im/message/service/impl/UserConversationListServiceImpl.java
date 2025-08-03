@@ -92,4 +92,45 @@ public class UserConversationListServiceImpl extends ServiceImpl<UserConversatio
         }
         // {{END MODIFICATIONS}}
     }
+
+    @Override
+    public void updateGroupConversationSimple(Long userId, String conversationId, Long lastMsgId) {
+        // {{CHENGQI:
+        // Action: Added; Timestamp: 2025-08-02 22:08:11 +08:00; Reason: 实现简化的群聊会话更新，支持读扩散模式;
+        // }}
+        // {{START MODIFICATIONS}}
+        try {
+            UserConversationList userConversation = getByUserIdAndConversationId(userId, conversationId);
+
+            if (userConversation != null) {
+                // 读扩散模式：简化更新，只更新时间和最新消息ID
+                userConversation.setLastMsgId(lastMsgId);
+                userConversation.setLastUpdateTime(new Date());
+                // 不更新unread_count，群聊在读扩散模式下通常只显示红点
+
+                this.updateById(userConversation);
+
+                log.debug("简化更新群聊会话完成 - 用户ID: {}, 会话ID: {}, 最新消息ID: {}",
+                        userId, conversationId, lastMsgId);
+            } else {
+                // 如果会话记录不存在，创建一个新的
+                UserConversationList newConversation = new UserConversationList();
+                newConversation.setUserId(userId);
+                newConversation.setConversationId(conversationId);
+                newConversation.setLastMsgId(lastMsgId);
+                newConversation.setUnreadCount(0); // 群聊不计算具体未读数
+                newConversation.setCreateTime(new Date());
+                newConversation.setLastUpdateTime(new Date());
+
+                this.save(newConversation);
+
+                log.debug("创建新的群聊会话记录 - 用户ID: {}, 会话ID: {}", userId, conversationId);
+            }
+        } catch (Exception e) {
+            log.error("简化更新群聊会话失败 - 用户ID: {}, 会话ID: {}, 消息ID: {}",
+                    userId, conversationId, lastMsgId, e);
+            throw new RuntimeException("简化更新群聊会话失败", e);
+        }
+        // {{END MODIFICATIONS}}
+    }
 }

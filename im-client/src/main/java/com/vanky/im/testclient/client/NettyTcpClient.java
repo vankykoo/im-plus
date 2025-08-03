@@ -261,6 +261,7 @@ public class NettyTcpClient {
                 .setSeq(String.valueOf(System.currentTimeMillis()))
                 .setTimestamp(System.currentTimeMillis())
                 .setRetry(0)
+                .setConversationId("group_" + groupId) // 设置会话ID
                 .build();
         
         channel.writeAndFlush(groupMsg);

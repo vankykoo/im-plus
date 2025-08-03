@@ -16,4 +16,5 @@ message ChatMessage {
   int64 timestamp = 7;      // 时间戳
   int32 retry = 8;          // 重试次数
   string token = 9;         // 身份验证token，用于连接验证
-} 
+  string conversationId = 10; // 会话ID，用于标识具体的会话
+}

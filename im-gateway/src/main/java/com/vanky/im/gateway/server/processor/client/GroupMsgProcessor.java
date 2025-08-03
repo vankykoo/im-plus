@@ -38,9 +38,10 @@ public class GroupMsgProcessor {
             // 2. 使用群组ID作为会话ID
             String conversationId = "group_" + msg.getToId();
             
-            // 3. 构建新的消息对象，设置全局MsgId
+            // 3. 构建新的消息对象，设置全局MsgId和会话ID
             ChatMessage processedMsg = ChatMessage.newBuilder(msg)
                     .setUid(globalMsgId)
+                    .setConversationId(conversationId) // 设置会话ID
                     .build();
             
             log.debug("消息处理信息 - 全局MsgId: {}, 会话ID: {}", globalMsgId, conversationId);

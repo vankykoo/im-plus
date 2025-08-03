@@ -139,7 +139,7 @@ public class HttpClient {
             System.out.println("创建群聊请求: " + jsonBody);
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(MESSAGE_SERVICE_BASE_URL + "/conversations/create"))
+                    .uri(URI.create(MESSAGE_SERVICE_BASE_URL + "/api/conversations/create"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                     .timeout(Duration.ofSeconds(30))

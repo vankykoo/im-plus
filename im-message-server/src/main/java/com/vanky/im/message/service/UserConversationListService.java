@@ -39,4 +39,14 @@ public interface UserConversationListService extends IService<UserConversationLi
      * @param msgId 最新消息ID
      */
     void updateUserConversationMessage(Long userId, String conversationId, String msgId);
+
+    /**
+     * 简化更新群聊会话（读扩散模式）
+     * 只更新last_update_time和last_msg_id，不计算unread_count
+     *
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @param lastMsgId 最新消息ID
+     */
+    void updateGroupConversationSimple(Long userId, String conversationId, Long lastMsgId);
 }

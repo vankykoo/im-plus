@@ -46,10 +46,19 @@ public class GatewayPushMessageConsumer implements MessageListenerConcurrently {
             try {
                 // 解析消息体为ChatMessage对象
                 ChatMessage chatMessage = ChatMessage.parseFrom(body);
-                
-                // 获取接收方用户ID
-                String toUserId = chatMessage.getToId();
-                
+
+                // {{CHENGQI:
+                // Action: Modified; Timestamp: 2025-08-01 23:00:19 +08:00; Reason: 支持从消息属性中获取目标用户ID，解决群聊消息推送问题;
+                // }}
+                // {{START MODIFICATIONS}}
+                // 获取接收方用户ID，优先从消息属性中获取targetUserId（群聊场景）
+                String targetUserId = msg.getUserProperty("targetUserId");
+                String toUserId = targetUserId != null ? targetUserId : chatMessage.getToId();
+
+                log.debug("消息推送处理 - 原始接收方: {}, 目标用户: {}, 会话ID: {}",
+                        chatMessage.getToId(), toUserId, chatMessage.getConversationId());
+                // {{END MODIFICATIONS}}
+
                 // 检查用户是否在当前网关在线
                 if (userChannelManager.isUserOnline(toUserId)) {
                     // 发送消息给用户

@@ -84,5 +84,14 @@ public interface MessageService extends IService<Message> {
      * @return 消息列表
      */
     List<Message> listByMsgIds(List<Long> msgIds);
+
+    /**
+     * 根据消息ID列表批量查询消息（别名方法，用于读扩散模式）
+     * @param msgIds 消息ID列表
+     * @return 消息列表
+     */
+    default List<Message> getByMsgIds(List<Long> msgIds) {
+        return listByMsgIds(msgIds);
+    }
 }
 // {{END MODIFICATIONS}}

@@ -7,6 +7,7 @@ import com.vanky.im.message.constants.MessageTypeConstants;
 import com.vanky.im.message.entity.GroupMessage;
 import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.entity.PrivateMessage;
+import com.vanky.im.message.model.MessageInfo;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Date;
@@ -216,6 +217,55 @@ public class MessageConverter {
             log.error("JSON转换为消息失败", e);
             throw new RuntimeException("JSON转换为消息失败", e);
         }
+    }
+
+    /**
+     * 将Message实体转换为MessageInfo（用于读扩散模式）
+     * @param message Message实体
+     * @return MessageInfo对象
+     */
+    public static MessageInfo convertToMessageInfo(Message message) {
+        // {{CHENGQI:
+        // Action: Added; Timestamp: 2025-08-02 21:41:41 +08:00; Reason: 添加Message到MessageInfo的转换方法，支持读扩散模式;
+        // }}
+        // {{START MODIFICATIONS}}
+        MessageInfo messageInfo = new MessageInfo();
+
+        messageInfo.setMsgId(String.valueOf(message.getMsgId()));
+        messageInfo.setConversationId(message.getConversationId());
+        messageInfo.setFromUserId(String.valueOf(message.getSenderId()));
+        messageInfo.setMsgType(message.getMsgType());
+        messageInfo.setContentType(message.getContentType());
+        messageInfo.setContent(message.getContent());
+        messageInfo.setStatus(message.getStatus());
+        messageInfo.setCreateTime(message.getSendTime());
+        messageInfo.setUpdateTime(message.getUpdateTime());
+
+        // 注意：seq字段需要从conversation_msg_list表中获取，这里不设置
+        // 在GroupMessageSyncServiceImpl中会单独处理seq字段
+
+        // 根据消息类型设置接收方信息
+        if (message.getMsgType() != null && message.getMsgType() == MessageTypeConstants.MSG_TYPE_PRIVATE) {
+            // 私聊消息：从conversationId中提取接收方用户ID
+            if (message.getConversationId() != null && message.getConversationId().startsWith("private_")) {
+                String[] parts = message.getConversationId().split("_");
+                if (parts.length >= 3) {
+                    // conversationId格式：private_发送方ID_接收方ID
+                    String senderId = String.valueOf(message.getSenderId());
+                    String toUserId = parts[1].equals(senderId) ? parts[2] : parts[1];
+                    messageInfo.setToUserId(toUserId);
+                }
+            }
+        } else if (message.getMsgType() != null && message.getMsgType() == MessageTypeConstants.MSG_TYPE_GROUP) {
+            // 群聊消息：从conversationId中提取群组ID
+            if (message.getConversationId() != null && message.getConversationId().startsWith("group_")) {
+                String groupId = message.getConversationId().substring("group_".length());
+                messageInfo.setGroupId(groupId);
+            }
+        }
+
+        return messageInfo;
+        // {{END MODIFICATIONS}}
     }
 
     /**

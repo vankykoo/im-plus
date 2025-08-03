@@ -35,6 +35,17 @@ public interface ConversationService extends IService<Conversation> {
     void handleGroupConversation(String conversationId, String fromUserId, String groupId, int memberCount);
 
     /**
+     * 创建群聊会话
+     * @param conversationName 群聊名称
+     * @param conversationDesc 群聊描述
+     * @param creatorId 创建者ID
+     * @param members 群聊成员列表
+     * @return 群聊会话ID
+     */
+    String createGroupConversation(String conversationName, String conversationDesc,
+                                 String creatorId, java.util.List<String> members);
+
+    /**
      * 更新会话的最新消息信息
      * @param conversationId 会话ID
      * @param latestMsgId 最新消息ID

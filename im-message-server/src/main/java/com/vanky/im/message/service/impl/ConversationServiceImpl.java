@@ -6,11 +6,15 @@ import com.vanky.im.message.mapper.ConversationMapper;
 import com.vanky.im.message.service.ConversationService;
 import com.vanky.im.message.service.RedisService;
 import com.vanky.im.message.service.UserConversationListService;
+import com.vanky.im.message.service.GroupMemberService;
+import com.vanky.im.common.util.SnowflakeIdGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
+import java.util.List;
 
 /**
 * @author vanky
@@ -27,6 +31,11 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
 
     @Autowired
     private RedisService redisService;
+
+    @Autowired
+    private GroupMemberService groupMemberService;
+
+    private final SnowflakeIdGenerator snowflakeIdGenerator = SnowflakeIdGenerator.getInstance();
 
     @Override
     public Conversation getByConversationId(String conversationId) {
@@ -146,6 +155,56 @@ public class ConversationServiceImpl extends ServiceImpl<ConversationMapper, Con
 
         } catch (Exception e) {
             log.error("激活用户会话列表失败 - 用户ID: {}, 会话ID: {}", userId, conversationId, e);
+        }
+    }
+
+    @Override
+    @Transactional
+    public String createGroupConversation(String conversationName, String conversationDesc,
+                                        String creatorId, List<String> members) {
+        try {
+            log.info("开始创建群聊会话 - 创建者: {}, 群聊名称: {}, 成员数量: {}",
+                    creatorId, conversationName, members.size());
+
+            // 1. 生成群聊ID
+            String groupId = snowflakeIdGenerator.nextIdString();
+            String conversationId = "group_" + groupId;
+
+            Date now = new Date();
+
+            // 2. 创建conversation记录
+            Conversation conversation = new Conversation();
+            conversation.setConversationId(conversationId);
+            conversation.setType(1); // 1-群聊 (根据数据库字段注释)
+            conversation.setMemberCount(members.size());
+            conversation.setLastMsgTime(now);
+            conversation.setCreateTime(now);
+            conversation.setUpdateTime(now);
+            conversation.setCreateBy(creatorId);
+            conversation.setUpdateBy(creatorId);
+            this.save(conversation);
+
+            log.info("群聊会话记录创建成功 - 会话ID: {}", conversationId);
+
+            // 3. 为所有成员创建user_conversation_list记录
+            for (String memberId : members) {
+                userConversationListService.createUserConversationRecord(memberId, conversationId);
+                log.debug("为成员创建会话记录 - 成员ID: {}, 会话ID: {}", memberId, conversationId);
+            }
+
+            // 4. 在Redis中管理群组成员关系
+            for (String memberId : members) {
+                groupMemberService.addGroupMember(groupId, memberId);
+            }
+
+            log.info("群聊创建完成 - 会话ID: {}, 群聊名称: {}, 成员数量: {}",
+                    conversationId, conversationName, members.size());
+
+            return conversationId;
+
+        } catch (Exception e) {
+            log.error("创建群聊会话失败 - 创建者: {}, 群聊名称: {}", creatorId, conversationName, e);
+            throw new RuntimeException("创建群聊失败: " + e.getMessage(), e);
         }
     }
 }

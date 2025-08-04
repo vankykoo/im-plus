@@ -146,6 +146,18 @@ public class NettyTcpClient {
                 // 更新本地用户级全局seq，避免重复拉取
                 updateLocalSyncSeqForRealTimeMessage(chatMessage);
             }
+            // 处理群聊消息通知，需要发送群聊会话ACK确认
+            else if (chatMessage.getType() == MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION) {
+                // 1. 更新客户端本地的群聊同步点
+                updateClientGroupConversationSeq(chatMessage);
+
+                // 2. 发送群聊会话ACK确认
+                sendGroupConversationAckForNotification(chatMessage);
+
+                System.out.println("收到群聊消息通知 - 会话ID: " + chatMessage.getConversationId() +
+                                 ", 发送方: " + chatMessage.getFromId() +
+                                 ", 内容: " + chatMessage.getContent());
+            }
 
             // 委托给消息处理器
             if (messageHandler != null) {
@@ -376,14 +388,22 @@ public class NettyTcpClient {
      */
     private void updateLocalSyncSeqForRealTimeMessage(ChatMessage chatMessage) {
         try {
-            // 临时解决方案：通过HTTP API查询当前用户的最大全局seq
+            // 获取当前本地同步点
+            Long currentLocalSeq = localStorage.getLastSyncSeq(userId);
+
+            // 使用当前本地同步点查询服务端
             if (httpClient != null) {
-                HttpClient.SyncCheckResponse response = httpClient.checkSyncNeeded(userId, 0L);
-                if (response != null && response.isSuccess()) {
+                HttpClient.SyncCheckResponse response = httpClient.checkSyncNeeded(userId, currentLocalSeq);
+                if (response != null && response.isSuccess() && response.getTargetSeq() != null) {
                     Long serverMaxSeq = response.getTargetSeq();
-                    if (serverMaxSeq != null && serverMaxSeq > 0) {
+                    if (serverMaxSeq > currentLocalSeq) {
                         localStorage.updateLastSyncSeq(userId, serverMaxSeq);
-                        System.out.println("更新本地同步点 - 用户ID: " + userId + ", 新序列号: " + serverMaxSeq);
+                        System.out.println("更新本地同步点 - 用户ID: " + userId +
+                                         ", 当前序列号: " + currentLocalSeq +
+                                         ", 新序列号: " + serverMaxSeq);
+                    } else {
+                        System.out.println("本地同步点已是最新 - 用户ID: " + userId +
+                                         ", 当前序列号: " + currentLocalSeq);
                     }
                 }
             }
@@ -424,6 +444,130 @@ public class NettyTcpClient {
 
         } catch (Exception e) {
             System.err.println("发送批量ACK确认失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 发送群聊会话ACK确认
+     * @param ackContent ACK内容，格式：conversationId1:seq1,conversationId2:seq2
+     */
+    public void sendGroupConversationAck(String ackContent) {
+        try {
+            if (ackContent == null || ackContent.trim().isEmpty()) {
+                System.err.println("群聊会话ACK内容为空");
+                return;
+            }
+
+            if (channel != null && channel.isActive()) {
+                ChatMessage groupAckMessage = ChatMessage.newBuilder()
+                        .setType(MessageTypeConstants.GROUP_CONVERSATION_ACK)
+                        .setContent(ackContent) // 消息内容：conversationId1:seq1,conversationId2:seq2
+                        .setFromId(userId)
+                        .setToId("system")
+                        .setUid("group_ack_" + System.currentTimeMillis()) // 生成唯一ID
+                        .setSeq(String.valueOf(System.currentTimeMillis()))
+                        .setTimestamp(System.currentTimeMillis())
+                        .setRetry(0)
+                        .build();
+
+                channel.writeAndFlush(groupAckMessage);
+                System.out.println("发送群聊会话ACK确认 - 内容: " + ackContent);
+            } else {
+                System.err.println("TCP连接不可用，无法发送群聊会话ACK");
+            }
+
+        } catch (Exception e) {
+            System.err.println("发送群聊会话ACK确认失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 针对群聊消息通知发送群聊会话ACK确认
+     * @param notificationMessage 群聊消息通知
+     */
+    private void sendGroupConversationAckForNotification(ChatMessage notificationMessage) {
+        try {
+            String conversationId = notificationMessage.getConversationId();
+            String seq = notificationMessage.getSeq();
+
+            if (conversationId == null || conversationId.trim().isEmpty()) {
+                System.err.println("群聊消息通知缺少会话ID，无法发送ACK");
+                return;
+            }
+
+            if (seq == null || seq.trim().isEmpty()) {
+                System.err.println("群聊消息通知缺少序列号，无法发送ACK");
+                return;
+            }
+
+            // 构建ACK内容：conversationId:seq
+            String ackContent = conversationId + ":" + seq;
+
+            if (channel != null && channel.isActive()) {
+                ChatMessage groupAckMessage = ChatMessage.newBuilder()
+                        .setType(MessageTypeConstants.GROUP_CONVERSATION_ACK)
+                        .setContent(ackContent) // 消息内容：conversationId:seq
+                        .setFromId(userId)
+                        .setToId("system")
+                        .setUid("group_notification_ack_" + System.currentTimeMillis()) // 生成唯一ID
+                        .setSeq(String.valueOf(System.currentTimeMillis()))
+                        .setTimestamp(System.currentTimeMillis())
+                        .setRetry(0)
+                        .build();
+
+                channel.writeAndFlush(groupAckMessage);
+                System.out.println("发送群聊通知ACK确认 - 会话ID: " + conversationId + ", seq: " + seq);
+            } else {
+                System.err.println("TCP连接不可用，无法发送群聊通知ACK");
+            }
+
+        } catch (Exception e) {
+            System.err.println("发送群聊通知ACK确认失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 更新客户端本地的群聊同步点
+     * 客户端接收到群聊消息通知时，需要更新自己在Redis中存储的已接收的最大会话seq
+     *
+     * @param notificationMessage 群聊消息通知
+     */
+    private void updateClientGroupConversationSeq(ChatMessage notificationMessage) {
+        try {
+            String conversationId = notificationMessage.getConversationId();
+            String seqStr = notificationMessage.getSeq();
+
+            if (conversationId == null || conversationId.trim().isEmpty()) {
+                System.err.println("群聊消息通知缺少会话ID，无法更新本地同步点");
+                return;
+            }
+
+            if (seqStr == null || seqStr.trim().isEmpty()) {
+                System.err.println("群聊消息通知缺少序列号，无法更新本地同步点");
+                return;
+            }
+
+            Long seq;
+            try {
+                seq = Long.parseLong(seqStr);
+            } catch (NumberFormatException e) {
+                System.err.println("群聊消息通知序列号格式错误: " + seqStr);
+                return;
+            }
+
+            // 更新客户端本地的群聊同步点
+            // 使用LocalMessageStorage的updateConversationSeq方法
+            if (localStorage != null) {
+                localStorage.updateConversationSeq(userId, conversationId, seq);
+                System.out.println("更新客户端群聊同步点成功 - 用户ID: " + userId +
+                                 ", 会话ID: " + conversationId + ", seq: " + seq);
+            } else {
+                System.err.println("LocalMessageStorage未初始化，无法更新群聊同步点");
+            }
+
+        } catch (Exception e) {
+            System.err.println("更新客户端群聊同步点失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

@@ -1,5 +1,6 @@
 package com.vanky.im.message.service.impl;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.message.constant.MessageConstants;
 import com.vanky.im.message.service.UserStatusService;
 import lombok.extern.slf4j.Slf4j;
@@ -71,7 +72,7 @@ public class UserStatusServiceImpl implements UserStatusService {
      */
     private UserStatusInfo getCachedUserStatus(String userId) {
         try {
-            String cacheKey = MessageConstants.USER_STATUS_CACHE_PREFIX + userId;
+            String cacheKey = RedisKeyConstants.getUserStatusKey(userId);
             Object cached = redisTemplate.opsForValue().get(cacheKey);
             return cached != null ? (UserStatusInfo) cached : null;
         } catch (Exception e) {
@@ -85,8 +86,8 @@ public class UserStatusServiceImpl implements UserStatusService {
      */
     private void cacheUserStatus(String userId, UserStatusInfo statusInfo) {
         try {
-            String cacheKey = MessageConstants.USER_STATUS_CACHE_PREFIX + userId;
-            redisTemplate.opsForValue().set(cacheKey, statusInfo, MessageConstants.USER_STATUS_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+            String cacheKey = RedisKeyConstants.getUserStatusKey(userId);
+            redisTemplate.opsForValue().set(cacheKey, statusInfo, RedisKeyConstants.USER_STATUS_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
             log.debug("缓存用户状态成功 - 用户ID: {}", userId);
         } catch (Exception e) {
             log.warn("缓存用户状态失败 - 用户ID: {}", userId, e);

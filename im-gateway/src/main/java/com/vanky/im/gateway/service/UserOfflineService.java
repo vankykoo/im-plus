@@ -1,5 +1,6 @@
 package com.vanky.im.gateway.service;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.gateway.session.UserChannelManager;
 import lombok.extern.slf4j.Slf4j;
@@ -72,7 +73,7 @@ public class UserOfflineService {
             Boolean sessionDeleted = redisTemplate.delete(sessionKey);
             
             // 2. 从在线用户集合中移除
-            Long removedCount = redisTemplate.opsForSet().remove(SessionConstants.ONLINE_USERS_KEY, userId);
+            Long removedCount = redisTemplate.opsForSet().remove(RedisKeyConstants.ONLINE_USERS_KEY, userId);
             
             log.debug("Redis状态清理完成 - 用户ID: {}, 会话删除: {}, 在线集合移除: {}", 
                     userId, sessionDeleted, removedCount);
@@ -111,7 +112,7 @@ public class UserOfflineService {
             log.debug("开始清理过期的在线用户状态");
             
             // 获取所有在线用户
-            java.util.Set<Object> onlineUsers = redisTemplate.opsForSet().members(SessionConstants.ONLINE_USERS_KEY);
+            java.util.Set<Object> onlineUsers = redisTemplate.opsForSet().members(RedisKeyConstants.ONLINE_USERS_KEY);
             if (onlineUsers == null || onlineUsers.isEmpty()) {
                 log.debug("没有在线用户需要检查");
                 return;
@@ -127,7 +128,7 @@ public class UserOfflineService {
                 
                 if (!Boolean.TRUE.equals(sessionExists)) {
                     // 会话不存在，从在线用户集合中移除
-                    redisTemplate.opsForSet().remove(SessionConstants.ONLINE_USERS_KEY, userId);
+                    redisTemplate.opsForSet().remove(RedisKeyConstants.ONLINE_USERS_KEY, userId);
                     expiredCount++;
                     log.debug("清理过期在线用户 - 用户ID: {}", userId);
                 }

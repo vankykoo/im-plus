@@ -47,8 +47,8 @@
             msg.content_type AS last_msg_content_type,
             CAST(msg.sender_id AS CHAR) AS last_msg_sender,
             conv.type AS conversation_type,
-            conv.name AS conversation_name,
-            conv.avatar AS conversation_avatar,
+            NULL AS conversation_name,
+            NULL AS conversation_avatar,
             msg.send_time AS last_msg_time,
             ucl.last_msg_id
         FROM

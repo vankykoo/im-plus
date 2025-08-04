@@ -1,7 +1,10 @@
 package com.vanky.im.message.service.impl;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.model.UserSession;
+import com.vanky.im.message.constant.MessageConstants;
+import com.vanky.im.message.service.ConversationMsgListService;
 import com.vanky.im.message.service.RedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,22 +25,43 @@ public class RedisServiceImpl implements RedisService {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    private static final String CONVERSATION_SEQ_PREFIX = "conversation:seq:";
-    private static final String USER_GLOBAL_SEQ_PREFIX = "user:global:seq:";
-    private static final String MESSAGE_CACHE_PREFIX = "msg:";
-    private static final String USER_MSG_LIST_PREFIX = "user:msg:list:";
-    private static final String CONVERSATION_LATEST_MSG_PREFIX = "conversation:latest:";
-    private static final String USER_CONVERSATION_LIST_PREFIX = "user:conversation:list:";
+    @Autowired
+    private ConversationMsgListService conversationMsgListService;
 
     @Override
     public Long generateSeq(String conversationId) {
-        String key = CONVERSATION_SEQ_PREFIX + conversationId;
+        // {{CHENGQI:
+        // Action: Modified; Timestamp: 2025-08-04 20:52:36 +08:00; Reason: 修复seq存储类型问题，统一使用整型存储而不是字符串;
+        // }}
+        // {{START MODIFICATIONS}}
+        String key = RedisKeyConstants.getConversationSeqKey(conversationId);
         try {
-            return redisTemplate.opsForValue().increment(key);
+            // 1. 检查Redis中是否已存在该会话的seq
+            Object currentSeqObj = redisTemplate.opsForValue().get(key);
+
+            if (currentSeqObj != null) {
+                // Redis中存在，直接递增
+                return redisTemplate.opsForValue().increment(key);
+            }
+
+            // 2. Redis中不存在，查询数据库获取最大seq
+            log.debug("Redis中不存在会话seq，查询数据库 - 会话ID: {}", conversationId);
+            Long maxSeqFromDb = conversationMsgListService.getMaxSeq(conversationId);
+
+            // 3. 初始化Redis中的seq值（存储为整型，不是字符串）
+            Long nextSeq = maxSeqFromDb + 1;
+            redisTemplate.opsForValue().set(key, nextSeq);
+
+            log.info("初始化会话seq - 会话ID: {}, 数据库最大seq: {}, 生成seq: {}",
+                    conversationId, maxSeqFromDb, nextSeq);
+
+            return nextSeq;
+
         } catch (Exception e) {
             log.error("生成会话序列号失败, conversationId: {}", conversationId, e);
             throw new RuntimeException("生成会话序列号失败", e);
         }
+        // {{END MODIFICATIONS}}
     }
 
     @Override
@@ -46,7 +70,7 @@ public class RedisServiceImpl implements RedisService {
         // Action: Added; Timestamp: 2025-07-28 23:08:31 +08:00; Reason: 实现用户级全局序列号生成;
         // }}
         // {{START MODIFICATIONS}}
-        String key = USER_GLOBAL_SEQ_PREFIX + userId;
+        String key = RedisKeyConstants.getUserGlobalSeqKey(userId);
         try {
             return redisTemplate.opsForValue().increment(key);
         } catch (Exception e) {
@@ -58,7 +82,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void cacheMessage(String msgId, String messageJson, long ttlSeconds) {
-        String key = MESSAGE_CACHE_PREFIX + msgId;
+        String key = RedisKeyConstants.getMessageCacheKey(msgId);
         try {
             redisTemplate.opsForValue().set(key, messageJson, ttlSeconds, TimeUnit.SECONDS);
             log.debug("缓存消息成功, msgId: {}, ttl: {}s", msgId, ttlSeconds);
@@ -70,7 +94,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public String getCachedMessage(String msgId) {
-        String key = MESSAGE_CACHE_PREFIX + msgId;
+        String key = RedisKeyConstants.getMessageCacheKey(msgId);
         try {
             Object value = redisTemplate.opsForValue().get(key);
             return value != null ? value.toString() : null;
@@ -82,7 +106,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void addToUserMsgList(String userId, String msgId, Long seq, int maxSize) {
-        String key = USER_MSG_LIST_PREFIX + userId;
+        String key = RedisKeyConstants.getUserMsgListKey(userId);
         try {
             ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
             
@@ -106,7 +130,7 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public Set<String> getUserMsgList(String userId, long start, long end) {
-        String key = USER_MSG_LIST_PREFIX + userId;
+        String key = RedisKeyConstants.getUserMsgListKey(userId);
         try {
             ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
             Set<Object> result = zSetOps.reverseRange(key, start, end);
@@ -172,7 +196,7 @@ public class RedisServiceImpl implements RedisService {
     public void updateConversationLatestMsg(String conversationId, String latestMsgId,
                                           String latestMsgContent, long latestMsgTime) {
         try {
-            String key = CONVERSATION_LATEST_MSG_PREFIX + conversationId;
+            String key = RedisKeyConstants.CONVERSATION_LATEST_MSG_PREFIX + conversationId;
 
             // 构建最新消息信息的JSON字符串
             String latestMsgInfo = String.format(
@@ -194,7 +218,7 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public void activateUserConversation(String userId, String conversationId, long timestamp) {
         try {
-            String key = USER_CONVERSATION_LIST_PREFIX + userId;
+            String key = RedisKeyConstants.USER_CONVERSATION_LIST_PREFIX + userId;
             ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
 
             // 使用时间戳作为score，实现按时间排序
@@ -219,7 +243,7 @@ public class RedisServiceImpl implements RedisService {
         // }}
         // {{START MODIFICATIONS}}
         try {
-            String key = USER_GLOBAL_SEQ_PREFIX + userId;
+            String key = RedisKeyConstants.getUserGlobalSeqKey(userId);
             Object value = redisTemplate.opsForValue().get(key);
 
             if (value instanceof Long) {

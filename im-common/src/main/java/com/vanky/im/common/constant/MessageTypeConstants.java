@@ -30,6 +30,9 @@ public class MessageTypeConstants {
     
     /** 批量消息确认 */
     public static final int BATCH_MESSAGE_ACK = 2005;
+
+    /** 群聊会话ACK确认 */
+    public static final int GROUP_CONVERSATION_ACK = 2006;
     
     // ==================== 服务端到客户端消息 (1000-1999) ====================
     

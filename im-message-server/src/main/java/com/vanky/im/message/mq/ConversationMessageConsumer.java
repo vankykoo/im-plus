@@ -100,6 +100,10 @@ public class ConversationMessageConsumer implements MessageListenerConcurrently 
                 // 处理批量消息确认
                 messageAckProcessor.processBatchMessageAck(chatMessage);
                 log.info("批量消息确认已处理 - 用户: {}", chatMessage.getFromId());
+            } else if (messageType == MessageTypeConstants.GROUP_CONVERSATION_ACK) {
+                // 处理群聊会话ACK确认
+                messageAckProcessor.processGroupConversationAck(chatMessage);
+                log.info("群聊会话ACK确认已处理 - 用户: {}", chatMessage.getFromId());
             } else {
                 log.warn("未知消息类型: {}, 会话ID: {}, 消息ID: {}",
                         messageType, conversationId, chatMessage.getUid());

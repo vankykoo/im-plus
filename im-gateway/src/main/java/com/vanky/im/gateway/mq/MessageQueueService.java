@@ -321,4 +321,42 @@ public class MessageQueueService {
             log.error("发送ACK消息到消息队列失败 - 消息ID: {}, 序列号: {}, 用户: {}", msgId, seq, userId, e);
         }
     }
+
+    /**
+     * 发送群聊会话ACK确认消息到消息服务器
+     * @param ackMessage 群聊会话ACK消息
+     */
+    public void sendGroupConversationAckToMessageServer(ChatMessage ackMessage) {
+        try {
+            String userId = ackMessage.getFromId();
+            String content = ackMessage.getContent();
+
+            log.debug("发送群聊会话ACK到消息队列 - 用户: {}, 内容: {}, Topic: {}",
+                    userId, content, TopicConstants.TOPIC_CONVERSATION_MESSAGE);
+
+            // 将群聊会话ACK消息发送到会话消息Topic
+            Message message = new Message(TopicConstants.TOPIC_CONVERSATION_MESSAGE, ackMessage.toByteArray());
+
+            // 设置消息Key为特殊格式，便于识别
+            message.setKeys("group_ack_" + userId + "_" + System.currentTimeMillis());
+
+            producer.send(message, new SendCallback() {
+                @Override
+                public void onSuccess(SendResult sendResult) {
+                    log.debug("群聊会话ACK消息发送成功 - 用户: {}, Topic: {}, MsgId: {}",
+                            userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, sendResult.getMsgId());
+                }
+
+                @Override
+                public void onException(Throwable e) {
+                    log.error("群聊会话ACK消息发送失败 - 用户: {}, Topic: {}",
+                            userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, e);
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("发送群聊会话ACK消息到消息队列失败 - 用户: {}, 内容: {}",
+                    ackMessage.getFromId(), ackMessage.getContent(), e);
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package com.vanky.im.message.service.impl;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.message.service.OfflineMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,31 +22,24 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    // Redis key前缀
-    private static final String OFFLINE_MSG_PREFIX = "user:offline_msg:";
-    private static final String UNREAD_COUNT_PREFIX = "user:conversation:unread:";
-    
-    // 离线消息队列最大长度
-    private static final int MAX_OFFLINE_MSG_SIZE = 10000;
-    // 离线消息TTL（7天）
-    private static final long OFFLINE_MSG_TTL_SECONDS = 7 * 24 * 60 * 60;
+    // 注意：Redis key前缀、TTL配置、业务配置已迁移到RedisKeyConstants类
 
     @Override
     public void addOfflineMessage(String userId, String msgId) {
         try {
-            String key = OFFLINE_MSG_PREFIX + userId;
-            
+            String key = RedisKeyConstants.getOfflineMsgKey(userId);
+
             // 使用LPUSH添加到队列头部（最新消息在前）
             redisTemplate.opsForList().leftPush(key, msgId);
-            
+
             // 限制队列长度，删除最旧的消息
-            redisTemplate.opsForList().trim(key, 0, MAX_OFFLINE_MSG_SIZE - 1);
-            
+            redisTemplate.opsForList().trim(key, 0, RedisKeyConstants.MAX_OFFLINE_MSG_SIZE - 1);
+
             // 设置过期时间
-            redisTemplate.expire(key, OFFLINE_MSG_TTL_SECONDS, TimeUnit.SECONDS);
-            
+            redisTemplate.expire(key, RedisKeyConstants.OFFLINE_MSG_TTL_SECONDS, TimeUnit.SECONDS);
+
             log.debug("添加离线消息 - 用户ID: {}, 消息ID: {}", userId, msgId);
-            
+
         } catch (Exception e) {
             log.error("添加离线消息失败 - 用户ID: {}, 消息ID: {}", userId, msgId, e);
         }
@@ -58,17 +52,17 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
         }
         
         try {
-            String key = OFFLINE_MSG_PREFIX + userId;
-            
+            String key = RedisKeyConstants.getOfflineMsgKey(userId);
+
             // 批量添加消息
             Object[] msgArray = msgIds.toArray();
             redisTemplate.opsForList().leftPushAll(key, msgArray);
-            
+
             // 限制队列长度
-            redisTemplate.opsForList().trim(key, 0, MAX_OFFLINE_MSG_SIZE - 1);
-            
+            redisTemplate.opsForList().trim(key, 0, RedisKeyConstants.MAX_OFFLINE_MSG_SIZE - 1);
+
             // 设置过期时间
-            redisTemplate.expire(key, OFFLINE_MSG_TTL_SECONDS, TimeUnit.SECONDS);
+            redisTemplate.expire(key, RedisKeyConstants.OFFLINE_MSG_TTL_SECONDS, TimeUnit.SECONDS);
             
             log.debug("批量添加离线消息 - 用户ID: {}, 消息数量: {}", userId, msgIds.size());
             
@@ -80,7 +74,7 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Override
     public List<String> getOfflineMessages(String userId, int limit) {
         try {
-            String key = OFFLINE_MSG_PREFIX + userId;
+            String key = RedisKeyConstants.getOfflineMsgKey(userId);
             
             List<Object> messages;
             if (limit <= 0) {
@@ -107,7 +101,7 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Override
     public void clearOfflineMessages(String userId, List<String> msgIds) {
         try {
-            String key = OFFLINE_MSG_PREFIX + userId;
+            String key = RedisKeyConstants.getOfflineMsgKey(userId);
             
             if (msgIds == null || msgIds.isEmpty()) {
                 // 清除全部离线消息
@@ -129,7 +123,7 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Override
     public long getOfflineMessageCount(String userId) {
         try {
-            String key = OFFLINE_MSG_PREFIX + userId;
+            String key = RedisKeyConstants.getOfflineMsgKey(userId);
             Long count = redisTemplate.opsForList().size(key);
             long result = count != null ? count : 0;
             
@@ -145,7 +139,7 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Override
     public long incrementUnreadCount(String userId, String conversationId, int increment) {
         try {
-            String key = UNREAD_COUNT_PREFIX + userId + ":" + conversationId;
+            String key = RedisKeyConstants.getUnreadCountKey(userId, conversationId);
             Long newCount = redisTemplate.opsForValue().increment(key, increment);
             long result = newCount != null ? newCount : increment;
             
@@ -171,7 +165,7 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Override
     public long getUnreadCount(String userId, String conversationId) {
         try {
-            String key = UNREAD_COUNT_PREFIX + userId + ":" + conversationId;
+            String key = RedisKeyConstants.getUnreadCountKey(userId, conversationId);
             Object count = redisTemplate.opsForValue().get(key);
             long result = count != null ? Long.parseLong(count.toString()) : 0;
             
@@ -187,7 +181,7 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Override
     public void resetUnreadCount(String userId, String conversationId) {
         try {
-            String key = UNREAD_COUNT_PREFIX + userId + ":" + conversationId;
+            String key = RedisKeyConstants.getUnreadCountKey(userId, conversationId);
             redisTemplate.delete(key);
             
             log.debug("重置未读数 - 用户ID: {}, 会话ID: {}", userId, conversationId);
@@ -200,7 +194,7 @@ public class OfflineMessageServiceImpl implements OfflineMessageService {
     @Override
     public long getTotalUnreadCount(String userId) {
         try {
-            String pattern = UNREAD_COUNT_PREFIX + userId + ":*";
+            String pattern = RedisKeyConstants.UNREAD_COUNT_PREFIX + userId + ":*";
             var keys = redisTemplate.keys(pattern);
             
             if (keys == null || keys.isEmpty()) {

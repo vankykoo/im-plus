@@ -1,5 +1,6 @@
 package com.vanky.im.message.processor;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
@@ -17,9 +18,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 群聊消息处理器
@@ -116,7 +116,10 @@ public class GroupMessageProcessor {
 
             // 9. 推送轻量级通知给在线群成员（读扩散模式）
             pushNotificationToOnlineMembers(chatMessage, groupId, seq, msgId);
-            
+
+            // 10. 更新发送方的会话级seq（发送成功后更新）
+            updateSenderConversationSeq(fromUserId, conversationId, seq);
+
             log.info("群聊消息处理完成 - 会话ID: {}, 消息ID: {}, Seq: {}", conversationId, msgId, seq);
             
         } catch (Exception e) {
@@ -286,18 +289,80 @@ public class GroupMessageProcessor {
             // 批量推送轻量级通知
             if (!memberToGatewayMap.isEmpty()) {
                 // {{CHENGQI:
-                // Action: Modified; Timestamp: 2025-08-02 22:27:58 +08:00; Reason: 修正群聊通知推送调用，直接使用ChatMessage协议;
+                // Action: Modified; Timestamp: 2025-08-04 21:00:00 +08:00; Reason: 修正群聊通知推送调用，传递会话级seq;
                 // }}
                 // {{START MODIFICATIONS}}
                 groupNotificationService.pushNotificationToOnlineMembers(chatMessage, seq, memberToGatewayMap);
 
-                log.info("群聊通知推送完成 - 群组ID: {}, 通知成员数: {}", groupId, memberToGatewayMap.size());
+                log.info("群聊通知推送完成 - 群组ID: {}, 会话seq: {}, 通知成员数: {}", groupId, seq, memberToGatewayMap.size());
                 // {{END MODIFICATIONS}}
             }
             // {{END MODIFICATIONS}}
 
         } catch (Exception e) {
             log.error("推送群聊通知失败 - 群组ID: {}", groupId, e);
+            // 不抛出异常，不影响主流程
+        }
+    }
+
+    /**
+     * 更新发送方的会话级seq
+     * 发送群聊消息成功后，需要更新发送方在该会话中的最大seq
+     *
+     * @param senderId 发送方用户ID
+     * @param conversationId 会话ID
+     * @param seq 会话级序列号
+     */
+    private void updateSenderConversationSeq(String senderId, String conversationId, Long seq) {
+        try {
+            // {{CHENGQI:
+            // Action: Added; Timestamp: 2025-08-04 21:10:03 +08:00; Reason: 新增发送方会话级seq更新逻辑，确保发送方也能正确追踪自己在会话中的位置;
+            // }}
+            // {{START MODIFICATIONS}}
+            log.debug("开始更新发送方会话级seq - 用户ID: {}, 会话ID: {}, seq: {}", senderId, conversationId, seq);
+
+            // 构建会话seq映射
+            Map<String, Long> conversationSeqs = new HashMap<>();
+            conversationSeqs.put(conversationId, seq);
+
+            // 调用MessageAckProcessor的更新逻辑，复用已有的seq更新机制
+            String redisKey = RedisKeyConstants.getUserConversationSeqKey(senderId);
+
+            // 获取当前已存储的seq
+            Object currentSeqObj = redisTemplate.opsForHash().get(redisKey, conversationId);
+            Long currentSeq = 0L;
+
+            if (currentSeqObj instanceof Long) {
+                currentSeq = (Long) currentSeqObj;
+            } else if (currentSeqObj instanceof Integer) {
+                currentSeq = ((Integer) currentSeqObj).longValue();
+            } else if (currentSeqObj instanceof String) {
+                try {
+                    currentSeq = Long.parseLong((String) currentSeqObj);
+                } catch (NumberFormatException e) {
+                    log.warn("解析发送方当前seq失败，使用默认值0 - 用户ID: {}, 会话ID: {}, 当前值: {}",
+                            senderId, conversationId, currentSeqObj);
+                    currentSeq = 0L;
+                }
+            }
+
+            // 只有新seq大于当前seq时才更新
+            if (seq > currentSeq) {
+                redisTemplate.opsForHash().put(redisKey, conversationId, seq.toString()); // 转换为字符串存储，兼容StringRedisSerializer
+
+                // 设置过期时间（30天）
+                redisTemplate.expire(redisKey, RedisKeyConstants.CONVERSATION_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+
+                log.info("成功更新发送方会话级seq - 用户ID: {}, 会话ID: {}, 当前seq: {} -> 新seq: {}",
+                        senderId, conversationId, currentSeq, seq);
+            } else {
+                log.debug("跳过发送方seq更新（新seq不大于当前seq） - 用户ID: {}, 会话ID: {}, 当前seq: {}, 新seq: {}",
+                        senderId, conversationId, currentSeq, seq);
+            }
+            // {{END MODIFICATIONS}}
+
+        } catch (Exception e) {
+            log.error("更新发送方会话级seq失败 - 用户ID: {}, 会话ID: {}, seq: {}", senderId, conversationId, seq, e);
             // 不抛出异常，不影响主流程
         }
     }

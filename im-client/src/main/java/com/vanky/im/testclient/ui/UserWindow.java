@@ -3,7 +3,7 @@ package com.vanky.im.testclient.ui;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.client.HttpClient;
-import com.vanky.im.testclient.client.IMWebSocketClient;
+
 import com.vanky.im.testclient.client.RealWebSocketClient;
 import com.vanky.im.testclient.client.NettyTcpClient;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * 用户窗口界面 - Swing版本
  */
-public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandler, RealWebSocketClient.MessageHandler, NettyTcpClient.MessageHandler {
+public class UserWindow extends JFrame implements RealWebSocketClient.MessageHandler, NettyTcpClient.MessageHandler {
     
     private final String userId;
     private JTextArea messageArea;
@@ -44,7 +44,6 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
     private JComboBox<String> protocolComboBox;
     
     private HttpClient httpClient;
-    private IMWebSocketClient webSocketClient;
     private RealWebSocketClient realWebSocketClient;
     private NettyTcpClient tcpClient;
     private ScheduledExecutorService heartbeatExecutor;
@@ -60,7 +59,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
 
         // 初始化离线消息同步组件
         this.localStorage = new LocalMessageStorage();
-        this.syncManager = new OfflineMessageSyncManager(httpClient, localStorage);
+        this.syncManager = new OfflineMessageSyncManager(httpClient, localStorage, this);
 
         initUI();
     }
@@ -172,7 +171,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
                 TitledBorder.LEFT, TitledBorder.TOP));
         
         JPanel groupInputPanel = new JPanel(new BorderLayout(5, 5));
-        groupIdInput = new JTextField("group1", 8);
+        groupIdInput = new JTextField("22486444098588672", 8);
         groupIdInput.setBorder(BorderFactory.createTitledBorder("群组ID"));
         
         groupMessageInput = new JTextField();
@@ -220,29 +219,22 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
      */
     private void connect() {
         // 先登录获取token
-        appendMessage("正在登录...");
         HttpClient.LoginResponse loginResponse = httpClient.login(userId, "123456"); // 默认密码
         
         if (loginResponse == null) {
-            appendMessage("登录失败，请检查用户服务是否启动");
             return;
         }
-        
-        appendMessage("登录成功，获取到token: " + loginResponse.getToken());
         
         // 根据选择的协议建立连接
         String selectedProtocol = (String) protocolComboBox.getSelectedItem();
         boolean connectionSuccess = false;
         
         if ("WebSocket".equals(selectedProtocol)) {
-            appendMessage("正在连接WebSocket服务器...");
             realWebSocketClient = new RealWebSocketClient(userId, loginResponse.getToken(), this);
             realWebSocketClient.connect();
 
             // 等待连接建立
             if (realWebSocketClient.waitForConnection(10, TimeUnit.SECONDS)) {
-                appendMessage("WebSocket连接已建立，等待登录响应...");
-
                 // 等待登录完成
                 int retryCount = 0;
                 while (retryCount < 50 && !realWebSocketClient.isLoggedIn()) { // 等待5秒
@@ -257,22 +249,14 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
 
                 if (realWebSocketClient.isLoggedIn()) {
                     connectionSuccess = true;
-                    appendMessage("WebSocket连接和登录成功");
-                } else {
-                    appendMessage("WebSocket连接成功但登录失败");
                 }
-            } else {
-                appendMessage("WebSocket连接失败");
             }
         } else if ("TCP".equals(selectedProtocol)) {
-            appendMessage("正在连接TCP服务器...");
             tcpClient = new NettyTcpClient(userId, loginResponse.getToken(), this);
             tcpClient.connect();
 
             // 等待连接建立
             if (tcpClient.waitForConnection(10, TimeUnit.SECONDS)) {
-                appendMessage("TCP连接已建立，等待登录响应...");
-
                 // 等待登录完成
                 int retryCount = 0;
                 while (retryCount < 50 && !tcpClient.isLoggedIn()) { // 等待5秒
@@ -287,12 +271,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
 
                 if (tcpClient.isLoggedIn()) {
                     connectionSuccess = true;
-                    appendMessage("TCP连接和登录成功");
-                } else {
-                    appendMessage("TCP连接成功但登录失败");
                 }
-            } else {
-                appendMessage("TCP连接失败");
             }
         }
         
@@ -331,11 +310,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
             tcpClient = null;
         }
         
-        // 断开旧的WebSocket连接（兼容性）
-        if (webSocketClient != null) {
-            webSocketClient.disconnect();
-            webSocketClient = null;
-        }
+
         
         // 停止心跳
         if (heartbeatExecutor != null && !heartbeatExecutor.isShutdown()) {
@@ -380,11 +355,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
             tcpClient.sendPrivateMessage(toUserId, content);
             sent = true;
         }
-        // 兼容旧的WebSocket客户端
-        else if (webSocketClient != null && webSocketClient.isLoggedIn()) {
-            webSocketClient.sendPrivateMessage(toUserId, content);
-            sent = true;
-        }
+
         
         if (sent) {
             appendMessage(String.format("[私聊] 发送给 %s: %s", toUserId, content));
@@ -418,11 +389,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
             tcpClient.sendGroupMessage(groupId, content);
             sent = true;
         }
-        // 兼容旧的WebSocket客户端
-        else if (webSocketClient != null && webSocketClient.isLoggedIn()) {
-            webSocketClient.sendGroupMessage(groupId, content);
-            sent = true;
-        }
+
         
         if (sent) {
             appendMessage(String.format("[群聊] 发送到群 %s: %s", groupId, content));
@@ -450,11 +417,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
                 tcpClient.sendHeartbeat();
                 heartbeatSent = true;
             }
-            // 兼容旧的WebSocket客户端
-            else if (webSocketClient != null && webSocketClient.isLoggedIn()) {
-                webSocketClient.sendHeartbeat();
-                heartbeatSent = true;
-            }
+
             
             if (heartbeatSent) {
                 SwingUtilities.invokeLater(() -> appendMessage("[心跳] 发送心跳包"));
@@ -467,7 +430,7 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
      */
     @Override
     public void handleMessage(ChatMessage message) {
-        String messageText;
+        String messageText = null;
         
         switch (message.getType()) {
             case MessageTypeConstants.PRIVATE_CHAT_MESSAGE:
@@ -476,26 +439,17 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
             case MessageTypeConstants.GROUP_CHAT_MESSAGE:
                 messageText = String.format("[群聊] %s@%s: %s", message.getFromId(), message.getToId(), message.getContent());
                 break;
-            case MessageTypeConstants.LOGIN_RESPONSE:
-                messageText = String.format("[系统] 登录响应: %s", message.getContent());
-                break;
-            case MessageTypeConstants.MESSAGE_DELIVERY_SUCCESS:
-                messageText = String.format("[系统] 消息投递成功: %s", message.getContent());
-                break;
-            case MessageTypeConstants.MESSAGE_DELIVERY_FAILED:
-                messageText = String.format("[系统] 消息投递失败: %s", message.getContent());
-                break;
-            case MessageTypeConstants.SYSTEM_NOTIFICATION:
-                messageText = String.format("[系统通知] %s", message.getContent());
-                break;
             case MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION:
-                messageText = String.format("[群聊通知] %s@%s: %s", message.getFromId(), message.getConversationId(), message.getContent());
+                messageText = String.format("[群聊] %s@%s: %s", message.getFromId(), message.getConversationId(), message.getContent());
                 break;
+            // 忽略系统消息和其他类型消息
             default:
-                messageText = String.format("[未知类型%d] %s: %s", message.getType(), message.getFromId(), message.getContent());
+                return; // 不显示其他类型的消息
         }
         
-        appendMessage(messageText);
+        if (messageText != null) {
+            appendMessage(messageText);
+        }
     }
     
     /**
@@ -507,6 +461,43 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
             messageArea.append(String.format("[%s] %s\n", timestamp, message));
             messageArea.setCaretPosition(messageArea.getDocument().getLength());
         });
+    }
+
+    /**
+     * 显示同步的离线消息
+     * @param messages 消息列表
+     * @param syncType 同步类型
+     */
+    public void displaySyncMessages(java.util.List<Object> messages, String syncType) {
+        if (messages == null || messages.isEmpty()) {
+            return;
+        }
+
+        for (Object messageObj : messages) {
+            if (messageObj instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> messageMap = (java.util.Map<String, Object>) messageObj;
+                
+                String content = (String) messageMap.get("content");
+                String fromId = (String) messageMap.get("fromId");
+                String toId = (String) messageMap.get("toId");
+                String conversationId = (String) messageMap.get("conversationId");
+                String type = (String) messageMap.get("type");
+                
+                String messageText = null;
+                
+                // 根据消息类型格式化显示
+                if ("1".equals(type)) { // 私聊消息
+                    messageText = String.format("[离线私聊] %s: %s", fromId, content);
+                } else if ("2".equals(type)) { // 群聊消息
+                    messageText = String.format("[离线群聊] %s@%s: %s", fromId, conversationId, content);
+                }
+                
+                if (messageText != null) {
+                    appendMessage(messageText);
+                }
+            }
+        }
     }
     
     /**
@@ -894,6 +885,41 @@ public class UserWindow extends JFrame implements IMWebSocketClient.MessageHandl
             JOptionPane.showMessageDialog(dialog,
                 "创建异常: " + e.getMessage() + "\n请检查消息服务是否正常运行",
                 "创建异常", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * 发送群聊会话ACK确认
+     * @param ackContent ACK内容，格式：conversationId1:seq1,conversationId2:seq2
+     * @return 是否发送成功
+     */
+    public boolean sendGroupConversationAck(String ackContent) {
+        try {
+            if (ackContent == null || ackContent.trim().isEmpty()) {
+                System.err.println("群聊会话ACK内容为空");
+                return false;
+            }
+
+            boolean sent = false;
+
+            // 使用WebSocket客户端发送
+            if (realWebSocketClient != null && realWebSocketClient.isConnected()) {
+                realWebSocketClient.sendGroupConversationAck(ackContent);
+                sent = true;
+                System.out.println("[DEBUG] 群聊会话ACK已通过WebSocket发送");
+            }
+            // 使用TCP客户端发送
+            else if (tcpClient != null && tcpClient.isConnected()) {
+                tcpClient.sendGroupConversationAck(ackContent);
+                sent = true;
+                System.out.println("[DEBUG] 群聊会话ACK已通过TCP发送");
+            }
+
+            return sent;
+
+        } catch (Exception e) {
+            System.err.println("发送群聊会话ACK失败: " + e.getMessage());
+            return false;
         }
     }
 

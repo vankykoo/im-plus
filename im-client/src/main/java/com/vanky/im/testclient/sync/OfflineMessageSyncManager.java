@@ -7,25 +7,27 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
- * 离线消息同步管理器
- * 负责管理整个离线消息同步流程，在后台异步执行
- * 
+ * 离线消息同步管理器（混合模式）
+ * 负责管理整个离线消息同步流程，支持私聊写扩散和群聊读扩散的混合模式并行同步
+ *
  * @author vanky
  * @create 2025/7/29
+ * @update 2025/8/3 - 支持混合模式并行同步
  */
-// {{CHENGQI:
-// Action: Added; Timestamp: 2025-07-29 14:15:29 +08:00; Reason: 创建离线消息同步管理器，实现客户端的消息内容同步功能;
-// }}
-// {{START MODIFICATIONS}}
+
 public class OfflineMessageSyncManager {
 
     private final HttpClient httpClient;
     private final LocalMessageStorage localStorage;
     private final ExecutorService executorService;
+    private final com.vanky.im.testclient.ui.UserWindow userWindow; // 添加UserWindow引用
     
     // 同步状态管理
     private final AtomicBoolean isSyncing = new AtomicBoolean(false);
@@ -37,10 +39,11 @@ public class OfflineMessageSyncManager {
     private static final int MAX_RETRY_COUNT = 3;
     private static final long RETRY_DELAY_MS = 1000;
 
-    public OfflineMessageSyncManager(HttpClient httpClient, LocalMessageStorage localStorage) {
+    public OfflineMessageSyncManager(HttpClient httpClient, LocalMessageStorage localStorage, com.vanky.im.testclient.ui.UserWindow userWindow) {
         this.httpClient = httpClient;
         this.localStorage = localStorage;
-        this.executorService = Executors.newSingleThreadExecutor(r -> {
+        this.userWindow = userWindow;
+                this.executorService = Executors.newFixedThreadPool(2, r -> {
             Thread thread = new Thread(r, "OfflineMessageSync");
             thread.setDaemon(true);
             return thread;
@@ -48,9 +51,9 @@ public class OfflineMessageSyncManager {
     }
 
     /**
-     * 检查并启动同步（如果需要）
-     * 这是客户端登录后调用的主入口方法
-     * 
+     * 检查并启动同步（如果需要）- 混合模式
+     * 这是客户端登录后调用的主入口方法，支持私聊写扩散和群聊读扩散的并行同步
+     *
      * @param userId 用户ID
      * @param callback 进度回调（可选）
      */
@@ -63,12 +66,12 @@ public class OfflineMessageSyncManager {
         this.currentUserId = userId;
         this.progressCallback = callback;
 
-        System.out.println("启动离线消息同步检查 - 用户ID: " + userId);
+        System.out.println("启动混合模式离线消息同步检查 - 用户ID: " + userId);
 
-        // 在后台线程中执行同步
-        CompletableFuture.runAsync(this::performFullSync, executorService)
+        // 在后台线程中执行混合模式同步
+        CompletableFuture.runAsync(this::performHybridSync, executorService)
                 .exceptionally(throwable -> {
-                    System.err.println("离线消息同步异常: " + throwable.getMessage());
+                    System.err.println("混合模式离线消息同步异常: " + throwable.getMessage());
                     throwable.printStackTrace();
                     notifyProgress(SyncStatus.ERROR, "同步异常: " + throwable.getMessage());
                     isSyncing.set(false);
@@ -77,7 +80,224 @@ public class OfflineMessageSyncManager {
     }
 
     /**
-     * 执行完整的同步流程
+     * 执行混合模式同步流程
+     * 并行执行私聊写扩散同步和群聊读扩散同步
+     */
+    private void performHybridSync() {
+        isSyncing.set(true);
+
+        try {
+            System.out.println("=== 开始执行混合模式离线消息同步 ===");
+            System.out.println("用户ID: " + currentUserId);
+            notifyProgress(SyncStatus.STARTED, "开始混合模式同步");
+
+            // 步骤0：初始化群聊同步点（如果需要）
+            System.out.println("步骤0: 初始化群聊同步点...");
+            initializeGroupSyncPoints();
+
+            // 创建两个并行任务
+            AtomicInteger completedTasks = new AtomicInteger(0);
+            AtomicBoolean hasError = new AtomicBoolean(false);
+            StringBuilder errorMessages = new StringBuilder();
+
+            System.out.println("步骤1: 创建并行同步任务...");
+
+            // 任务一：私聊写扩散同步
+            System.out.println("创建任务1: 私聊消息同步（写扩散模式）");
+            CompletableFuture<Void> privateTask = CompletableFuture.runAsync(() -> {
+                try {
+                    System.out.println(">>> 任务1开始：私聊消息同步（写扩散模式）");
+                    performPrivateMessageSync();
+                    System.out.println(">>> 任务1完成：私聊消息同步");
+                } catch (Exception e) {
+                    hasError.set(true);
+                    errorMessages.append("私聊同步失败: ").append(e.getMessage()).append("; ");
+                    System.err.println(">>> 任务1失败：私聊消息同步失败: " + e.getMessage());
+                    e.printStackTrace();
+                } finally {
+                    int completed = completedTasks.incrementAndGet();
+                    System.out.println(">>> 任务1结束，已完成任务数: " + completed);
+                    notifyProgress(SyncStatus.SYNCING, String.format("已完成 %d/2 个同步任务", completed));
+                }
+            }, executorService);
+
+            // 任务二：群聊读扩散同步
+            System.out.println("创建任务2: 群聊消息同步（读扩散模式）");
+            CompletableFuture<Void> groupTask = CompletableFuture.runAsync(() -> {
+                try {
+                    System.out.println(">>> 任务2开始：群聊消息同步（读扩散模式）");
+                    performGroupMessageSync();
+                    System.out.println(">>> 任务2完成：群聊消息同步");
+                } catch (Exception e) {
+                    hasError.set(true);
+                    errorMessages.append("群聊同步失败: ").append(e.getMessage()).append("; ");
+                    System.err.println(">>> 任务2失败：群聊消息同步失败: " + e.getMessage());
+                    e.printStackTrace();
+                } finally {
+                    int completed = completedTasks.incrementAndGet();
+                    System.out.println(">>> 任务2结束，已完成任务数: " + completed);
+                    notifyProgress(SyncStatus.SYNCING, String.format("已完成 %d/2 个同步任务", completed));
+                }
+            }, executorService);
+
+            // 等待两个任务都完成
+            System.out.println("步骤2: 等待两个并行任务完成...");
+            CompletableFuture.allOf(privateTask, groupTask).join();
+            System.out.println("步骤3: 两个并行任务都已完成");
+
+            // 检查结果
+            if (hasError.get()) {
+                System.err.println("混合模式同步部分失败: " + errorMessages.toString());
+                notifyProgress(SyncStatus.ERROR, "部分同步失败: " + errorMessages.toString());
+            } else {
+                System.out.println("混合模式同步全部成功");
+                notifyProgress(SyncStatus.COMPLETED, "混合模式同步完成");
+            }
+
+            System.out.println("=== 混合模式离线消息同步完成 ===");
+
+        } catch (Exception e) {
+            System.err.println("混合模式同步过程异常: " + e.getMessage());
+            e.printStackTrace();
+            notifyProgress(SyncStatus.ERROR, "同步异常: " + e.getMessage());
+        } finally {
+            isSyncing.set(false);
+        }
+    }
+
+    /**
+     * 执行私聊消息同步（写扩散模式）
+     */
+    private void performPrivateMessageSync() {
+        try {
+            // 步骤1：读取本地同步点
+            Long lastSyncSeq = localStorage.getLastSyncSeq(currentUserId);
+            System.out.println("私聊本地同步点: " + lastSyncSeq);
+
+            // 步骤2：检查是否需要同步
+            HttpClient.SyncCheckResponse checkResponse = httpClient.checkSyncNeeded(currentUserId, lastSyncSeq);
+            if (checkResponse == null || !checkResponse.isSuccess()) {
+                String error = checkResponse != null ? checkResponse.getErrorMessage() : "网络错误";
+                System.err.println("私聊同步检查失败: " + error);
+                throw new RuntimeException("私聊同步检查失败: " + error);
+            }
+
+            if (!checkResponse.isSyncNeeded()) {
+                System.out.println("私聊消息无需同步，本地消息已是最新");
+                return;
+            }
+
+            // 步骤3：执行分页拉取
+            Long targetSeq = checkResponse.getTargetSeq();
+            Long currentSeq = lastSyncSeq;
+            int totalPulled = 0;
+            List<String> allMsgIds = new ArrayList<>();
+
+            System.out.println("开始私聊消息拉取 - 目标序列号: " + targetSeq + ", 当前序列号: " + currentSeq);
+
+            while (currentSeq < targetSeq) {
+                // 执行一次批量拉取
+                PullResult pullResult = pullMessagesBatch(currentSeq + 1);
+
+                if (!pullResult.isSuccess()) {
+                    System.err.println("私聊批量拉取失败: " + pullResult.getErrorMessage());
+                    throw new RuntimeException("私聊批量拉取失败: " + pullResult.getErrorMessage());
+                }
+
+                if (pullResult.getCount() == 0) {
+                    break;
+                }
+
+                // 更新本地同步点
+                currentSeq = pullResult.getMaxSeq();
+                localStorage.updateLastSyncSeq(currentUserId, currentSeq);
+                totalPulled += pullResult.getCount();
+
+                // 收集消息ID
+                allMsgIds.addAll(pullResult.getMsgIds());
+
+                // 显示拉取到的消息
+                System.out.println("[DEBUG] 准备显示 " + pullResult.getMessages().size() + " 条私聊消息");
+                displayMessages(pullResult.getMessages(), "私聊");
+
+                // 私聊本批次拉取完成
+
+                // 检查是否还有更多消息
+                if (!pullResult.isHasMore()) {
+                    break;
+                }
+            }
+
+            // 私聊消息同步完成
+
+            // 发送批量ACK确认
+            if (!allMsgIds.isEmpty()) {
+                sendBatchAck(allMsgIds);
+            }
+
+        } catch (Exception e) {
+            System.err.println("私聊消息同步异常: " + e.getMessage());
+            throw new RuntimeException("私聊消息同步失败", e);
+        }
+    }
+
+    /**
+     * 执行群聊消息同步（读扩散模式）
+     */
+    private void performGroupMessageSync() {
+        try {
+            System.out.println("--- 开始群聊消息同步（读扩散模式） ---");
+
+            // 步骤1：读取本地群聊同步点
+            Map<String, Long> conversationSeqMap = localStorage.getConversationSeqMap(currentUserId);
+
+            // 如果没有群聊同步点，说明用户没有群聊，直接返回
+            if (conversationSeqMap.isEmpty()) {
+                return;
+            }
+
+            // 步骤2：拉取群聊消息
+            HttpClient.PullGroupMessagesResponse pullResponse = httpClient.pullGroupMessages(
+                    currentUserId, conversationSeqMap, 100);
+
+            if (!pullResponse.isSuccess()) {
+                System.err.println("群聊消息拉取失败: " + pullResponse.getErrorMessage());
+                throw new RuntimeException("群聊消息拉取失败: " + pullResponse.getErrorMessage());
+            }
+
+            // 群聊消息拉取完成
+
+            // 步骤2.5：解析并显示群聊消息
+            if (pullResponse.getTotalCount() > 0) {
+                java.util.List<Object> groupMessages = pullResponse.getMessages(httpClient);
+                System.out.println("[DEBUG] 群聊消息解析完成，消息数量: " + groupMessages.size());
+                if (!groupMessages.isEmpty()) {
+                    displayMessages(groupMessages, "群聊");
+                }
+            }
+
+            // 步骤3：处理响应并更新同步点
+            if (pullResponse.getTotalCount() > 0) {
+                // 更新本地同步点
+                Map<String, Long> latestSeqMap = pullResponse.getLatestSeqMap();
+                if (latestSeqMap != null && !latestSeqMap.isEmpty()) {
+                    localStorage.updateConversationSeqMap(currentUserId, latestSeqMap);
+
+                    // 步骤4：发送群聊会话ACK确认
+                    sendGroupConversationAck(latestSeqMap);
+                }
+            }
+
+            // 群聊消息同步完成
+
+        } catch (Exception e) {
+            System.err.println("群聊消息同步异常: " + e.getMessage());
+            throw new RuntimeException("群聊消息同步失败", e);
+        }
+    }
+
+    /**
+     * 执行完整的同步流程（保留原有方法，用于向后兼容）
      */
     private void performFullSync() {
         if (!isSyncing.compareAndSet(false, true)) {
@@ -140,6 +360,9 @@ public class OfflineMessageSyncManager {
                 // 收集消息ID
                 allMsgIds.addAll(pullResult.getMsgIds());
 
+                // 显示拉取到的消息
+                displayMessages(pullResult.getMessages(), "私聊");
+
                 System.out.println("本批次拉取完成 - 消息数量: " + pullResult.getCount() + 
                                  ", 当前序列号: " + currentSeq + 
                                  ", 累计拉取: " + totalPulled);
@@ -194,7 +417,7 @@ public class OfflineMessageSyncManager {
                         continue;
                     }
                     
-                    return new PullResult(false, 0, 0L, false, error);
+                    return new PullResult(false, 0, 0L, false, error, new ArrayList<>(), new ArrayList<>());
                 }
 
                 // 这里应该将消息存储到本地数据库
@@ -218,7 +441,7 @@ public class OfflineMessageSyncManager {
                     }
                 }
 
-                return new PullResult(true, response.getCount(), maxSeq, response.isHasMore(), null, msgIds);
+                return new PullResult(true, response.getCount(), maxSeq, response.isHasMore(), null, msgIds, response.getMessages());
                 
             } catch (Exception e) {
                 System.err.println("批量拉取异常 (重试 " + (retryCount + 1) + "/" + MAX_RETRY_COUNT + "): " + e.getMessage());
@@ -228,15 +451,64 @@ public class OfflineMessageSyncManager {
                         Thread.sleep(RETRY_DELAY_MS * retryCount);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return new PullResult(false, 0, 0L, false, "线程中断");
+                        return new PullResult(false, 0, 0L, false, "线程中断", new ArrayList<>(), new ArrayList<>());
                     }
                 } else {
-                    return new PullResult(false, 0, 0L, false, "网络异常: " + e.getMessage());
+                    return new PullResult(false, 0, 0L, false, "网络异常: " + e.getMessage(), new ArrayList<>(), new ArrayList<>());
                 }
             }
         }
         
-        return new PullResult(false, 0, 0L, false, "重试次数超限");
+        return new PullResult(false, 0, 0L, false, "重试次数超限", new ArrayList<>(), new ArrayList<>());
+    }
+
+    /**
+     * 显示拉取到的消息
+     * @param messages 消息列表
+     * @param syncType 同步类型
+     */
+    private void displayMessages(List<Object> messages, String syncType) {
+        System.out.println("[DEBUG] displayMessages被调用，消息数量: " + (messages != null ? messages.size() : "null"));
+        
+        if (messages == null || messages.isEmpty()) {
+            System.out.println("[" + syncType + "] 没有消息需要显示");
+            return;
+        }
+
+        // 同时在控制台和GUI中显示消息，确保用户能看到离线消息
+        System.out.println("[" + syncType + "] 拉取到 " + messages.size() + " 条消息:");
+        for (int i = 0; i < messages.size(); i++) {
+            Object messageObj = messages.get(i);
+            System.out.println("[DEBUG] 处理消息对象[" + i + "]: " + messageObj.getClass().getName());
+            
+            if (messageObj instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> messageMap = (java.util.Map<String, Object>) messageObj;
+                
+                System.out.println("[DEBUG] 消息Map内容: " + messageMap);
+                
+                String msgId = (String) messageMap.get("msgId");
+                String content = (String) messageMap.get("content");
+                String senderId = (String) messageMap.get("senderId");
+                Object timestamp = messageMap.get("timestamp");
+                
+                System.out.println("  [" + (i + 1) + "] 消息ID: " + msgId + 
+                                 ", 发送者: " + senderId + 
+                                 ", 内容: " + content + 
+                                 ", 时间: " + timestamp);
+            } else {
+                System.out.println("[DEBUG] 消息对象不是Map类型: " + messageObj);
+                System.out.println("  [" + (i + 1) + "] " + messageObj.toString());
+            }
+        }
+        
+        // 同时通过UserWindow显示消息
+        if (userWindow != null) {
+            System.out.println("[DEBUG] 调用userWindow.displaySyncMessages");
+            userWindow.displaySyncMessages(messages, syncType);
+        } else {
+            System.out.println("[DEBUG] userWindow为null，无法显示到GUI");
+        }
     }
 
     /**
@@ -276,7 +548,7 @@ public class OfflineMessageSyncManager {
             try {
                 progressCallback.onProgress(status, message);
             } catch (Exception e) {
-                System.err.println("进度回调异常: " + e.getMessage());
+                // 忽略进度回调异常
             }
         }
     }
@@ -293,6 +565,203 @@ public class OfflineMessageSyncManager {
      */
     public void shutdown() {
         executorService.shutdown();
+    }
+
+    /**
+     * 初始化群聊同步点
+     * 通过会话概览同步获取用户的群聊列表，并初始化同步点
+     */
+    private void initializeGroupSyncPoints() {
+        try {
+            // 获取当前的群聊同步点
+            Map<String, Long> currentSeqMap = localStorage.getConversationSeqMap(currentUserId);
+
+            // 如果已有同步点，直接返回
+            if (!currentSeqMap.isEmpty()) {
+                return;
+            }
+
+            // 调用会话概览同步API获取用户的群聊列表
+            HttpClient.ConversationSyncResponse syncResponse = httpClient.syncConversations(currentUserId, 100);
+            if (!syncResponse.isSuccess()) {
+                return;
+            }
+
+            // 解析响应，提取群聊会话ID
+            Map<String, Long> newSeqMap = parseGroupConversationsFromResponse(syncResponse.getRawResponse());
+
+            if (!newSeqMap.isEmpty()) {
+                // 获取真实的群聊最新序列号
+                List<String> conversationIds = new ArrayList<>(newSeqMap.keySet());
+                HttpClient.GroupLatestSeqsResponse latestSeqsResponse = httpClient.getGroupLatestSeqs(conversationIds);
+                
+                if (latestSeqsResponse.isSuccess()) {
+                    // 解析真实的序列号
+                    Map<String, Long> realSeqMap = parseLatestSeqsFromResponse(latestSeqsResponse.getRawResponse());
+                    if (realSeqMap != null && !realSeqMap.isEmpty()) {
+                        newSeqMap = realSeqMap;
+                    }
+                }
+                
+                localStorage.updateConversationSeqMap(currentUserId, newSeqMap);
+            }
+
+        } catch (Exception e) {
+            // 初始化失败不影响整体同步流程，继续执行
+        }
+    }
+
+    /**
+     * 从会话概览同步响应中解析群聊会话ID
+     * @param rawResponse 原始响应JSON
+     * @return 群聊同步点映射，Key为conversationId，Value为初始seq（0）
+     */
+    private Map<String, Long> parseGroupConversationsFromResponse(String rawResponse) {
+        Map<String, Long> groupSeqMap = new HashMap<>();
+
+        try {
+            if (rawResponse == null || rawResponse.trim().isEmpty()) {
+                return groupSeqMap;
+            }
+
+            System.out.println("解析会话概览响应，提取群聊会话...");
+
+            // 简化的JSON解析，查找群聊会话
+            // 实际项目中应该使用专业的JSON解析库
+
+            // 查找conversations数组
+            int conversationsStart = rawResponse.indexOf("\"conversations\":");
+            if (conversationsStart == -1) {
+                System.out.println("响应中未找到conversations字段");
+                return groupSeqMap;
+            }
+
+            // 查找数组开始位置
+            int arrayStart = rawResponse.indexOf("[", conversationsStart);
+            if (arrayStart == -1) {
+                System.out.println("conversations字段不是数组格式");
+                return groupSeqMap;
+            }
+
+            // 查找数组结束位置
+            int arrayEnd = rawResponse.indexOf("]", arrayStart);
+            if (arrayEnd == -1) {
+                System.out.println("conversations数组格式错误");
+                return groupSeqMap;
+            }
+
+            String conversationsArray = rawResponse.substring(arrayStart + 1, arrayEnd);
+
+            // 简单解析每个会话对象
+            String[] conversations = conversationsArray.split("\\},\\{");
+            for (String conversation : conversations) {
+                // 清理格式
+                conversation = conversation.replace("{", "").replace("}", "");
+
+                // 查找conversationId和conversationType
+                String conversationId = extractJsonValue(conversation, "conversationId");
+                String conversationType = extractJsonValue(conversation, "conversationType");
+
+                // 只处理群聊会话（type = 1）
+                if ("1".equals(conversationType) && conversationId != null && !conversationId.isEmpty()) {
+                    groupSeqMap.put(conversationId, 0L); // 初始化为0
+                    System.out.println("发现群聊会话: " + conversationId);
+                }
+            }
+
+            System.out.println("解析完成，发现 " + groupSeqMap.size() + " 个群聊会话");
+
+        } catch (Exception e) {
+            System.err.println("解析会话概览响应失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return groupSeqMap;
+    }
+
+    /**
+     * 从JSON字符串中提取指定字段的值
+     * @param jsonStr JSON字符串
+     * @param fieldName 字段名
+     * @return 字段值
+     */
+    private String extractJsonValue(String jsonStr, String fieldName) {
+        try {
+            String pattern = "\"" + fieldName + "\"\\s*:\\s*\"?([^,}\"]+)\"?";
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile(pattern);
+            java.util.regex.Matcher m = p.matcher(jsonStr);
+            if (m.find()) {
+                return m.group(1).trim().replace("\"", "");
+            }
+        } catch (Exception e) {
+            System.err.println("提取JSON字段失败 - 字段: " + fieldName + ", 错误: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * 从群聊最新序列号响应中解析序列号映射
+     * @param rawResponse 原始响应JSON
+     * @return 群聊序列号映射，Key为conversationId，Value为最新seq
+     */
+    private Map<String, Long> parseLatestSeqsFromResponse(String rawResponse) {
+        Map<String, Long> seqMap = new HashMap<>();
+
+        try {
+            if (rawResponse == null || rawResponse.trim().isEmpty()) {
+                return seqMap;
+            }
+
+            System.out.println("解析群聊最新序列号响应...");
+
+            // 查找data字段
+            int dataStart = rawResponse.indexOf("\"data\":");
+            if (dataStart == -1) {
+                System.out.println("响应中未找到data字段");
+                return seqMap;
+            }
+
+            // 查找对象开始位置
+            int objStart = rawResponse.indexOf("{", dataStart + 7);
+            if (objStart == -1) {
+                System.out.println("data字段不是对象格式");
+                return seqMap;
+            }
+
+            // 查找对象结束位置
+            int objEnd = rawResponse.indexOf("}", objStart);
+            if (objEnd == -1) {
+                System.out.println("data对象格式错误");
+                return seqMap;
+            }
+
+            String dataObject = rawResponse.substring(objStart + 1, objEnd);
+
+            // 解析键值对
+            String[] pairs = dataObject.split(",");
+            for (String pair : pairs) {
+                String[] kv = pair.split(":");
+                if (kv.length == 2) {
+                    String conversationId = kv[0].trim().replace("\"", "");
+                    String seqStr = kv[1].trim().replace("\"", "");
+                    try {
+                        Long seq = Long.parseLong(seqStr);
+                        seqMap.put(conversationId, seq);
+                        System.out.println("解析群聊序列号: " + conversationId + " -> " + seq);
+                    } catch (NumberFormatException e) {
+                        System.err.println("序列号格式错误: " + seqStr);
+                    }
+                }
+            }
+
+            System.out.println("解析完成，获取到 " + seqMap.size() + " 个群聊序列号");
+
+        } catch (Exception e) {
+            System.err.println("解析群聊最新序列号响应失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return seqMap;
     }
 
     // ========== 内部类定义 ==========
@@ -324,18 +793,24 @@ public class OfflineMessageSyncManager {
         private final boolean hasMore;
         private final String errorMessage;
         private final List<String> msgIds; // 新增消息ID列表
+        private final List<Object> messages; // 新增消息列表
 
         public PullResult(boolean success, int count, long maxSeq, boolean hasMore, String errorMessage) {
-            this(success, count, maxSeq, hasMore, errorMessage, new ArrayList<>());
+            this(success, count, maxSeq, hasMore, errorMessage, new ArrayList<>(), new ArrayList<>());
         }
 
         public PullResult(boolean success, int count, long maxSeq, boolean hasMore, String errorMessage, List<String> msgIds) {
+            this(success, count, maxSeq, hasMore, errorMessage, msgIds, new ArrayList<>());
+        }
+
+        public PullResult(boolean success, int count, long maxSeq, boolean hasMore, String errorMessage, List<String> msgIds, List<Object> messages) {
             this.success = success;
             this.count = count;
             this.maxSeq = maxSeq;
             this.hasMore = hasMore;
             this.errorMessage = errorMessage;
             this.msgIds = msgIds != null ? msgIds : new ArrayList<>();
+            this.messages = messages != null ? messages : new ArrayList<>();
         }
 
         public boolean isSuccess() { return success; }
@@ -344,6 +819,49 @@ public class OfflineMessageSyncManager {
         public boolean isHasMore() { return hasMore; }
         public String getErrorMessage() { return errorMessage; }
         public List<String> getMsgIds() { return msgIds; }
+        public List<Object> getMessages() { return messages; }
+    }
+
+    /**
+     * 发送群聊会话ACK确认
+     * @param latestSeqMap 会话ID到最新seq的映射
+     */
+    private void sendGroupConversationAck(Map<String, Long> latestSeqMap) {
+        if (latestSeqMap == null || latestSeqMap.isEmpty()) {
+            System.out.println("[DEBUG] 没有需要ACK的群聊会话");
+            return;
+        }
+
+        try {
+            // 构建ACK消息内容：conversationId1:seq1,conversationId2:seq2
+            StringBuilder contentBuilder = new StringBuilder();
+            boolean first = true;
+            for (Map.Entry<String, Long> entry : latestSeqMap.entrySet()) {
+                if (!first) {
+                    contentBuilder.append(",");
+                }
+                contentBuilder.append(entry.getKey()).append(":").append(entry.getValue());
+                first = false;
+            }
+
+            String ackContent = contentBuilder.toString();
+            System.out.println("[DEBUG] 发送群聊会话ACK确认 - 内容: " + ackContent);
+
+            // 通过UserWindow的客户端发送ACK消息
+            if (userWindow != null) {
+                boolean ackSent = userWindow.sendGroupConversationAck(ackContent);
+                if (ackSent) {
+                    System.out.println("[DEBUG] 群聊会话ACK发送成功");
+                } else {
+                    System.err.println("[ERROR] 无可用连接发送群聊会话ACK");
+                }
+            } else {
+                System.err.println("[ERROR] UserWindow为空，无法发送群聊会话ACK");
+            }
+
+        } catch (Exception e) {
+            System.err.println("[ERROR] 发送群聊会话ACK失败: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
-// {{END MODIFICATIONS}}

@@ -1,5 +1,7 @@
 package com.vanky.im.message.service.impl;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
+import com.vanky.im.message.constant.MessageConstants;
 import com.vanky.im.message.entity.ConversationMsgList;
 import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.model.MessageInfo;
@@ -11,6 +13,7 @@ import com.vanky.im.message.service.MessageService;
 import com.vanky.im.message.util.MessageConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -36,6 +39,9 @@ public class GroupMessageSyncServiceImpl implements GroupMessageSyncService {
     
     @Autowired
     private MessageService messageService;
+
+    @Autowired
+    private RedisTemplate<String, String> redisTemplate;
     
     @Override
     public PullGroupMessagesResponse pullGroupMessages(PullGroupMessagesRequest request) {
@@ -118,6 +124,9 @@ public class GroupMessageSyncServiceImpl implements GroupMessageSyncService {
         response.setLatestSeqs(latestSeqs);
         response.setTotalCount(totalCount);
         response.setHasMore(false); // 暂不支持分页，后续可扩展
+
+        // 更新用户在这些会话中的同步点 (sync seq)
+        updateUserConversationSyncSeqs(request.getUserId(), latestSeqs);
         
         log.info("群聊消息拉取完成 - 用户ID: {}, 总消息数: {}", request.getUserId(), totalCount);
         return response;
@@ -142,6 +151,49 @@ public class GroupMessageSyncServiceImpl implements GroupMessageSyncService {
         }
         
         return result;
+    }
+
+    /**
+     * 更新用户在指定会话中的同步点 (sync seq)
+     *
+     * @param userId 用户ID
+     * @param conversationSeqs 会话ID到最新seq的映射
+     */
+    private void updateUserConversationSyncSeqs(String userId, Map<String, Long> conversationSeqs) {
+        if (userId == null || conversationSeqs == null || conversationSeqs.isEmpty()) {
+            log.warn("更新用户会话同步点失败 - 参数为空: userId={}, conversationSeqs={}", userId, conversationSeqs);
+            return;
+        }
+
+        try {
+            String syncKey = RedisKeyConstants.getUserConversationSeqKey(userId);
+            Map<String, String> fieldToValueMap = new HashMap<>();
+
+            for (Map.Entry<String, Long> entry : conversationSeqs.entrySet()) {
+                String conversationId = entry.getKey();
+                Long seq = entry.getValue();
+                if (seq != null) {
+                    fieldToValueMap.put(conversationId, seq.toString()); // 转换为字符串存储，兼容StringRedisSerializer
+                    log.debug("准备更新会话同步点 - 会话ID: {}, seq: {}", conversationId, seq);
+                }
+            }
+
+            if (!fieldToValueMap.isEmpty()) {
+                log.info("开始更新Redis - key: {}, 数据: {}", syncKey, fieldToValueMap);
+                redisTemplate.opsForHash().putAll(syncKey, fieldToValueMap);
+                log.info("成功更新用户会话同步点 - 用户ID: {}, 更新数量: {}, Redis key: {}", userId, fieldToValueMap.size(), syncKey);
+                
+                // 验证更新结果
+                for (String conversationId : fieldToValueMap.keySet()) {
+                    Object storedValue = redisTemplate.opsForHash().get(syncKey, conversationId);
+                    log.info("验证Redis更新结果 - 会话ID: {}, 存储值: {}", conversationId, storedValue);
+                }
+            } else {
+                log.warn("没有有效的会话同步点需要更新 - 用户ID: {}", userId);
+            }
+        } catch (Exception e) {
+            log.error("更新用户会话同步点异常 - 用户ID: {}, 错误: {}", userId, e.getMessage(), e);
+        }
     }
 }
 // {{END MODIFICATIONS}}

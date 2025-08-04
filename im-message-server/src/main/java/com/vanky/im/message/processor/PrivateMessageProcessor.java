@@ -1,5 +1,6 @@
 package com.vanky.im.message.processor;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.constant.MessageConstants;
@@ -199,10 +200,10 @@ public class PrivateMessageProcessor {
         messageService.save(message);
         log.debug("保存私聊消息主体完成 - 消息ID: {}, 消息类型: {}", msgId, MessageTypeConstants.MSG_TYPE_PRIVATE);
 
-        // 2. 使用统一的消息接收者处理逻辑
-        List<String> receiverIds = Arrays.asList(fromUserId, toUserId); // 私聊：发送方和接收方都是接收者
-        messageReceiverService.processMessageReceivers(msgId, conversationId, receiverIds);
-        log.debug("消息接收者处理完成 - 发送方: {}, 接收方: {}", fromUserId, toUserId);
+        // 2. 只为发送方生成用户级全局seq（发送方确实"接收"了自己发送的消息）
+        // 接收方只有在真正接收到消息时才生成全局seq
+        messageReceiverService.processSingleReceiver(fromUserId, msgId, conversationId);
+        log.debug("发送方消息接收者处理完成 - 发送方: {}", fromUserId);
 
         // 3. 处理会话信息
         conversationService.handleConversation(conversationId, fromUserId, toUserId);
@@ -217,8 +218,13 @@ public class PrivateMessageProcessor {
         UserSession receiverSession = onlineStatusService.getUserOnlineStatus(toUserId);
 
         if (receiverSession != null && receiverSession.getNodeId() != null) {
-            // 3.2. 处理在线场景
+            // 3.2. 处理在线场景 - 接收方真正接收到消息，生成用户级全局seq
             log.debug("接收方在线，推送消息 - 接收方: {}, 网关ID: {}", toUserId, receiverSession.getNodeId());
+
+            // 为接收方生成用户级全局seq（因为接收方真正接收到了消息）
+            String conversationId = generateConversationId(chatMessage.getFromId(), toUserId);
+            messageReceiverService.processSingleReceiver(toUserId, persistResult.msgId, conversationId);
+            log.debug("接收方消息接收者处理完成 - 接收方: {}", toUserId);
 
             // 填充服务端生成的消息ID和序列号
             ChatMessage enrichedMessage = chatMessage.toBuilder()
@@ -229,10 +235,11 @@ public class PrivateMessageProcessor {
             gatewayMessagePushService.pushMessageToGateway(enrichedMessage, persistResult.seq, receiverSession.getNodeId());
 
         } else {
-            // 3.3. 处理离线场景
+            // 3.3. 处理离线场景 - 接收方离线，不生成用户级全局seq
             log.debug("接收方离线，添加到离线消息队列 - 接收方: {}, 消息ID: {}", toUserId, persistResult.msgId);
 
-            // 将消息ID存入离线消息队列
+            // 将消息ID存入离线消息队列，但不为接收方生成全局seq
+            // 接收方的全局seq将在其登录并拉取离线消息时生成
             offlineMessageService.addOfflineMessage(toUserId, persistResult.msgId);
         }
     }
@@ -268,11 +275,11 @@ public class PrivateMessageProcessor {
         // 1. 将新消息缓存到Redis (String, msgId -> message_json, TTL 1天)
         Message message = MessageConverter.convertToMessage(chatMessage, persistResult.msgId, conversationId, MessageTypeConstants.MSG_TYPE_PRIVATE);
         String messageJson = MessageConverter.toJson(message);
-        redisService.cacheMessage(persistResult.msgId, messageJson, MessageConstants.MESSAGE_CACHE_TTL_SECONDS);
+        redisService.cacheMessage(persistResult.msgId, messageJson, RedisKeyConstants.MESSAGE_CACHE_TTL_SECONDS);
 
         // 2. 将消息的msgId和seq存入用户消息链的缓存中(ZSet)
-        redisService.addToUserMsgList(fromUserId, persistResult.msgId, persistResult.seq, MessageConstants.MAX_USER_MSG_CACHE_SIZE);
-        redisService.addToUserMsgList(toUserId, persistResult.msgId, persistResult.seq, MessageConstants.MAX_USER_MSG_CACHE_SIZE);
+        redisService.addToUserMsgList(fromUserId, persistResult.msgId, persistResult.seq, RedisKeyConstants.MAX_USER_MSG_CACHE_SIZE);
+        redisService.addToUserMsgList(toUserId, persistResult.msgId, persistResult.seq, RedisKeyConstants.MAX_USER_MSG_CACHE_SIZE);
 
         log.debug("缓存更新完成 - 消息ID: {}, 发送方: {}, 接收方: {}", persistResult.msgId, fromUserId, toUserId);
     }
@@ -301,10 +308,10 @@ public class PrivateMessageProcessor {
         }
 
         // 限制摘要长度
-        if (content.length() <= MessageConstants.MAX_MSG_CONTENT_SUMMARY_LENGTH) {
+        if (content.length() <= RedisKeyConstants.MAX_MSG_CONTENT_SUMMARY_LENGTH) {
             return content;
         } else {
-            return content.substring(0, MessageConstants.MAX_MSG_CONTENT_SUMMARY_LENGTH) + "...";
+            return content.substring(0, RedisKeyConstants.MAX_MSG_CONTENT_SUMMARY_LENGTH) + "...";
         }
     }
 }

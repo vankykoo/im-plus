@@ -96,7 +96,7 @@ public class TestClientMain extends JFrame {
         scenario1Button.setAlignmentX(Component.CENTER_ALIGNMENT);
         scenario1Button.addActionListener(e -> setupPrivateChatScenario());
         
-        JButton scenario2Button = new JButton("场景2: 群聊测试 (user1, user2, user3 → group1)");
+        JButton scenario2Button = new JButton("场景2: 群聊测试 (user1, user2, user3 → 22486444098588672)");
         scenario2Button.setAlignmentX(Component.CENTER_ALIGNMENT);
         scenario2Button.addActionListener(e -> setupGroupChatScenario());
         
@@ -211,7 +211,7 @@ public class TestClientMain extends JFrame {
         createUserWindow("user3");
         
         // 设置群组ID
-        String groupId = "group1";
+        String groupId = "22486444098588672";
         UserWindow user1Window = findUserWindow("user1");
         UserWindow user2Window = findUserWindow("user2");
         UserWindow user3Window = findUserWindow("user3");
@@ -245,11 +245,11 @@ public class TestClientMain extends JFrame {
         
         if (user1Window != null) {
             user1Window.setTargetUserId("user2");
-            user1Window.setGroupId("group1");
+            user1Window.setGroupId("22486444098588672");
         }
         if (user2Window != null) {
             user2Window.setTargetUserId("user1");
-            user2Window.setGroupId("group1");
+            user2Window.setGroupId("22486444098588672");
         }
         
         showScenarioInfo("离线消息测试场景已设置", 

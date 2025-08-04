@@ -1,6 +1,8 @@
 package com.vanky.im.message.service.impl;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.message.service.FriendshipService;
+import com.vanky.im.message.service.FriendshipService.FriendshipInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -23,10 +25,6 @@ public class FriendshipServiceImpl implements FriendshipService {
     @Autowired
     private RestTemplate restTemplate;
 
-    // Redis缓存key前缀
-    private static final String FRIENDSHIP_CACHE_PREFIX = "friendship:";
-    // 缓存TTL（10分钟）
-    private static final long CACHE_TTL_SECONDS = 10 * 60;
     // im-user服务地址（可配置化）
     private static final String USER_SERVICE_URL = "http://localhost:8081";
 
@@ -90,7 +88,7 @@ public class FriendshipServiceImpl implements FriendshipService {
     private void cacheFriendshipInfo(String userId1, String userId2, FriendshipInfo friendshipInfo) {
         try {
             String cacheKey = generateCacheKey(userId1, userId2);
-            redisTemplate.opsForValue().set(cacheKey, friendshipInfo, CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+            redisTemplate.opsForValue().set(cacheKey, friendshipInfo, RedisKeyConstants.FRIENDSHIP_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
             log.debug("缓存好友关系成功 - 用户1: {}, 用户2: {}", userId1, userId2);
         } catch (Exception e) {
             log.warn("缓存好友关系失败 - 用户1: {}, 用户2: {}", userId1, userId2, e);
@@ -123,9 +121,9 @@ public class FriendshipServiceImpl implements FriendshipService {
     private String generateCacheKey(String userId1, String userId2) {
         // 按字典序排序，确保缓存key的一致性
         if (userId1.compareTo(userId2) <= 0) {
-            return FRIENDSHIP_CACHE_PREFIX + userId1 + ":" + userId2;
+            return RedisKeyConstants.getFriendshipKey(userId1, userId2);
         } else {
-            return FRIENDSHIP_CACHE_PREFIX + userId2 + ":" + userId1;
+            return RedisKeyConstants.getFriendshipKey(userId2, userId1);
         }
     }
 }

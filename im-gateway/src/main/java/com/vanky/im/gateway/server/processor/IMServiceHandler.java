@@ -1,6 +1,7 @@
 package com.vanky.im.gateway.server.processor;
 
 import com.vanky.im.common.constant.MsgContentConstant;
+import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.constant.MessageTypeConstants;
 
@@ -81,6 +82,9 @@ public class IMServiceHandler {
             } else if (messageType == MessageTypeConstants.MESSAGE_ACK) {
                 // 处理消息确认
                 handleMessageAck(msg, channel);
+            } else if (messageType == MessageTypeConstants.GROUP_CONVERSATION_ACK) {
+                // 处理群聊会话ACK确认
+                handleGroupConversationAck(msg, channel);
             }
             // 客户端到客户端消息处理
             else if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE ||
@@ -172,10 +176,10 @@ public class IMServiceHandler {
                     // 将用户会话存入Redis
                     String sessionKey = SessionConstants.getUserSessionKey(userId);
                     redisTemplate.opsForValue().set(sessionKey, userSession,
-                            SessionConstants.SESSION_EXPIRE_TIME, TimeUnit.SECONDS);
+                            RedisKeyConstants.SESSION_EXPIRE_TIME, TimeUnit.SECONDS);
 
                     // 将用户ID添加到在线用户集合
-                    redisTemplate.opsForSet().add(SessionConstants.ONLINE_USERS_KEY, userId);
+                    redisTemplate.opsForSet().add(RedisKeyConstants.ONLINE_USERS_KEY, userId);
 
                     log.debug("用户会话Redis存储完成 - 用户: {}", userId);
                 } catch (Exception e) {
@@ -204,7 +208,7 @@ public class IMServiceHandler {
             redisTemplate.delete(sessionKey);
             
             // 3. 将用户ID从在线用户集合中移除
-            redisTemplate.opsForSet().remove(SessionConstants.ONLINE_USERS_KEY, userId);
+            redisTemplate.opsForSet().remove(RedisKeyConstants.ONLINE_USERS_KEY, userId);
             
             log.info("用户登出成功 - 用户: {}", userId);
         } catch (Exception e) {
@@ -227,7 +231,7 @@ public class IMServiceHandler {
         try {
             // 1. 刷新Redis中用户会话的过期时间
             String sessionKey = SessionConstants.getUserSessionKey(userId);
-            redisTemplate.expire(sessionKey, SessionConstants.SESSION_EXPIRE_TIME, TimeUnit.SECONDS);
+            redisTemplate.expire(sessionKey, RedisKeyConstants.SESSION_EXPIRE_TIME, TimeUnit.SECONDS);
             
             // 2. 发送心跳响应
             ChatMessage heartbeatResponse = MsgGenerator.generateHeartbeatResponseMsg(userId);
@@ -306,6 +310,29 @@ public class IMServiceHandler {
 
         } catch (Exception e) {
             log.error("处理消息确认失败 - 用户: {}, 消息ID: {}, 序列号: {}", userId, msgId, seq, e);
+        }
+    }
+
+    /**
+     * 处理群聊会话ACK确认
+     * @param msg 群聊会话ACK消息
+     * @param channel 客户端连接通道
+     */
+    private void handleGroupConversationAck(ChatMessage msg, Channel channel) {
+        String userId = msg.getFromId();
+        String content = msg.getContent(); // conversationId1:seq1,conversationId2:seq2
+
+        log.info("收到群聊会话ACK确认 - 用户: {}, 内容: {}, Channel: {}",
+                userId, content, channel.id().asShortText());
+
+        try {
+            // 将群聊会话ACK消息发送到消息队列，由im-message-server处理
+            messageQueueService.sendGroupConversationAckToMessageServer(msg);
+
+            log.debug("群聊会话ACK消息已转发到消息服务器 - 用户: {}, 内容: {}", userId, content);
+
+        } catch (Exception e) {
+            log.error("处理群聊会话ACK确认失败 - 用户: {}, 内容: {}", userId, content, e);
         }
     }
 }

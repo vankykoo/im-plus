@@ -29,39 +29,39 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
     private GatewayMessagePushService gatewayMessagePushService;
     
     @Override
-    public void pushNotificationToUser(ChatMessage notificationMessage, Long seq, String gatewayNodeId) {
+    public void pushNotificationToUser(ChatMessage notificationMessage, Long conversationSeq, String gatewayNodeId) {
         try {
             // {{CHENGQI:
-            // Action: Modified; Timestamp: 2025-08-02 22:32:38 +08:00; Reason: 简化群聊通知推送，移除冗余参数，直接使用ChatMessage中的toId;
+            // Action: Modified; Timestamp: 2025-08-04 21:00:00 +08:00; Reason: 修正群聊通知推送，确保使用会话级seq而不是原消息seq;
             // }}
             // {{START MODIFICATIONS}}
-            log.debug("推送群聊通知给用户 - 用户ID: {}, 会话ID: {}, 消息ID: {}, 网关: {}",
+            log.debug("推送群聊通知给用户 - 用户ID: {}, 会话ID: {}, 消息ID: {}, 会话seq: {}, 网关: {}",
                     notificationMessage.getToId(), notificationMessage.getConversationId(),
-                    notificationMessage.getUid(), gatewayNodeId);
+                    notificationMessage.getUid(), conversationSeq, gatewayNodeId);
 
-            // 使用简化后的网关推送服务，ChatMessage中已包含所有必要信息
-            gatewayMessagePushService.pushNotificationToGateway(notificationMessage, seq, gatewayNodeId);
+            // 使用会话级seq推送通知
+            gatewayMessagePushService.pushNotificationToGateway(notificationMessage, conversationSeq, gatewayNodeId);
 
-            log.debug("群聊通知推送成功 - 用户ID: {}, 会话ID: {}",
-                    notificationMessage.getToId(), notificationMessage.getConversationId());
+            log.debug("群聊通知推送成功 - 用户ID: {}, 会话ID: {}, 会话seq: {}",
+                    notificationMessage.getToId(), notificationMessage.getConversationId(), conversationSeq);
             // {{END MODIFICATIONS}}
 
         } catch (Exception e) {
-            log.error("推送群聊通知失败 - 用户ID: {}, 会话ID: {}",
-                    notificationMessage.getToId(), notificationMessage.getConversationId(), e);
+            log.error("推送群聊通知失败 - 用户ID: {}, 会话ID: {}, 会话seq: {}",
+                    notificationMessage.getToId(), notificationMessage.getConversationId(), conversationSeq, e);
         }
     }
     
     @Override
-    public void pushNotificationToOnlineMembers(ChatMessage originalMessage, Long seq,
+    public void pushNotificationToOnlineMembers(ChatMessage originalMessage, Long conversationSeq,
                                               Map<String, String> onlineMembers) {
 
         // {{CHENGQI:
-        // Action: Modified; Timestamp: 2025-08-02 22:27:58 +08:00; Reason: 修正批量推送逻辑，直接使用ChatMessage协议;
+        // Action: Modified; Timestamp: 2025-08-04 21:00:00 +08:00; Reason: 修正批量推送逻辑，使用会话级seq;
         // }}
         // {{START MODIFICATIONS}}
-        log.info("开始批量推送群聊通知 - 会话ID: {}, 消息ID: {}, 在线成员数: {}",
-                originalMessage.getConversationId(), originalMessage.getUid(), onlineMembers.size());
+        log.info("开始批量推送群聊通知 - 会话ID: {}, 消息ID: {}, 会话seq: {}, 在线成员数: {}",
+                originalMessage.getConversationId(), originalMessage.getUid(), conversationSeq, onlineMembers.size());
 
         int successCount = 0;
         int failureCount = 0;
@@ -76,11 +76,11 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
                     continue;
                 }
 
-                // 为每个成员创建专门的通知消息
-                ChatMessage notificationMessage = createNotificationMessage(originalMessage, memberId);
+                // 为每个成员创建专门的通知消息，传递会话级seq
+                ChatMessage notificationMessage = createNotificationMessage(originalMessage, memberId, conversationSeq);
 
-                // 推送通知
-                pushNotificationToUser(notificationMessage, seq, gatewayNodeId);
+                // 推送通知，使用会话级seq
+                pushNotificationToUser(notificationMessage, conversationSeq, gatewayNodeId);
                 successCount++;
 
             } catch (Exception e) {
@@ -89,16 +89,16 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
             }
         }
 
-        log.info("群聊通知批量推送完成 - 会话ID: {}, 成功: {}, 失败: {}",
-                originalMessage.getConversationId(), successCount, failureCount);
+        log.info("群聊通知批量推送完成 - 会话ID: {}, 会话seq: {}, 成功: {}, 失败: {}",
+                originalMessage.getConversationId(), conversationSeq, successCount, failureCount);
         // {{END MODIFICATIONS}}
     }
     
     @Override
-    public ChatMessage createNotificationMessage(ChatMessage originalMessage, String targetUserId) {
+    public ChatMessage createNotificationMessage(ChatMessage originalMessage, String targetUserId, Long conversationSeq) {
 
         // {{CHENGQI:
-        // Action: Modified; Timestamp: 2025-08-02 22:32:38 +08:00; Reason: 修正通知消息创建，toId设置为目标用户ID而不是群组ID;
+        // Action: Modified; Timestamp: 2025-08-04 21:00:00 +08:00; Reason: 修正通知消息创建，使用会话级seq而不是原消息seq;
         // }}
         // {{START MODIFICATIONS}}
         // 创建轻量级通知消息，使用特殊的消息类型
@@ -108,6 +108,7 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
         // 3. fromId: 发送方用户ID
         // 4. toId: 接收方用户ID（目标用户ID，不是群组ID）
         // 5. conversationId: 群聊会话ID，用于标识来源群聊
+        // 6. seq: 会话级序列号，用于ACK确认
 
         // 限制内容长度，创建简化的通知内容
         String notificationContent = "new_message"; // 简化的通知内容
@@ -123,14 +124,14 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
                 .setFromId(originalMessage.getFromId()) // 保持发送方ID
                 .setToId(targetUserId) // 关键修正：设置为目标用户ID，不是群组ID
                 .setUid(originalMessage.getUid()) // 使用原消息ID
-                .setSeq(originalMessage.getSeq()) // 使用原消息seq
+                .setSeq(String.valueOf(conversationSeq)) // 关键修正：使用会话级seq，不是原消息seq
                 .setTimestamp(originalMessage.getTimestamp()) // 使用原消息时间戳
                 .setRetry(0) // 通知不重试
                 .setConversationId(originalMessage.getConversationId()) // 设置会话ID，标识来源群聊
                 .build();
 
-        log.debug("创建群聊通知消息 - 会话ID: {}, 目标用户: {}, 通知内容: {}",
-                originalMessage.getConversationId(), targetUserId, notificationContent);
+        log.debug("创建群聊通知消息 - 会话ID: {}, 目标用户: {}, 会话seq: {}, 通知内容: {}",
+                originalMessage.getConversationId(), targetUserId, conversationSeq, notificationContent);
 
         return notificationMessage;
         // {{END MODIFICATIONS}}

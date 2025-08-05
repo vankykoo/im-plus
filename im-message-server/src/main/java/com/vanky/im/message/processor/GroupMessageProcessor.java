@@ -62,6 +62,12 @@ public class GroupMessageProcessor {
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private SendReceiptService sendReceiptService;
+
+    @Autowired
+    private MessageIdempotentService messageIdempotentService;
     
     // 消息缓存TTL（24小时）
     private static final long MESSAGE_CACHE_TTL = 24 * 60 * 60;
@@ -79,12 +85,29 @@ public class GroupMessageProcessor {
         try {
             String fromUserId = chatMessage.getFromId();
             String groupId = chatMessage.getToId();
+            String clientSeq = chatMessage.getClientSeq();
 
             // 1. 使用传入的消息ID（雪花算法生成，保持ID一致性）
             String msgId = chatMessage.getUid(); // 使用gateway传入的消息ID，避免重复生成
 
-            log.info("开始处理群聊消息 - 会话ID: {}, 消息ID: {}, 发送方: {}, 群组ID: {}",
-                    conversationId, msgId, fromUserId, groupId);
+            log.info("开始处理群聊消息 - 会话ID: {}, 消息ID: {}, 发送方: {}, 群组ID: {}, 客户端序列号: {}",
+                    conversationId, msgId, fromUserId, groupId, clientSeq);
+
+            // 0. 幂等性检查（仅对包含client_seq的消息进行检查）
+            if (clientSeq != null && !clientSeq.trim().isEmpty()) {
+                MessageIdempotentService.IdempotentResult idempotentResult =
+                        messageIdempotentService.checkIdempotent(clientSeq);
+
+                if (idempotentResult != null) {
+                    // 重复消息，直接发送回执并返回
+                    log.info("检测到重复群聊消息，直接返回之前结果 - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
+                            clientSeq, idempotentResult.getMsgId(), idempotentResult.getSeq());
+
+                    // 发送回执给发送方
+                    sendReceiptForDuplicateMessage(chatMessage, idempotentResult);
+                    return;
+                }
+            }
             
             // 2. 校验发送者是否为群成员
             if (!groupMemberService.isGroupMember(groupId, fromUserId)) {
@@ -119,6 +142,14 @@ public class GroupMessageProcessor {
 
             // 10. 更新发送方的会话级seq（发送成功后更新）
             updateSenderConversationSeq(fromUserId, conversationId, seq);
+
+            // 11. 记录幂等性结果（仅对包含client_seq的消息）
+            if (clientSeq != null && !clientSeq.trim().isEmpty()) {
+                messageIdempotentService.recordIdempotent(clientSeq, msgId, seq);
+            }
+
+            // 12. 发送回执给发送方
+            sendReceiptToSender(chatMessage, msgId, seq);
 
             log.info("群聊消息处理完成 - 会话ID: {}, 消息ID: {}, Seq: {}", conversationId, msgId, seq);
             
@@ -364,6 +395,61 @@ public class GroupMessageProcessor {
         } catch (Exception e) {
             log.error("更新发送方会话级seq失败 - 用户ID: {}, 会话ID: {}, seq: {}", senderId, conversationId, seq, e);
             // 不抛出异常，不影响主流程
+        }
+    }
+
+    /**
+     * 处理重复消息，发送回执
+     */
+    private void sendReceiptForDuplicateMessage(ChatMessage chatMessage, MessageIdempotentService.IdempotentResult idempotentResult) {
+        String clientSeq = chatMessage.getClientSeq();
+
+        try {
+            // 发送回执给发送方
+            sendReceiptService.sendReceipt(
+                    clientSeq,                                    // 客户端序列号
+                    idempotentResult.getMsgId(),                  // 之前的服务端消息ID
+                    String.valueOf(idempotentResult.getSeq()),    // 之前的服务端序列号
+                    chatMessage.getFromId()                       // 发送方用户ID
+            );
+
+            log.info("重复群聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId());
+
+        } catch (Exception e) {
+            // 回执发送失败不影响主流程
+            log.error("重复群聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId(), e);
+        }
+    }
+
+    /**
+     * 12. 发送回执给发送方
+     */
+    private void sendReceiptToSender(ChatMessage chatMessage, String msgId, Long seq) {
+        // 检查是否有客户端序列号（只有新版本客户端才会发送）
+        String clientSeq = chatMessage.getClientSeq();
+        if (clientSeq == null || clientSeq.trim().isEmpty()) {
+            log.debug("消息无客户端序列号，跳过发送回执 - 消息ID: {}", msgId);
+            return;
+        }
+
+        try {
+            // 发送回执给发送方
+            sendReceiptService.sendReceipt(
+                    clientSeq,                    // 客户端序列号
+                    msgId,                        // 服务端消息ID
+                    String.valueOf(seq),          // 服务端序列号
+                    chatMessage.getFromId()       // 发送方用户ID
+            );
+
+            log.info("群聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, msgId, chatMessage.getFromId());
+
+        } catch (Exception e) {
+            // 回执发送失败不影响消息处理流程
+            log.error("群聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, msgId, chatMessage.getFromId(), e);
         }
     }
 }

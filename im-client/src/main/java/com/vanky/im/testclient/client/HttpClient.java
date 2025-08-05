@@ -783,9 +783,14 @@ public class HttpClient {
                     System.err.println("解析群聊消息元数据失败: " + e.getMessage());
                 }
 
-                String seqMapJson = extractJsonObject(dataJson, "latestSeqMap");
+                // 注意：服务端返回的字段名是 latestSeqs，不是 latestSeqMap
+                String seqMapJson = extractJsonObject(dataJson, "latestSeqs");
+                System.out.println("[DEBUG] 提取的latestSeqs JSON: " + seqMapJson);
                 if (seqMapJson != null && !seqMapJson.isEmpty()) {
                     latestSeqMap = parseMap(seqMapJson);
+                    System.out.println("[DEBUG] 解析后的latestSeqMap: " + latestSeqMap);
+                } else {
+                    System.out.println("[DEBUG] latestSeqs JSON为空或null");
                 }
             }
 

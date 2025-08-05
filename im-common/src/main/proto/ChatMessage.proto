@@ -17,4 +17,7 @@ message ChatMessage {
   int32 retry = 8;          // 重试次数
   string token = 9;         // 身份验证token，用于连接验证
   string conversationId = 10; // 会话ID，用于标识具体的会话
+  string clientSeq = 11;      // 客户端生成的临时序列号，用于回执匹配
+  string serverMsgId = 12;    // 服务端生成的正式消息ID
+  string serverSeq = 13;      // 服务端生成的正式序列号
 }

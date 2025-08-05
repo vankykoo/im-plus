@@ -33,6 +33,9 @@ public class MessageTypeConstants {
 
     /** 群聊会话ACK确认 */
     public static final int GROUP_CONVERSATION_ACK = 2006;
+
+    /** 消息发送回执 */
+    public static final int MESSAGE_SEND_RECEIPT = 2007;
     
     // ==================== 服务端到客户端消息 (1000-1999) ====================
     
@@ -111,6 +114,8 @@ public class MessageTypeConstants {
             case HEARTBEAT: return "心跳";
             case MESSAGE_ACK: return "消息确认";
             case BATCH_MESSAGE_ACK: return "批量消息确认";
+            case GROUP_CONVERSATION_ACK: return "群聊会话ACK确认";
+            case MESSAGE_SEND_RECEIPT: return "消息发送回执";
             
             // 服务端到客户端消息
             case LOGIN_RESPONSE: return "登录响应";

@@ -277,15 +277,22 @@ public class OfflineMessageSyncManager {
             }
 
             // 步骤3：处理响应并更新同步点
-            if (pullResponse.getTotalCount() > 0) {
-                // 更新本地同步点
-                Map<String, Long> latestSeqMap = pullResponse.getLatestSeqMap();
-                if (latestSeqMap != null && !latestSeqMap.isEmpty()) {
-                    localStorage.updateConversationSeqMap(currentUserId, latestSeqMap);
+            // 获取服务端返回的最新seq映射
+            Map<String, Long> latestSeqMap = pullResponse.getLatestSeqMap();
+            System.out.println("[DEBUG] 服务端返回的latestSeqMap: " + latestSeqMap);
 
-                    // 步骤4：发送群聊会话ACK确认
+            if (latestSeqMap != null && !latestSeqMap.isEmpty()) {
+                // 无论是否有新消息，都应该更新本地同步点
+                // 这样可以避免重复拉取已经检查过的消息
+                localStorage.updateConversationSeqMap(currentUserId, latestSeqMap);
+                System.out.println("[DEBUG] 已更新本地群聊同步点，会话数量: " + latestSeqMap.size());
+
+                // 步骤4：发送群聊会话ACK确认（只有当有新消息时才发送ACK）
+                if (pullResponse.getTotalCount() > 0) {
                     sendGroupConversationAck(latestSeqMap);
                 }
+            } else {
+                System.out.println("[DEBUG] 服务端未返回latestSeqMap或为空，跳过同步点更新");
             }
 
             // 群聊消息同步完成

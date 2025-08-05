@@ -169,6 +169,8 @@ public class LocalMessageStorage {
      * @param conversationSeqMap 群聊同步点映射
      */
     public void updateConversationSeqMap(String userId, Map<String, Long> conversationSeqMap) {
+        System.out.println("[DEBUG] 开始批量更新群聊同步点 - 用户: " + userId + ", 会话数量: " + conversationSeqMap.size());
+
         try (Jedis jedis = jedisPool.getResource()) {
             String key = conversationSeqPrefix + userId;
 
@@ -179,6 +181,8 @@ public class LocalMessageStorage {
                 for (Map.Entry<String, Long> entry : conversationSeqMap.entrySet()) {
                     String conversationId = entry.getKey();
                     Long newSeq = entry.getValue();
+
+                    System.out.println("[DEBUG] 处理会话同步点 - 会话: " + conversationId + ", 新seq: " + newSeq);
 
                     if (newSeq != null) {
                         // 获取当前已存储的seq
@@ -214,13 +218,15 @@ public class LocalMessageStorage {
                     jedis.expire(key, (int) RedisConfig.getClientDataExpire());
                 }
 
-                System.out.println("群聊同步点增量更新完成 - 用户ID: " + userId +
+                System.out.println("[DEBUG] 群聊同步点增量更新完成 - 用户ID: " + userId +
                                  ", 传入会话数量: " + conversationSeqMap.size() +
                                  ", 实际更新数量: " + updatedCount);
+            } else {
+                System.out.println("[DEBUG] 传入的会话同步点映射为空，跳过更新");
             }
 
         } catch (Exception e) {
-            System.err.println("更新群聊同步点失败 - 用户ID: " + userId + ", 错误: " + e.getMessage());
+            System.err.println("[ERROR] 更新群聊同步点失败 - 用户ID: " + userId + ", 错误: " + e.getMessage());
             e.printStackTrace();
         }
     }

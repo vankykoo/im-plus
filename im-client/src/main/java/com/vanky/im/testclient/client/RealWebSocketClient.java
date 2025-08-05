@@ -3,6 +3,10 @@ package com.vanky.im.testclient.client;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
+import com.vanky.im.testclient.manager.PendingMessageManager;
+import com.vanky.im.testclient.handler.MessageSendReceiptHandler;
+import com.vanky.im.testclient.model.PendingMessage;
+import com.vanky.im.testclient.model.MessageStatus;
 import java.util.List;
 
 import java.net.URI;
@@ -36,6 +40,10 @@ public class RealWebSocketClient implements WebSocket.Listener {
     // 用于更新本地同步点
     private com.vanky.im.testclient.client.HttpClient imHttpClient;
     private LocalMessageStorage localStorage;
+
+    // 消息发送确认机制
+    private PendingMessageManager pendingMessageManager;
+    private MessageSendReceiptHandler receiptHandler;
     
     public RealWebSocketClient(String userId, String token, MessageHandler messageHandler) {
         this.userId = userId;
@@ -49,6 +57,30 @@ public class RealWebSocketClient implements WebSocket.Listener {
         // 初始化IM HTTP客户端和本地存储
         this.imHttpClient = new com.vanky.im.testclient.client.HttpClient();
         this.localStorage = new LocalMessageStorage();
+
+        // 初始化消息发送确认机制
+        this.pendingMessageManager = new PendingMessageManager();
+        this.receiptHandler = new MessageSendReceiptHandler(pendingMessageManager);
+
+        // 设置超时回调
+        this.pendingMessageManager.setTimeoutCallback(new PendingMessageManager.TimeoutCallback() {
+            @Override
+            public void onMessageTimeout(PendingMessage message) {
+                // 消息超时，重新发送
+                retryMessage(message);
+            }
+
+            @Override
+            public void onMessageFailed(PendingMessage message) {
+                // 消息发送失败
+                System.err.println("消息发送失败: " + message.getClientSeq() +
+                                 ", 内容: " + message.getContent());
+            }
+        });
+
+        // 设置本地存储和用户ID
+        this.pendingMessageManager.setLocalStorage(localStorage);
+        this.pendingMessageManager.setUserId(userId);
     }
     
     /**
@@ -68,6 +100,9 @@ public class RealWebSocketClient implements WebSocket.Listener {
             
             webSocket = webSocketFuture.get(10, TimeUnit.SECONDS);
             System.out.println("WebSocket连接已建立 - 用户: " + userId);
+
+            // 启动待确认消息管理器
+            pendingMessageManager.start();
             
         } catch (Exception e) {
             System.err.println("WebSocket连接失败 - 用户: " + userId + " - " + e.getMessage());
@@ -143,6 +178,11 @@ public class RealWebSocketClient implements WebSocket.Listener {
                                  ", 发送方: " + chatMessage.getFromId() +
                                  ", 内容: " + chatMessage.getContent());
             }
+            // 处理消息发送回执
+            else if (chatMessage.getType() == MessageTypeConstants.MESSAGE_SEND_RECEIPT) {
+                // 处理发送回执
+                receiptHandler.handleSendReceipt(chatMessage);
+            }
 
             // 委托给消息处理器
             if (messageHandler != null) {
@@ -214,7 +254,11 @@ public class RealWebSocketClient implements WebSocket.Listener {
             System.err.println("用户 " + userId + " 未登录，无法发送消息");
             return;
         }
-        
+
+        // 生成客户端序列号
+        String clientSeq = UUID.randomUUID().toString();
+        String conversationId = generatePrivateConversationId(userId, toUserId);
+
         ChatMessage privateMsg = ChatMessage.newBuilder()
                 .setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE)
                 .setContent(content)
@@ -224,10 +268,23 @@ public class RealWebSocketClient implements WebSocket.Listener {
                 .setSeq(String.valueOf(System.currentTimeMillis()))
                 .setTimestamp(System.currentTimeMillis())
                 .setRetry(0)
+                .setClientSeq(clientSeq) // 设置客户端序列号
+                .setConversationId(conversationId)
                 .build();
-        
-        sendBinaryMessage(privateMsg);
-        System.out.println("发送私聊消息 - 从: " + userId + " 到: " + toUserId + ", 内容: " + content);
+
+        // 创建待确认消息
+        PendingMessage pendingMessage = new PendingMessage(
+                clientSeq, content, toUserId,
+                MessageTypeConstants.PRIVATE_CHAT_MESSAGE, conversationId);
+
+        // 添加到待确认队列
+        if (pendingMessageManager.addPendingMessage(pendingMessage)) {
+            sendBinaryMessage(privateMsg);
+            System.out.println("发送私聊消息 - 从: " + userId + " 到: " + toUserId +
+                             ", 内容: " + content + ", 客户端序列号: " + clientSeq);
+        } else {
+            System.err.println("添加待确认消息失败，消息未发送");
+        }
     }
     
     /**
@@ -238,7 +295,11 @@ public class RealWebSocketClient implements WebSocket.Listener {
             System.err.println("用户 " + userId + " 未登录，无法发送消息");
             return;
         }
-        
+
+        // 生成客户端序列号
+        String clientSeq = UUID.randomUUID().toString();
+        String conversationId = "group_" + groupId;
+
         ChatMessage groupMsg = ChatMessage.newBuilder()
                 .setType(MessageTypeConstants.GROUP_CHAT_MESSAGE)
                 .setContent(content)
@@ -248,11 +309,23 @@ public class RealWebSocketClient implements WebSocket.Listener {
                 .setSeq(String.valueOf(System.currentTimeMillis()))
                 .setTimestamp(System.currentTimeMillis())
                 .setRetry(0)
-                .setConversationId("group_" + groupId) // 设置会话ID
+                .setClientSeq(clientSeq) // 设置客户端序列号
+                .setConversationId(conversationId)
                 .build();
-        
-        sendBinaryMessage(groupMsg);
-        System.out.println("发送群聊消息 - 从: " + userId + " 到群: " + groupId + ", 内容: " + content);
+
+        // 创建待确认消息
+        PendingMessage pendingMessage = new PendingMessage(
+                clientSeq, content, groupId,
+                MessageTypeConstants.GROUP_CHAT_MESSAGE, conversationId);
+
+        // 添加到待确认队列
+        if (pendingMessageManager.addPendingMessage(pendingMessage)) {
+            sendBinaryMessage(groupMsg);
+            System.out.println("发送群聊消息 - 从: " + userId + " 到群: " + groupId +
+                             ", 内容: " + content + ", 客户端序列号: " + clientSeq);
+        } else {
+            System.err.println("添加待确认消息失败，消息未发送");
+        }
     }
     
     /**
@@ -342,6 +415,11 @@ public class RealWebSocketClient implements WebSocket.Listener {
         
         connected.set(false);
         isLoggedIn.set(false);
+
+        // 停止待确认消息管理器
+        if (pendingMessageManager != null) {
+            pendingMessageManager.stop();
+        }
     }
 
     /**
@@ -547,6 +625,93 @@ public class RealWebSocketClient implements WebSocket.Listener {
             System.err.println("更新客户端群聊同步点失败: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * 生成私聊会话ID
+     * @param fromUserId 发送方用户ID
+     * @param toUserId 接收方用户ID
+     * @return 会话ID
+     */
+    private String generatePrivateConversationId(String fromUserId, String toUserId) {
+        // 私聊会话ID规则：private_xx_xx，其中userid小的放前面
+        try {
+            long id1 = Long.parseLong(fromUserId);
+            long id2 = Long.parseLong(toUserId);
+
+            if (id1 < id2) {
+                return "private_" + id1 + "_" + id2;
+            } else {
+                return "private_" + id2 + "_" + id1;
+            }
+        } catch (NumberFormatException e) {
+            // 如果ID不是数字，则使用字符串比较
+            if (fromUserId.compareTo(toUserId) < 0) {
+                return "private_" + fromUserId + "_" + toUserId;
+            } else {
+                return "private_" + toUserId + "_" + fromUserId;
+            }
+        }
+    }
+
+    /**
+     * 重试发送消息
+     * @param message 待重试的消息
+     */
+    private void retryMessage(PendingMessage message) {
+        if (!isLoggedIn.get()) {
+            System.err.println("用户未登录，无法重试消息: " + message.getClientSeq());
+            return;
+        }
+
+        System.out.println("重试发送消息: " + message.getClientSeq() +
+                         ", 重试次数: " + message.getRetryCount());
+
+        // 根据消息类型重新发送
+        if (message.getMessageType() == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
+            // 重新构建私聊消息
+            ChatMessage retryMsg = ChatMessage.newBuilder()
+                    .setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE)
+                    .setContent(message.getContent())
+                    .setFromId(userId)
+                    .setToId(message.getToUserId())
+                    .setUid(UUID.randomUUID().toString())
+                    .setSeq(String.valueOf(System.currentTimeMillis()))
+                    .setTimestamp(System.currentTimeMillis())
+                    .setRetry(message.getRetryCount())
+                    .setClientSeq(message.getClientSeq()) // 保持相同的客户端序列号
+                    .setConversationId(message.getConversationId())
+                    .build();
+
+            sendBinaryMessage(retryMsg);
+        } else if (message.getMessageType() == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
+            // 重新构建群聊消息
+            ChatMessage retryMsg = ChatMessage.newBuilder()
+                    .setType(MessageTypeConstants.GROUP_CHAT_MESSAGE)
+                    .setContent(message.getContent())
+                    .setFromId(userId)
+                    .setToId(message.getToUserId())
+                    .setUid(UUID.randomUUID().toString())
+                    .setSeq(String.valueOf(System.currentTimeMillis()))
+                    .setTimestamp(System.currentTimeMillis())
+                    .setRetry(message.getRetryCount())
+                    .setClientSeq(message.getClientSeq()) // 保持相同的客户端序列号
+                    .setConversationId(message.getConversationId())
+                    .build();
+
+            sendBinaryMessage(retryMsg);
+        }
+    }
+
+    /**
+     * 获取待确认消息队列统计信息
+     * @return 统计信息
+     */
+    public String getPendingMessageStatistics() {
+        if (pendingMessageManager != null) {
+            return pendingMessageManager.getStatistics();
+        }
+        return "PendingMessageManager未初始化";
     }
 
     /**

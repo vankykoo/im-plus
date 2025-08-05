@@ -85,6 +85,9 @@ public class IMServiceHandler {
             } else if (messageType == MessageTypeConstants.GROUP_CONVERSATION_ACK) {
                 // 处理群聊会话ACK确认
                 handleGroupConversationAck(msg, channel);
+            } else if (messageType == MessageTypeConstants.MESSAGE_SEND_RECEIPT) {
+                // 处理消息发送回执
+                handleMessageSendReceipt(msg, channel);
             }
             // 客户端到客户端消息处理
             else if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE ||
@@ -333,6 +336,61 @@ public class IMServiceHandler {
 
         } catch (Exception e) {
             log.error("处理群聊会话ACK确认失败 - 用户: {}, 内容: {}", userId, content, e);
+        }
+    }
+
+    /**
+     * 处理消息发送回执
+     * @param msg 回执消息
+     * @param channel 客户端连接通道
+     */
+    private void handleMessageSendReceipt(ChatMessage msg, Channel channel) {
+        String toUserId = msg.getToId();
+        String clientSeq = msg.getClientSeq();
+        String serverMsgId = msg.getServerMsgId();
+        String serverSeq = msg.getServerSeq();
+
+        log.info("收到消息发送回执 - 目标用户: {}, 客户端序列号: {}, 服务端消息ID: {}, 服务端序列号: {}, Channel: {}",
+                toUserId, clientSeq, serverMsgId, serverSeq, channel.id().asShortText());
+
+        // 验证回执消息的必要字段
+        if (toUserId == null || toUserId.trim().isEmpty()) {
+            log.warn("回执消息目标用户ID为空，忽略处理");
+            return;
+        }
+
+        if (clientSeq == null || clientSeq.trim().isEmpty()) {
+            log.warn("回执消息客户端序列号为空，忽略处理");
+            return;
+        }
+
+        if (serverMsgId == null || serverMsgId.trim().isEmpty()) {
+            log.warn("回执消息服务端消息ID为空，忽略处理");
+            return;
+        }
+
+        if (serverSeq == null || serverSeq.trim().isEmpty()) {
+            log.warn("回执消息服务端序列号为空，忽略处理");
+            return;
+        }
+
+        try {
+            // 查找目标用户的连接通道
+            Channel targetChannel = userChannelManager.getChannel(toUserId);
+            if (targetChannel == null) {
+                log.warn("目标用户不在线或连接已断开，无法发送回执 - 用户: {}", toUserId);
+                return;
+            }
+
+            // 直接将回执消息推送给目标用户
+            targetChannel.writeAndFlush(msg.toByteArray());
+
+            log.info("消息发送回执已推送给用户 - 用户: {}, 客户端序列号: {}, 服务端消息ID: {}",
+                    toUserId, clientSeq, serverMsgId);
+
+        } catch (Exception e) {
+            log.error("处理消息发送回执失败 - 目标用户: {}, 客户端序列号: {}, 服务端消息ID: {}",
+                    toUserId, clientSeq, serverMsgId, e);
         }
     }
 }

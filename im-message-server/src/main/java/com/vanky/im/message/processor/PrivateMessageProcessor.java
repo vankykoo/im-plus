@@ -50,6 +50,12 @@ public class PrivateMessageProcessor {
     private FriendshipService friendshipService;
 
     @Autowired
+    private SendReceiptService sendReceiptService;
+
+    @Autowired
+    private MessageIdempotentService messageIdempotentService;
+
+    @Autowired
     private OnlineStatusService onlineStatusService;
 
     @Autowired
@@ -94,9 +100,26 @@ public class PrivateMessageProcessor {
     public void processPrivateMessage(ChatMessage chatMessage, String conversationId) {
         String fromUserId = chatMessage.getFromId();
         String toUserId = chatMessage.getToId();
+        String clientSeq = chatMessage.getClientSeq();
 
-        log.info("开始处理私聊消息 - 会话ID: {}, 发送方: {}, 接收方: {}, 原始消息ID: {}",
-                conversationId, fromUserId, toUserId, chatMessage.getUid());
+        log.info("开始处理私聊消息 - 会话ID: {}, 发送方: {}, 接收方: {}, 原始消息ID: {}, 客户端序列号: {}",
+                conversationId, fromUserId, toUserId, chatMessage.getUid(), clientSeq);
+
+        // 0. 幂等性检查（仅对包含client_seq的消息进行检查）
+        if (clientSeq != null && !clientSeq.trim().isEmpty()) {
+            MessageIdempotentService.IdempotentResult idempotentResult =
+                    messageIdempotentService.checkIdempotent(clientSeq);
+
+            if (idempotentResult != null) {
+                // 重复消息，直接发送回执并返回
+                log.info("检测到重复私聊消息，直接返回之前结果 - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
+                        clientSeq, idempotentResult.getMsgId(), idempotentResult.getSeq());
+
+                // 发送回执给发送方
+                sendReceiptForDuplicateMessage(chatMessage, idempotentResult);
+                return;
+            }
+        }
 
         try {
             // 1. 关系与权限校验 (业务安全性)
@@ -114,7 +137,15 @@ public class PrivateMessageProcessor {
             // 5. 数据缓存 (性能优化)
             updateCache(chatMessage, persistResult, fromUserId, toUserId);
 
-            // 6. 最终确认通过事务管理自动完成
+            // 6. 记录幂等性结果（仅对包含client_seq的消息）
+            if (clientSeq != null && !clientSeq.trim().isEmpty()) {
+                messageIdempotentService.recordIdempotent(clientSeq, persistResult.msgId, persistResult.seq);
+            }
+
+            // 7. 发送回执给发送方
+            sendReceiptToSender(chatMessage, persistResult);
+
+            // 8. 最终确认通过事务管理自动完成
             log.info("私聊消息处理完成 - 会话ID: {}, 消息ID: {}, Seq: {}",
                     conversationId, persistResult.msgId, persistResult.seq);
 
@@ -314,4 +345,60 @@ public class PrivateMessageProcessor {
             return content.substring(0, RedisKeyConstants.MAX_MSG_CONTENT_SUMMARY_LENGTH) + "...";
         }
     }
+
+    /**
+     * 处理重复消息，发送回执
+     */
+    private void sendReceiptForDuplicateMessage(ChatMessage chatMessage, MessageIdempotentService.IdempotentResult idempotentResult) {
+        String clientSeq = chatMessage.getClientSeq();
+
+        try {
+            // 发送回执给发送方
+            sendReceiptService.sendReceipt(
+                    clientSeq,                                    // 客户端序列号
+                    idempotentResult.getMsgId(),                  // 之前的服务端消息ID
+                    String.valueOf(idempotentResult.getSeq()),    // 之前的服务端序列号
+                    chatMessage.getFromId()                       // 发送方用户ID
+            );
+
+            log.info("重复私聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId());
+
+        } catch (Exception e) {
+            // 回执发送失败不影响主流程
+            log.error("重复私聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId(), e);
+        }
+    }
+
+    /**
+     * 7. 发送回执给发送方
+     */
+    private void sendReceiptToSender(ChatMessage chatMessage, MessagePersistResult persistResult) {
+        // 检查是否有客户端序列号（只有新版本客户端才会发送）
+        String clientSeq = chatMessage.getClientSeq();
+        if (clientSeq == null || clientSeq.trim().isEmpty()) {
+            log.debug("消息无客户端序列号，跳过发送回执 - 消息ID: {}", persistResult.msgId);
+            return;
+        }
+
+        try {
+            // 发送回执给发送方
+            sendReceiptService.sendReceipt(
+                    clientSeq,                          // 客户端序列号
+                    persistResult.msgId,                // 服务端消息ID
+                    String.valueOf(persistResult.seq),  // 服务端序列号
+                    chatMessage.getFromId()             // 发送方用户ID
+            );
+
+            log.info("私聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, persistResult.msgId, chatMessage.getFromId());
+
+        } catch (Exception e) {
+            // 回执发送失败不影响消息处理流程
+            log.error("私聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
+                    clientSeq, persistResult.msgId, chatMessage.getFromId(), e);
+        }
+    }
+
 }

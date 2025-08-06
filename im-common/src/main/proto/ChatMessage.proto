@@ -20,4 +20,9 @@ message ChatMessage {
   string clientSeq = 11;      // 客户端生成的临时序列号，用于回执匹配
   string serverMsgId = 12;    // 服务端生成的正式消息ID
   string serverSeq = 13;      // 服务端生成的正式序列号
+
+  // 推拉结合模式新增字段
+  int64 userSeq = 14;         // 用户级全局序列号（私聊消息使用）
+  int64 conversationSeq = 15; // 会话级序列号（群聊消息使用）
+  int64 expectedSeq = 16;     // 客户端期望的下一个序列号（用于空洞检测）
 }

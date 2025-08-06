@@ -232,6 +232,98 @@ public class LocalMessageStorage {
     }
 
     /**
+     * 获取单个群聊会话的最后序列号
+     * 从Redis中获取指定用户在指定群聊会话中的最后序列号
+     *
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @return 最后序列号，如果不存在则返回0
+     */
+    public long getConversationLastSeq(String userId, String conversationId) {
+        // {{CHENGQI:
+        // Action: Modified; Timestamp: 2025-08-06 21:32:28 +08:00; Reason: 实现从Redis获取单个群聊会话最后序列号的方法，使用Redis Key格式im:client:conversation:seq:{user_id};
+        // }}
+        // {{START MODIFICATIONS}}
+        try (Jedis jedis = jedisPool.getResource()) {
+            String key = conversationSeqPrefix + userId;
+            String seqStr = jedis.hget(key, conversationId);
+
+            if (seqStr != null && !seqStr.isEmpty()) {
+                try {
+                    long seq = Long.parseLong(seqStr);
+                    return seq;
+                } catch (NumberFormatException e) {
+                    System.err.println("解析群聊会话序列号失败 - 用户ID: " + userId +
+                                     ", 会话ID: " + conversationId + ", 值: " + seqStr);
+                    return 0L;
+                }
+            } else {
+                System.out.println("群聊会话序列号不存在，返回默认值0 - 用户ID: " + userId +
+                                 ", 会话ID: " + conversationId);
+                return 0L;
+            }
+        } catch (Exception e) {
+            System.err.println("获取群聊会话序列号失败 - 用户ID: " + userId +
+                             ", 会话ID: " + conversationId + ", 错误: " + e.getMessage());
+            e.printStackTrace();
+            return 0L;
+        }
+        // {{END MODIFICATIONS}}
+    }
+
+    /**
+     * 更新单个群聊会话的最后序列号
+     * 更新Redis中指定用户在指定群聊会话中的最后序列号，确保seq单调递增
+     *
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @param newSeq 新序列号
+     */
+    public void updateConversationLastSeq(String userId, String conversationId, long newSeq) {
+        // {{CHENGQI:
+        // Action: Modified; Timestamp: 2025-08-06 21:32:28 +08:00; Reason: 实现更新Redis中单个群聊会话最后序列号的方法，确保seq单调递增;
+        // }}
+        // {{START MODIFICATIONS}}
+        try (Jedis jedis = jedisPool.getResource()) {
+            String key = conversationSeqPrefix + userId;
+
+            // 获取当前已存储的seq
+            String currentSeqStr = jedis.hget(key, conversationId);
+            Long currentSeq = 0L;
+
+            if (currentSeqStr != null && !currentSeqStr.isEmpty()) {
+                try {
+                    currentSeq = Long.parseLong(currentSeqStr);
+                } catch (NumberFormatException e) {
+                    System.err.println("解析当前seq失败，使用默认值0 - 用户ID: " + userId +
+                                     ", 会话ID: " + conversationId + ", 当前值: " + currentSeqStr);
+                    currentSeq = 0L;
+                }
+            }
+
+            // 只有新seq大于当前seq时才更新
+            if (newSeq > currentSeq) {
+                jedis.hset(key, conversationId, String.valueOf(newSeq));
+                jedis.expire(key, (int) RedisConfig.getClientDataExpire());
+
+                System.out.println("更新群聊会话序列号成功 - 用户ID: " + userId +
+                                 ", 会话ID: " + conversationId +
+                                 ", 当前seq: " + currentSeq + " -> 新seq: " + newSeq);
+            } else {
+                System.out.println("跳过seq更新（新seq不大于当前seq） - 用户ID: " + userId +
+                                 ", 会话ID: " + conversationId +
+                                 ", 当前seq: " + currentSeq + ", 新seq: " + newSeq);
+            }
+
+        } catch (Exception e) {
+            System.err.println("更新群聊会话序列号失败 - 用户ID: " + userId +
+                             ", 会话ID: " + conversationId + ", 序列号: " + newSeq + ", 错误: " + e.getMessage());
+            e.printStackTrace();
+        }
+        // {{END MODIFICATIONS}}
+    }
+
+    /**
      * 更新单个群聊的同步点（确保seq单调递增）
      *
      * @param userId 用户ID

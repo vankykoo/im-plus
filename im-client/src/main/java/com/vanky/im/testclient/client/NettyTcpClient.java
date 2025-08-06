@@ -7,6 +7,7 @@ import com.vanky.im.testclient.manager.PendingMessageManager;
 import com.vanky.im.testclient.handler.MessageSendReceiptHandler;
 import com.vanky.im.testclient.model.PendingMessage;
 import com.vanky.im.testclient.model.MessageStatus;
+import com.vanky.im.testclient.pushpull.UnifiedMessageProcessor;
 import java.util.List;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
@@ -56,6 +57,9 @@ public class NettyTcpClient {
     // 消息发送确认机制
     private PendingMessageManager pendingMessageManager;
     private MessageSendReceiptHandler receiptHandler;
+
+    // 推拉结合模式的统一消息处理器
+    private UnifiedMessageProcessor unifiedMessageProcessor;
     
     public NettyTcpClient(String userId, String token, MessageHandler messageHandler) {
         this.userId = userId;
@@ -90,6 +94,20 @@ public class NettyTcpClient {
         // 设置本地存储和用户ID
         this.pendingMessageManager.setLocalStorage(localStorage);
         this.pendingMessageManager.setUserId(userId);
+
+        // 初始化统一消息处理器
+        this.unifiedMessageProcessor = new UnifiedMessageProcessor(httpClient, localStorage, userId);
+
+        // 设置消息处理回调
+        this.unifiedMessageProcessor.setMessageCallback(new UnifiedMessageProcessor.MessageProcessCallback() {
+            @Override
+            public void onMessageReceived(ChatMessage message) {
+                // 委托给原有的消息处理器
+                if (messageHandler != null) {
+                    messageHandler.handleMessage(message);
+                }
+            }
+        });
     }
     
     /**
@@ -175,18 +193,18 @@ public class NettyTcpClient {
             // 处理聊天消息，需要发送ACK确认
             else if (chatMessage.getType() == MessageTypeConstants.PRIVATE_CHAT_MESSAGE ||
                      chatMessage.getType() == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
+                // 使用统一消息处理器处理消息（包含推拉结合逻辑）
+                unifiedMessageProcessor.processReceivedMessage(chatMessage);
+
                 // 发送ACK确认消息
                 sendAckMessage(chatMessage.getUid(), chatMessage.getSeq());
-
-                // 更新本地用户级全局seq，避免重复拉取
-                updateLocalSyncSeqForRealTimeMessage(chatMessage);
             }
             // 处理群聊消息通知，需要发送群聊会话ACK确认
             else if (chatMessage.getType() == MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION) {
-                // 1. 更新客户端本地的群聊同步点
-                updateClientGroupConversationSeq(chatMessage);
+                // 使用统一消息处理器处理群聊通知（包含推拉结合逻辑）
+                unifiedMessageProcessor.processReceivedMessage(chatMessage);
 
-                // 2. 发送群聊会话ACK确认
+                // 发送群聊会话ACK确认
                 sendGroupConversationAckForNotification(chatMessage);
 
                 System.out.println("收到群聊消息通知 - 会话ID: " + chatMessage.getConversationId() +
@@ -199,10 +217,13 @@ public class NettyTcpClient {
                 receiptHandler.handleSendReceipt(chatMessage);
             }
 
-            // 委托给消息处理器
-            if (messageHandler != null) {
-                messageHandler.handleMessage(chatMessage);
-            }
+            // {{CHENGQI:
+            // Action: Removed; Timestamp: 2025-08-06 22:01:47 +08:00; Reason: 删除重复的messageHandler调用，避免消息重复显示，消息已通过UnifiedMessageProcessor回调处理;
+            // }}
+            // {{START MODIFICATIONS}}
+            // 注意：不再直接调用messageHandler.handleMessage()，因为消息已经通过UnifiedMessageProcessor的回调机制处理
+            // 这样可以避免消息重复显示的问题
+            // {{END MODIFICATIONS}}
         }
         
         @Override
@@ -429,6 +450,11 @@ public class NettyTcpClient {
         // 停止待确认消息管理器
         if (pendingMessageManager != null) {
             pendingMessageManager.stop();
+        }
+
+        // 关闭统一消息处理器
+        if (unifiedMessageProcessor != null) {
+            unifiedMessageProcessor.shutdown();
         }
 
         if (group != null) {

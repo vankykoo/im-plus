@@ -128,6 +128,10 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
                 .setTimestamp(originalMessage.getTimestamp()) // 使用原消息时间戳
                 .setRetry(0) // 通知不重试
                 .setConversationId(originalMessage.getConversationId()) // 设置会话ID，标识来源群聊
+                // 推拉结合模式新增字段
+                .setUserSeq(0L) // 群聊消息不使用用户级全局序列号
+                .setConversationSeq(conversationSeq) // 设置会话级序列号
+                .setExpectedSeq(0L) // 通知消息不需要期望序列号
                 .build();
 
         log.debug("创建群聊通知消息 - 会话ID: {}, 目标用户: {}, 会话seq: {}, 通知内容: {}",

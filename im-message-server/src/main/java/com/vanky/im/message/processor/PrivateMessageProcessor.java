@@ -257,9 +257,15 @@ public class PrivateMessageProcessor {
             messageReceiverService.processSingleReceiver(toUserId, persistResult.msgId, conversationId);
             log.debug("接收方消息接收者处理完成 - 接收方: {}", toUserId);
 
-            // 填充服务端生成的消息ID和序列号
+            // 获取接收方的用户级全局序列号
+            Long receiverUserSeq = redisService.getUserMaxGlobalSeq(toUserId);
+            log.debug("获取接收方用户级全局序列号 - 接收方: {}, 用户级seq: {}", toUserId, receiverUserSeq);
+
+            // 填充服务端生成的消息ID和序列号，包括推拉结合模式所需的序列号
             ChatMessage enrichedMessage = chatMessage.toBuilder()
                     .setUid(persistResult.msgId) // 使用服务端生成的消息ID
+                    .setUserSeq(receiverUserSeq != null ? receiverUserSeq : 0L) // 设置用户级全局序列号
+                    .setConversationSeq(0L) // 私聊消息不使用会话级序列号
                     .build();
 
             // 推送到目标gateway

@@ -596,7 +596,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
      */
     private void showRegisterDialog() {
         JDialog registerDialog = new JDialog(this, "用户注册", true);
-        registerDialog.setSize(400, 250);
+        registerDialog.setSize(400, 200);
         registerDialog.setLocationRelativeTo(this);
 
         JPanel panel = new JPanel(new GridBagLayout());
@@ -618,22 +618,14 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
         JTextField usernameField = new JTextField(20);
         panel.add(usernameField, gbc);
 
-        // 密码输入
-        gbc.gridx = 0; gbc.gridy = 2; gbc.fill = GridBagConstraints.NONE;
-        panel.add(new JLabel("密码:"), gbc);
-        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-        JPasswordField passwordField = new JPasswordField(20);
-        panel.add(passwordField, gbc);
-
-        // 确认密码输入
-        gbc.gridx = 0; gbc.gridy = 3; gbc.fill = GridBagConstraints.NONE;
-        panel.add(new JLabel("确认密码:"), gbc);
-        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL;
-        JPasswordField confirmPasswordField = new JPasswordField(20);
-        panel.add(confirmPasswordField, gbc);
+        // 默认密码提示
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel passwordHintLabel = new JLabel("<html><font color='blue'>注册成功后，默认密码为：123456<br/>建议首次登录后修改密码</font></html>");
+        passwordHintLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        panel.add(passwordHintLabel, gbc);
 
         // 按钮面板
-        gbc.gridx = 0; gbc.gridy = 4; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
         JPanel buttonPanel = new JPanel(new FlowLayout());
 
         JButton registerBtn = new JButton("注册");
@@ -642,22 +634,15 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
         registerBtn.addActionListener(e -> {
             String userIdInput = userIdField.getText().trim();
             String username = usernameField.getText().trim();
-            String password = new String(passwordField.getPassword());
-            String confirmPassword = new String(confirmPasswordField.getPassword());
 
             // 验证输入
-            if (userIdInput.isEmpty() || username.isEmpty() || password.isEmpty()) {
-                JOptionPane.showMessageDialog(registerDialog, "用户ID、用户名和密码不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
+            if (userIdInput.isEmpty() || username.isEmpty()) {
+                JOptionPane.showMessageDialog(registerDialog, "用户ID和用户名不能为空！", "错误", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
-            if (!password.equals(confirmPassword)) {
-                JOptionPane.showMessageDialog(registerDialog, "两次输入的密码不一致！", "错误", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            // 执行注册
-            performUserRegistration(userIdInput, username, password, registerDialog);
+            // 执行注册，使用默认密码"123456"
+            performUserRegistration(userIdInput, username, registerDialog);
         });
 
         cancelBtn.addActionListener(e -> registerDialog.dispose());
@@ -673,17 +658,17 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
     /**
      * 执行用户注册
      */
-    private void performUserRegistration(String userIdInput, String username, String password, JDialog dialog) {
+    private void performUserRegistration(String userIdInput, String username, JDialog dialog) {
         try {
             appendMessage("[系统] 正在注册用户: " + userIdInput + " (" + username + ")");
 
-            // 调用真实的注册API
-            boolean success = httpClient.register(userIdInput, username, password);
+            // 调用真实的注册API，使用默认密码"123456"
+            boolean success = httpClient.register(userIdInput, username, "123456");
 
             if (success) {
-                appendMessage("[系统] 用户注册成功！用户ID: " + userIdInput + ", 用户名: " + username);
+                appendMessage("[系统] 用户注册成功！用户ID: " + userIdInput + ", 用户名: " + username + ", 默认密码: 123456");
                 JOptionPane.showMessageDialog(dialog,
-                    "注册成功！\n用户ID: " + userIdInput + "\n用户名: " + username,
+                    "注册成功！\n用户ID: " + userIdInput + "\n用户名: " + username + "\n默认密码: 123456\n\n建议首次登录后修改密码",
                     "注册成功", JOptionPane.INFORMATION_MESSAGE);
                 dialog.dispose();
             } else {

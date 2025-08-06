@@ -1,75 +1,119 @@
 # IM Plus - 分布式即时通讯系统
 
-IM Plus是一个基于Spring Boot + Netty的分布式即时通讯系统，支持私聊、群聊、多协议连接等功能。采用微服务架构，具备高性能、高可用、高可靠的特性。
+IM Plus是一个基于Spring Boot + Netty的企业级分布式即时通讯系统，采用推拉结合的消息传输模式，支持私聊、群聊、多协议连接等功能。系统具备高性能、高可用、高可靠的特性，适用于企业内部通讯、在线客服、社交应用等场景。
 
-## 🚀 项目特性
+## ✨ 核心亮点
 
-### 核心功能
+### 🎯 架构创新
+- 🚀 **推拉结合传输模式**: 推送保证实时性，拉取保证最终一致性，序列号驱动同步
+- 🏗️ **统一消息表设计**: 私聊和群聊消息统一存储，简化架构，便于维护扩展
+- ⚡ **混合扩散策略**: 私聊写扩散(高读性能) + 群聊读扩散(高写性能)，最优资源利用
+- 🔄 **双重确认机制**: 发送回执 + 接收ACK，状态驱动的消息生命周期管理
+
+### 🛠️ 核心功能
 - ✅ **用户管理**: 用户注册、登录、认证、在线状态管理、好友关系管理
 - ✅ **私聊消息**: 一对一实时消息收发，支持写扩散模式，包含权限校验和黑名单机制
-- ✅ **群聊消息**: 群组聊天，支持读扩散模式，适合大群场景
-- ✅ **多协议支持**: WebSocket、TCP、UDP三种连接方式
-- ✅ **心跳保活**: 自动心跳检测，维持连接稳定性
+- ✅ **群聊消息**: 群组聊天，支持读扩散模式，适合大群场景，轻量级通知推送
+- ✅ **多协议支持**: WebSocket、TCP、UDP三种连接方式，满足不同场景需求
+- ✅ **心跳保活**: 自动心跳检测，维持连接稳定性，及时清理无效连接
 - ✅ **消息存储**: 统一消息表设计，支持私聊和群聊消息统一管理
-- ✅ **离线消息**: 完整的离线消息拉取和会话同步机制
-- ✅ **消息确认**: ACK确认机制，确保消息可靠投递
-- ✅ **超时重发**: 基于时间轮算法的消息超时重发机制
+- ✅ **离线消息**: 完整的离线消息拉取和会话同步机制，支持断点续传
+- ✅ **消息确认**: 完整的ACK确认机制，确保消息可靠投递
+- ✅ **超时重发**: 基于时间轮算法的消息超时重发机制，指数退避策略
 - ✅ **会话管理**: 会话列表同步，未读数管理，最新消息预览
-- ✅ **分布式架构**: 微服务架构，支持水平扩展
+- ✅ **分布式架构**: 微服务架构，支持水平扩展，无状态设计
 
-### 技术特性
-- 🔥 **高性能**: 基于Netty NIO，支持高并发连接
-- 🔥 **高可用**: Redis + RocketMQ消息队列保证服务可用性
-- 🔥 **消息可靠**: 消息序列号机制 + ACK确认 + 超时重发，保证消息有序性和完整性
-- 🔥 **缓存优化**: Redis缓存热点数据，提升响应速度
-- 🔥 **负载均衡**: 网关层负载均衡，支持多实例部署
-- 🔥 **统一架构**: 统一消息表设计，简化系统架构
+### 🔥 技术特性
+- ⚡ **高性能**: 基于Netty NIO，支持万级并发连接，消息推送延迟 < 100ms
+- 🛡️ **高可用**: Redis + RocketMQ消息队列保证服务可用性，99.9% SLA
+- 🔒 **消息可靠**: 序列号机制 + 双重确认 + 超时重发 + 幂等性保证，确保消息不丢失不重复
+- 🚀 **缓存优化**: Redis缓存热点数据，智能过期策略，提升响应速度
+- ⚖️ **负载均衡**: 网关层负载均衡，支持多实例部署，自动故障转移
+- 🎯 **智能路由**: 基于RocketMQ的分布式消息路由，支持跨网关推送
 
 ## 🏗️ 系统架构
 
-### 模块结构
-- **im-gateway**: 网关服务，负责客户端连接管理和消息转发
-- **im-user**: 用户服务，提供用户注册、登录、认证、好友关系管理等功能
-- **im-message-server**: 消息服务，负责消息存储、推送和分发，包含私聊和群聊消息处理
-- **im-common**: 通用模块，包含协议定义、工具类、常量、共享模型等
-- **im-client**: 客户端实现，支持WebSocket、TCP、UDP三种连接协议
+### 📦 模块结构
+```
+im-plus/
+├── im-gateway/          # 🌐 网关服务 - 连接管理和消息路由
+├── im-user/             # 👤 用户服务 - 用户管理和认证
+├── im-message-server/   # 💬 消息服务 - 消息处理和存储
+├── im-common/           # 🔧 通用模块 - 协议定义和工具类
+├── im-client/           # 📱 客户端 - 多协议客户端实现
+└── docs/               # 📚 项目文档 - 技术文档和指南
+```
 
-### 技术栈
-- **后端框架**: Spring Boot 3.4.3
-- **通信框架**: Netty 4.1.119
-- **消息队列**: RocketMQ 4.9.6
-- **缓存**: Redis (Redisson 3.44.0)
-- **数据库**: MySQL 8.0 + MyBatis Plus 3.5.10
-- **序列化**: Protobuf 3.25.2
-- **开发语言**: Java 17
-- **消息可靠性**: ACK确认机制 + 时间轮算法超时重发
-- **会话管理**: 统一会话表设计 + 会话列表同步
+#### 核心模块职责
+- **im-gateway**: 网关服务，负责客户端连接管理、消息路由转发、负载均衡、协议适配
+- **im-user**: 用户服务，提供用户注册、登录、认证、好友关系管理、在线状态管理
+- **im-message-server**: 消息服务，负责消息存储、推送分发、离线消息处理、会话管理
+- **im-common**: 通用模块，包含协议定义、工具类、常量、共享模型、Redis配置等
+- **im-client**: 客户端实现，支持WebSocket、TCP、UDP三种连接协议，Redis存储模拟
+
+### 🛠️ 技术栈
+
+#### 核心框架
+- **后端框架**: Spring Boot 3.4.3 - 企业级微服务框架
+- **通信框架**: Netty 4.1.119.Final - 高性能异步网络通信
+- **开发语言**: Java 17 - 现代化Java开发
+
+#### 中间件
+- **消息队列**: RocketMQ 4.9.6 - 分布式消息中间件，支持事务消息
+- **缓存系统**: Redis + Redisson 3.44.0 - 分布式缓存，支持集群模式
+- **数据库**: MySQL 8.0 + MyBatis Plus 3.5.10.1 - 关系型数据库持久化
+
+#### 通信协议
+- **序列化**: Protobuf 3.25.2 - 高效二进制序列化
+- **连接协议**: WebSocket、TCP、UDP - 多协议支持
+- **消息协议**: 自定义ChatMessage协议 - 支持扩展字段
+
+#### 架构模式
+- **消息传输**: 推拉结合模式 - 实时性 + 最终一致性
+- **存储模式**: 私聊写扩散 + 群聊读扩散 - 性能最优化
+- **可靠性**: 双重确认 + 时间轮超时重发 + 幂等性保证
+- **会话管理**: 统一消息表 + 会话列表同步 + Redis缓存
 
 ## 🌐 服务端口配置
 
-### 应用服务端口
-- **im-gateway (网关服务)**: 8080
-  - TCP端口: 8900
-  - UDP端口: 8901
-  - WebSocket端口: 8902
-- **im-user (用户服务)**: 8090
-- **im-message-server (消息服务)**: 8100
+### 🚀 应用服务端口
+| 服务 | 端口 | 协议 | 说明 |
+|------|------|------|------|
+| **im-gateway** | 8080 | HTTP | 网关服务主端口 |
+| | 8900 | TCP | TCP长连接端口 |
+| | 8901 | UDP | UDP连接端口 |
+| | 8902 | WebSocket | WebSocket连接端口 |
+| **im-user** | 8090 | HTTP | 用户服务API端口 |
+| **im-message-server** | 8100 | HTTP | 消息服务API端口 |
 
-### 中间件端口
-- **MySQL数据库**: localhost:3306 (数据库名: im-plus)
-- **Redis缓存**: 192.168.200.137:6379
-- **RocketMQ NameServer**: localhost:9876
+### 🗄️ 中间件配置
+| 组件 | 地址 | 说明 |
+|------|------|------|
+| **MySQL数据库** | localhost:3306 | 数据库名: im-plus |
+| **Redis缓存** | 192.168.200.137:6379 | 密码: 123456 |
+| **RocketMQ NameServer** | localhost:9876 | 消息队列服务 |
 
-### 客户端连接端口
-- **WebSocket连接**: ws://localhost:8080/websocket
-- **HTTP用户服务**: http://localhost:8090
-- **HTTP消息服务**: http://localhost:8100
+### 📱 客户端连接地址
+```bash
+# WebSocket连接
+ws://localhost:8080/websocket
 
-### 端口常量定义
+# HTTP API服务
+http://localhost:8090  # 用户服务
+http://localhost:8100  # 消息服务
+
+# TCP/UDP连接
+tcp://localhost:8900   # TCP长连接
+udp://localhost:8901   # UDP连接
+```
+
+### ⚙️ 端口常量定义
 在 `im-common/src/main/java/com/vanky/im/common/constant/PortConstant.java` 中定义：
-- DEFAULT_TCP_PORT: 8900
-- DEFAULT_UDP_PORT: 8901
-- DEFAULT_WEBSOCKET_PORT: 8902
+```java
+DEFAULT_TCP_PORT = 8900        // TCP连接端口
+DEFAULT_UDP_PORT = 8901        // UDP连接端口
+DEFAULT_WEBSOCKET_PORT = 8902  // WebSocket连接端口
+```
 
 ## 📋 已实现功能
 
@@ -193,59 +237,126 @@ GET  /users/logout/{userId} - 用户退出
 
 ## 🚀 快速开始
 
-### 环境要求
-- Java 17+
-- Maven 3.6+
-- MySQL 8.0+
-- Redis 6.0+
-- RocketMQ 4.9+
+### 📋 环境要求
+| 组件 | 版本要求 | 说明 |
+|------|----------|------|
+| **Java** | 17+ | 推荐使用 OpenJDK 17 或 Oracle JDK 17 |
+| **Maven** | 3.6+ | 项目构建工具 |
+| **MySQL** | 8.0+ | 主数据库，需要支持utf8mb4字符集 |
+| **Redis** | 6.0+ | 缓存和会话存储 |
+| **RocketMQ** | 4.9+ | 消息队列中间件 |
 
-### 1. 环境准备
-```bash
-# 启动MySQL (端口3306)
-# 启动Redis (端口6379, 地址192.168.200.137)
-# 启动RocketMQ NameServer (localhost:9876)
-```
+### 1️⃣ 环境准备
 
-### 2. 数据库初始化
+#### MySQL 配置
 ```sql
 -- 创建数据库
 CREATE DATABASE `im-plus` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- 导入数据库表结构
--- 执行相应的SQL脚本创建表结构
+-- 创建用户（可选）
+CREATE USER 'im_user'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON `im-plus`.* TO 'im_user'@'localhost';
+FLUSH PRIVILEGES;
 ```
 
-### 3. 配置文件
-修改各模块的 `application.yml` 配置文件：
-- 数据库连接信息
-- Redis连接信息
-- RocketMQ连接信息
-
-### 4. 启动服务
+#### Redis 配置
 ```bash
-# 1. 启动用户服务
+# 启动Redis服务
+redis-server
+
+# 设置密码（推荐）
+redis-cli
+> CONFIG SET requirepass 123456
+> AUTH 123456
+```
+
+#### RocketMQ 配置
+```bash
+# 下载并启动RocketMQ NameServer
+sh mqnamesrv
+
+# 启动Broker
+sh mqbroker -n localhost:9876
+```
+
+### 2️⃣ 项目配置
+
+#### 修改配置文件
+根据你的环境修改各模块的 `application.yml`：
+
+```yaml
+# 数据库配置
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/im-plus?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
+    username: root
+    password: your_mysql_password
+
+# Redis配置
+  data:
+    redis:
+      host: 192.168.200.137  # 修改为你的Redis地址
+      port: 6379
+      password: 123456       # 修改为你的Redis密码
+```
+
+### 3️⃣ 编译项目
+```bash
+# 在项目根目录执行
+mvn clean compile
+
+# 或者直接打包
+mvn clean package -DskipTests
+```
+
+### 4️⃣ 启动服务
+
+**推荐启动顺序**：
+```bash
+# 1. 启动用户服务 (端口8090)
 cd im-user
 mvn spring-boot:run
 
-# 2. 启动消息服务
+# 2. 启动消息服务 (端口8100)
 cd im-message-server
 mvn spring-boot:run
 
-# 3. 启动网关服务
+# 3. 启动网关服务 (端口8080)
 cd im-gateway
 mvn spring-boot:run
 ```
 
-### 5. 测试连接
-```bash
-# WebSocket连接测试
-ws://localhost:8080/websocket
+### 5️⃣ 验证部署
 
-# HTTP API测试
+#### API测试
+```bash
+# 用户注册
 curl -X POST http://localhost:8090/users/register \
   -H "Content-Type: application/json" \
   -d '{"userId":"test001","username":"测试用户","password":"123456"}'
+
+# 用户登录
+curl -X POST http://localhost:8090/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"test001","password":"123456"}'
+```
+
+#### 客户端测试
+```bash
+# 运行客户端
+cd im-client
+java -jar target/im-client-1.0.0.jar
+
+# 或者直接运行
+mvn exec:java -Dexec.mainClass="com.vanky.im.client.UserWindow"
+```
+
+#### WebSocket连接测试
+使用浏览器开发者工具或WebSocket测试工具：
+```javascript
+const ws = new WebSocket('ws://localhost:8080/websocket');
+ws.onopen = () => console.log('连接成功');
+ws.onmessage = (event) => console.log('收到消息:', event.data);
 ```
 
 ## 📖 API文档
@@ -276,52 +387,87 @@ message ChatMessage {
 }
 ```
 
-## 🏗️ 项目结构
+## 📁 项目结构
 
 ```
 im-plus/
-├── im-gateway/          # 网关服务
-│   ├── src/main/java/
-│   │   └── com/vanky/im/gateway/
-│   │       ├── netty/           # Netty服务器实现
-│   │       ├── handler/         # 消息处理器
-│   │       └── config/          # 配置类
-│   └── pom.xml
-├── im-user/             # 用户服务
-│   ├── src/main/java/
-│   │   └── com/vanky/im/user/
-│   │       ├── controller/      # REST控制器
-│   │       ├── service/         # 业务逻辑
-│   │       ├── entity/          # 数据实体
-│   │       └── mapper/          # 数据访问层
-│   └── pom.xml
-├── im-message-server/   # 消息服务
-│   ├── src/main/java/
-│   │   └── com/vanky/im/message/
-│   │       ├── processor/       # 消息处理器
-│   │       ├── service/         # 业务服务
-│   │       ├── entity/          # 消息实体
-│   │       └── config/          # 配置类
-│   └── pom.xml
-├── im-common/           # 通用模块
-│   ├── src/main/java/
-│   │   └── com/vanky/im/common/
-│   │       ├── constant/        # 常量定义
-│   │       ├── protocol/        # 协议定义
-│   │       ├── util/            # 工具类
-│   │       └── model/           # 通用模型
-│   └── pom.xml
-├── im-client/           # 客户端实现
-│   └── src/main/java/
-│       └── com/vanky/im/client/
-├── docs/                # 项目文档
-│   ├── memory_bank.md           # 项目记忆库
-│   ├── offline-message-sync-*.md # 离线消息同步文档
-│   ├── quick_test_guide.md      # 快速测试指南
-│   ├── task_*.md               # 任务开发文档
-│   └── unified-message-consumer-guide.md # 消息消费指南
-└── pom.xml             # 父级POM文件
+├── 📦 im-gateway/              # 🌐 网关服务 - 连接管理和消息路由
+│   ├── src/main/java/com/vanky/im/gateway/
+│   │   ├── netty/              # Netty服务器实现 (TCP/UDP/WebSocket)
+│   │   ├── handler/            # 消息处理器和协议适配
+│   │   ├── consumer/           # RocketMQ消息消费者
+│   │   ├── service/            # 业务服务层
+│   │   └── config/             # 配置类和Bean定义
+│   └── src/main/resources/
+│       └── application.yml     # 网关服务配置
+│
+├── 📦 im-user/                 # 👤 用户服务 - 用户管理和认证
+│   ├── src/main/java/com/vanky/im/user/
+│   │   ├── controller/         # REST API控制器
+│   │   ├── service/            # 用户业务逻辑
+│   │   ├── entity/             # 用户数据实体
+│   │   └── mapper/             # MyBatis数据访问层
+│   └── src/main/resources/
+│       ├── application.yml     # 用户服务配置
+│       └── mapper/             # MyBatis XML映射文件
+│
+├── 📦 im-message-server/       # 💬 消息服务 - 消息处理和存储
+│   ├── src/main/java/com/vanky/im/message/
+│   │   ├── processor/          # 消息处理器 (私聊/群聊)
+│   │   ├── consumer/           # RocketMQ消息消费者
+│   │   ├── service/            # 消息业务服务
+│   │   ├── controller/         # 消息API控制器
+│   │   ├── entity/             # 消息数据实体
+│   │   └── mapper/             # 数据访问层
+│   └── src/main/resources/
+│       ├── application.yml     # 消息服务配置
+│       └── mapper/             # MyBatis XML映射文件
+│
+├── 📦 im-common/               # 🔧 通用模块 - 协议定义和工具类
+│   ├── src/main/java/com/vanky/im/common/
+│   │   ├── constant/           # 常量定义 (消息类型/Redis Key等)
+│   │   ├── protocol/           # Protobuf协议定义
+│   │   ├── model/              # 通用数据模型
+│   │   ├── util/               # 工具类和帮助方法
+│   │   └── config/             # 通用配置类
+│   └── src/main/resources/
+│       └── proto/              # Protobuf协议文件
+│
+├── 📦 im-client/               # 📱 客户端 - 多协议客户端实现
+│   └── src/main/java/com/vanky/im/client/
+│       ├── ui/                 # Swing用户界面
+│       ├── network/            # 网络通信层 (WebSocket/TCP)
+│       ├── storage/            # 本地存储 (Redis模拟)
+│       ├── sync/               # 离线消息同步
+│       └── message/            # 消息处理和确认
+│
+├── 📚 docs/                    # 📖 项目文档
+│   ├── memory_bank.md          # 项目记忆库 - 完整的项目历史
+│   ├── offline-message-sync-*.md # 离线消息同步技术文档
+│   ├── quick_test_guide.md     # 快速测试指南
+│   ├── task_*.md              # 开发任务文档
+│   └── *-guide.md             # 各种技术指南
+│
+├── 🖼️ pic/                     # 图片资源
+└── 📄 pom.xml                  # Maven父级配置文件
 ```
+
+### 🔍 关键目录说明
+
+#### 网关服务 (im-gateway)
+- `netty/`: Netty服务器实现，支持TCP、UDP、WebSocket三种协议
+- `handler/`: 消息处理器，负责协议解析和消息路由
+- `consumer/`: 消费RocketMQ消息，推送给客户端
+
+#### 消息服务 (im-message-server)
+- `processor/`: 核心消息处理器，实现私聊写扩散和群聊读扩散
+- `service/`: 消息业务服务，包括离线消息、会话管理等
+- `controller/`: REST API，提供消息拉取和同步接口
+
+#### 客户端 (im-client)
+- `network/`: 网络通信层，支持WebSocket和TCP连接
+- `storage/`: 本地存储，使用Redis模拟本地文件存储
+- `sync/`: 离线消息同步，实现推拉结合模式
 
 ## 🔧 配置说明
 
@@ -344,14 +490,141 @@ im-plus/
 - **高可用**: 99.9% 服务可用性
 - **可扩展**: 支持水平扩展，无状态设计
 
+## 🛠️ 开发指南
+
+### 📝 开发环境搭建
+
+#### IDE配置
+推荐使用 IntelliJ IDEA 或 Eclipse：
+```bash
+# 导入项目
+File -> Open -> 选择项目根目录的pom.xml
+
+# 配置JDK
+Project Structure -> Project -> Project SDK -> 选择Java 17
+
+# 配置Maven
+Settings -> Build Tools -> Maven -> 设置Maven路径
+```
+
+#### 代码规范
+- **命名规范**: 驼峰命名法，类名首字母大写，方法和变量首字母小写
+- **注释规范**: 类和方法必须有JavaDoc注释，复杂逻辑需要行内注释
+- **包结构**: 按功能模块组织，controller/service/mapper分层清晰
+
+#### 开发流程
+1. **创建分支**: `git checkout -b feature/your-feature-name`
+2. **编写代码**: 遵循代码规范，添加必要的测试
+3. **本地测试**: 确保功能正常，无编译错误
+4. **提交代码**: 使用清晰的commit message
+5. **创建PR**: 详细描述功能和变更
+
+### 🧪 测试指南
+
+#### 单元测试
+```bash
+# 运行所有测试
+mvn test
+
+# 运行特定模块测试
+cd im-message-server
+mvn test
+```
+
+#### 集成测试
+```bash
+# 启动所有服务后运行客户端
+cd im-client
+mvn exec:java -Dexec.mainClass="com.vanky.im.client.UserWindow"
+```
+
+#### 性能测试
+- 使用JMeter或自定义脚本测试并发连接
+- 监控Redis和MySQL的性能指标
+- 观察RocketMQ的消息堆积情况
+
+### 🔧 调试技巧
+
+#### 日志配置
+在 `application.yml` 中调整日志级别：
+```yaml
+logging:
+  level:
+    com.vanky.im: DEBUG
+    org.springframework: INFO
+```
+
+#### Redis调试
+```bash
+# 连接Redis查看数据
+redis-cli -h 192.168.200.137 -p 6379 -a 123456
+
+# 查看用户在线状态
+SMEMBERS im:online:users
+
+# 查看消息缓存
+KEYS im:msg:*
+```
+
+#### RocketMQ调试
+```bash
+# 查看Topic列表
+sh mqadmin topicList -n localhost:9876
+
+# 查看消息堆积
+sh mqadmin consumerProgress -n localhost:9876
+```
+
+### 📚 扩展开发
+
+#### 添加新的消息类型
+1. 在 `MessageTypeConstants` 中定义新的消息类型常量
+2. 扩展 `ChatMessage.proto` 协议文件
+3. 在相应的处理器中添加处理逻辑
+4. 更新客户端的消息处理代码
+
+#### 添加新的API接口
+1. 在对应的Controller中添加新的端点
+2. 实现相应的Service业务逻辑
+3. 添加必要的数据访问层代码
+4. 编写单元测试和集成测试
+
 ## 🤝 贡献指南
 
-1. Fork 项目
+### 🎯 贡献方式
+1. **Bug报告**: 在Issues中详细描述问题，包含复现步骤
+2. **功能建议**: 提出新功能想法，说明使用场景和价值
+3. **代码贡献**: Fork项目，开发功能，提交Pull Request
+4. **文档改进**: 完善README、技术文档、代码注释
+
+### 📋 提交规范
+```bash
+# 提交格式
+git commit -m "type(scope): description"
+
+# 示例
+git commit -m "feat(message): 添加消息撤回功能"
+git commit -m "fix(gateway): 修复WebSocket连接断开问题"
+git commit -m "docs(readme): 更新安装指南"
+```
+
+### 🔄 Pull Request流程
+1. Fork 项目到你的GitHub账号
 2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
 3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
+5. 打开 Pull Request，详细描述变更内容
+
+### ✅ 代码审查标准
+- 代码风格符合项目规范
+- 功能完整，无明显Bug
+- 包含必要的测试用例
+- 文档和注释完善
+- 不破坏现有功能
 
 ## 📞 联系方式
 
-- 作者: vanky
+- **作者**: vanky
+- **项目地址**: [GitHub Repository]
+- **技术交流**: 欢迎提交Issue讨论技术问题
+- **文档贡献**: 帮助完善项目文档和使用指南

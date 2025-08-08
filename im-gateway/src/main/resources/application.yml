@@ -101,3 +101,18 @@ message:
     retry-backoff-base: 2       # 重试退避基数
     retry-backoff-max: 30000    # 最大退避时间(ms)
     ticker-thread-name: message-timeout-ticker  # 时间轮线程名称
+
+# 会话级串行化处理配置
+conversation:
+  processor:
+    enabled: false              # 是否启用会话级串行化处理（默认禁用）
+    worker-pool-size: 16        # 工作线程池大小
+    queue-capacity: 1000        # 每个会话队列的最大容量
+    idle-timeout-ms: 300000     # 队列空闲超时时间(5分钟)
+    worker-thread-prefix: "conversation-worker-"  # 工作线程名称前缀
+    monitor-interval-ms: 30000  # 监控统计间隔(30秒)
+    max-conversations: 10000    # 最大并发会话数
+    message-timeout-ms: 5000    # 消息处理超时时间(5秒)
+    verbose-logging: false      # 是否启用详细日志
+    queue-full-policy: REJECT   # 队列满时的处理策略(REJECT/BLOCK/DROP_OLDEST)
+    shutdown-timeout-ms: 30000  # 优雅关闭超时时间(30秒)

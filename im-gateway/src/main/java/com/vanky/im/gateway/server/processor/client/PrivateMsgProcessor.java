@@ -33,29 +33,35 @@ public class PrivateMsgProcessor {
      */
     public void process(ChatMessage msg, Channel senderChannel) {
         try {
-            log.info("处理私聊消息 - 发送方: {}, 接收方: {}, 原始消息ID: {}", 
+            log.info("处理私聊消息 - 发送方: {}, 接收方: {}, 原始消息ID: {}",
                     msg.getFromId(), msg.getToId(), msg.getUid());
-            
+
             // 1. 生成全局唯一的MsgId
             String globalMsgId = snowflakeIdGenerator.nextIdString();
-            
-            // 2. 创建会话ID
-            String conversationId = generateConversationId(msg.getFromId(), msg.getToId());
-            
+
+            // 2. 使用客户端传入的会话ID，如果为空则作为兜底生成
+            String conversationId = msg.getConversationId();
+            if (conversationId == null || conversationId.trim().isEmpty()) {
+                conversationId = generateConversationId(msg.getFromId(), msg.getToId());
+                log.warn("客户端未提供会话ID，网关层兜底生成 - 会话ID: {}", conversationId);
+            } else {
+                log.debug("使用客户端提供的会话ID: {}", conversationId);
+            }
+
             // 3. 构建新的消息对象，设置全局MsgId
             ChatMessage processedMsg = ChatMessage.newBuilder(msg)
                     .setUid(globalMsgId)
                     .build();
-            
+
             log.debug("消息处理信息 - 全局MsgId: {}, 会话ID: {}", globalMsgId, conversationId);
-            
+
             // 4. 投递消息到RocketMQ
             messageQueueService.sendMessageToPrivate(conversationId, processedMsg, senderChannel);
-            
+
             log.info("私聊消息处理完成 - 全局MsgId: {}, 会话ID: {}", globalMsgId, conversationId);
-            
+
         } catch (Exception e) {
-            log.error("处理私聊消息失败 - 发送方: {}, 接收方: {}, 消息ID: {}, 错误: {}", 
+            log.error("处理私聊消息失败 - 发送方: {}, 接收方: {}, 消息ID: {}, 错误: {}",
                     msg.getFromId(), msg.getToId(), msg.getUid(), e.getMessage(), e);
         }
     }

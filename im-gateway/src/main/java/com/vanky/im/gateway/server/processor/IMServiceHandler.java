@@ -9,6 +9,7 @@ import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
 import com.vanky.im.common.util.TokenUtil;
+import com.vanky.im.gateway.conversation.ConversationDispatcher;
 import com.vanky.im.gateway.session.UserChannelManager;
 import com.vanky.im.gateway.server.processor.client.PrivateMsgProcessor;
 import com.vanky.im.gateway.server.processor.client.GroupMsgProcessor;
@@ -35,12 +36,15 @@ public class IMServiceHandler {
 
     @Autowired
     private PrivateMsgProcessor privateMsgProcessor;
-    
+
     @Autowired
     private GroupMsgProcessor groupMsgProcessor;
 
     @Autowired
     private com.vanky.im.gateway.mq.MessageQueueService messageQueueService;
+
+    @Autowired
+    private ConversationDispatcher conversationDispatcher;
 
     @Autowired
     private UserChannelManager userChannelManager;
@@ -101,12 +105,18 @@ public class IMServiceHandler {
                     }
                 }
                 
-                if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
-                    // 私聊消息
-                    privateMsgProcessor.process(msg, channel);
-                } else {
-                    // 群聊消息
-                    groupMsgProcessor.process(msg, channel);
+                // 尝试使用会话级串行化处理
+                boolean dispatched = conversationDispatcher.dispatch(msg, channel);
+
+                if (!dispatched) {
+                    // 如果会话分发失败或未启用，回退到原有的同步处理方式
+                    if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
+                        // 私聊消息
+                        privateMsgProcessor.process(msg, channel);
+                    } else {
+                        // 群聊消息
+                        groupMsgProcessor.process(msg, channel);
+                    }
                 }
             } else {
                 log.warn("未知消息类型: {}, 发送方: {}, 消息ID: {}", 

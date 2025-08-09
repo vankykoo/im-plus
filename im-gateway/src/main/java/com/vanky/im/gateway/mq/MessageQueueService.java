@@ -292,9 +292,9 @@ public class MessageQueueService {
             // 序列化消息
             byte[] messageBody = ackMessage.toByteArray();
 
-            // 创建RocketMQ消息，使用统一的会话消息Topic
+            // 创建RocketMQ消息，使用专门的ACK消息Topic
             Message message = new Message(
-                    TopicConstants.TOPIC_CONVERSATION_MESSAGE,
+                    TopicConstants.TOPIC_MESSAGE_ACK,
                     "MESSAGE_ACK",
                     messageBody
             );
@@ -307,13 +307,13 @@ public class MessageQueueService {
                 @Override
                 public void onSuccess(SendResult sendResult) {
                     log.info("ACK消息发送成功 - 消息ID: {}, 序列号: {}, 用户: {}, Topic: {}, MQ消息ID: {}",
-                            msgId, seq, userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, sendResult.getMsgId());
+                            msgId, seq, userId, TopicConstants.TOPIC_MESSAGE_ACK, sendResult.getMsgId());
                 }
 
                 @Override
                 public void onException(Throwable e) {
                     log.error("ACK消息发送失败 - 消息ID: {}, 序列号: {}, 用户: {}, Topic: {}",
-                            msgId, seq, userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, e);
+                            msgId, seq, userId, TopicConstants.TOPIC_MESSAGE_ACK, e);
                 }
             });
 
@@ -332,10 +332,10 @@ public class MessageQueueService {
             String content = ackMessage.getContent();
 
             log.debug("发送群聊会话ACK到消息队列 - 用户: {}, 内容: {}, Topic: {}",
-                    userId, content, TopicConstants.TOPIC_CONVERSATION_MESSAGE);
+                    userId, content, TopicConstants.TOPIC_MESSAGE_ACK);
 
-            // 将群聊会话ACK消息发送到会话消息Topic
-            Message message = new Message(TopicConstants.TOPIC_CONVERSATION_MESSAGE, ackMessage.toByteArray());
+            // 将群聊会话ACK消息发送到专门的ACK消息Topic
+            Message message = new Message(TopicConstants.TOPIC_MESSAGE_ACK, ackMessage.toByteArray());
 
             // 设置消息Key为特殊格式，便于识别
             message.setKeys("group_ack_" + userId + "_" + System.currentTimeMillis());
@@ -344,13 +344,13 @@ public class MessageQueueService {
                 @Override
                 public void onSuccess(SendResult sendResult) {
                     log.debug("群聊会话ACK消息发送成功 - 用户: {}, Topic: {}, MsgId: {}",
-                            userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, sendResult.getMsgId());
+                            userId, TopicConstants.TOPIC_MESSAGE_ACK, sendResult.getMsgId());
                 }
 
                 @Override
                 public void onException(Throwable e) {
                     log.error("群聊会话ACK消息发送失败 - 用户: {}, Topic: {}",
-                            userId, TopicConstants.TOPIC_CONVERSATION_MESSAGE, e);
+                            userId, TopicConstants.TOPIC_MESSAGE_ACK, e);
                 }
             });
 

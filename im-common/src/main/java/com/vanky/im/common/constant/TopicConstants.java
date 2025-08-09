@@ -23,6 +23,11 @@ public class TopicConstants {
     public static final String TOPIC_CONVERSATION_MESSAGE = "TOPIC_CONVERSATION_MESSAGE";
 
     /**
+     * ACK消息专用主题（消息确认、批量确认、群聊会话确认）
+     */
+    public static final String TOPIC_MESSAGE_ACK = "TOPIC_MESSAGE_ACK";
+
+    /**
      * 网关推送消息主题
      */
     public static final String TOPIC_PUSH_TO_GATEWAY = "TOPIC_PUSH_TO_GATEWAY";
@@ -46,6 +51,11 @@ public class TopicConstants {
      * 统一会话消息消费者组
      */
     public static final String CONSUMER_GROUP_CONVERSATION_MESSAGE = "im-conversation-message-consumer";
+
+    /**
+     * ACK消息消费者组
+     */
+    public static final String CONSUMER_GROUP_MESSAGE_ACK = "im-message-ack-consumer";
 
     /**
      * 网关推送消费者组

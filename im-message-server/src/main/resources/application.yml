@@ -74,6 +74,13 @@ rocketmq:
     consume-thread-min: 5
     consume-thread-max: 20
     consume-message-batch-max-size: 1
+    # ACK消息消费者配置
+    ack:
+      consume-thread-min: 10
+      consume-thread-max: 30
+      consume-timeout: 10000
+      max-reconsume-times: 3
+      consume-message-batch-max-size: 10
 
 # 消息推送配置
 message:

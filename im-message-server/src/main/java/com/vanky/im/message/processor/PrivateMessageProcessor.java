@@ -49,8 +49,7 @@ public class PrivateMessageProcessor {
     @Autowired
     private FriendshipService friendshipService;
 
-    @Autowired
-    private SendReceiptService sendReceiptService;
+
 
     @Autowired
     private MessageIdempotentService messageIdempotentService;
@@ -111,12 +110,11 @@ public class PrivateMessageProcessor {
                     messageIdempotentService.checkIdempotent(clientSeq);
 
             if (idempotentResult != null) {
-                // 重复消息，直接发送回执并返回
-                log.info("检测到重复私聊消息，直接返回之前结果 - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
+                // 重复消息，直接忽略（统一推送理念：发送方通过消息拉取补偿获取消息，不主动推送）
+                log.info("检测到重复私聊消息，直接忽略 - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
                         clientSeq, idempotentResult.getMsgId(), idempotentResult.getSeq());
 
-                // 发送回执给发送方
-                sendReceiptForDuplicateMessage(chatMessage, idempotentResult);
+                // 不做任何推送，发送方如果需要确认，通过消息拉取补偿机制获取
                 return;
             }
         }
@@ -128,24 +126,27 @@ public class PrivateMessageProcessor {
             // 2. 消息持久化 (数据落地)
             MessagePersistResult persistResult = persistMessage(chatMessage, conversationId);
 
-            // 3. 消息下推给接收方 (核心投递逻辑)
+            // 3. 接收方数据持久化 (推拉结合同步模型核心：无论在线离线都生成userSeq)
+            processReceiverData(chatMessage, persistResult, toUserId);
+
+            // 4. 消息下推给接收方 (仅在线时推送)
             deliverMessageToReceiver(chatMessage, persistResult, toUserId);
 
-            // 4. 维护会话列表 (增强用户体验)
+            // 5. 消息下推给发送方 (统一推送逻辑 - 发送方也接收自己的消息)
+            deliverMessageToSender(chatMessage, persistResult, fromUserId);
+
+            // 6. 维护会话列表 (增强用户体验)
             updateConversationList(chatMessage, persistResult, fromUserId, toUserId);
 
-            // 5. 数据缓存 (性能优化)
+            // 7. 数据缓存 (性能优化)
             updateCache(chatMessage, persistResult, fromUserId, toUserId);
 
-            // 6. 记录幂等性结果（仅对包含client_seq的消息）
+            // 8. 记录幂等性结果（仅对包含client_seq的消息）
             if (clientSeq != null && !clientSeq.trim().isEmpty()) {
                 messageIdempotentService.recordIdempotent(clientSeq, persistResult.msgId, persistResult.seq);
             }
 
-            // 7. 发送回执给发送方
-            sendReceiptToSender(chatMessage, persistResult);
-
-            // 8. 最终确认通过事务管理自动完成
+            // 9. 最终确认通过事务管理自动完成
             log.info("私聊消息处理完成 - 会话ID: {}, 消息ID: {}, Seq: {}",
                     conversationId, persistResult.msgId, persistResult.seq);
 
@@ -242,22 +243,44 @@ public class PrivateMessageProcessor {
     }
 
     /**
-     * 3. 消息下推给接收方 (核心投递逻辑)
+     * 3. 接收方数据持久化 (推拉结合同步模型核心)
+     *
+     * 核心原则：无论接收方是否在线，都必须为其生成连续的userSeq和对应的user_msg_list记录
+     * 这是推拉结合同步模型的基础，确保userSeq连续性不被破坏
+     */
+    private void processReceiverData(ChatMessage chatMessage, MessagePersistResult persistResult, String toUserId) {
+        try {
+            log.debug("开始处理接收方数据持久化 - 接收方: {}, 消息ID: {}", toUserId, persistResult.msgId);
+
+            // 为接收方生成用户级全局seq并创建user_msg_list记录
+            // 这一步无论接收方在线离线都必须执行，确保userSeq连续性
+            String conversationId = generateConversationId(chatMessage.getFromId(), toUserId);
+            messageReceiverService.processSingleReceiver(toUserId, persistResult.msgId, conversationId);
+
+            // 获取接收方的用户级全局序列号（用于后续推送或拉取）
+            Long receiverUserSeq = redisService.getUserMaxGlobalSeq(toUserId);
+
+            log.info("接收方数据持久化完成 - 接收方: {}, 消息ID: {}, 用户级seq: {}",
+                    toUserId, persistResult.msgId, receiverUserSeq);
+
+        } catch (Exception e) {
+            log.error("接收方数据持久化失败 - 接收方: {}, 消息ID: {}", toUserId, persistResult.msgId, e);
+            throw e; // 抛出异常，确保事务回滚
+        }
+    }
+
+    /**
+     * 4. 消息下推给接收方 (仅在线时推送)
      */
     private void deliverMessageToReceiver(ChatMessage chatMessage, MessagePersistResult persistResult, String toUserId) {
-        // 3.1. 查询接收方在线状态
+        // 查询接收方在线状态
         UserSession receiverSession = onlineStatusService.getUserOnlineStatus(toUserId);
 
         if (receiverSession != null && receiverSession.getNodeId() != null) {
-            // 3.2. 处理在线场景 - 接收方真正接收到消息，生成用户级全局seq
+            // 在线场景：推送消息到网关
             log.debug("接收方在线，推送消息 - 接收方: {}, 网关ID: {}", toUserId, receiverSession.getNodeId());
 
-            // 为接收方生成用户级全局seq（因为接收方真正接收到了消息）
-            String conversationId = generateConversationId(chatMessage.getFromId(), toUserId);
-            messageReceiverService.processSingleReceiver(toUserId, persistResult.msgId, conversationId);
-            log.debug("接收方消息接收者处理完成 - 接收方: {}", toUserId);
-
-            // 获取接收方的用户级全局序列号
+            // 获取接收方的用户级全局序列号（已在processReceiverData中生成）
             Long receiverUserSeq = redisService.getUserMaxGlobalSeq(toUserId);
             log.debug("获取接收方用户级全局序列号 - 接收方: {}, 用户级seq: {}", toUserId, receiverUserSeq);
 
@@ -271,18 +294,21 @@ public class PrivateMessageProcessor {
             // 推送到目标gateway
             gatewayMessagePushService.pushMessageToGateway(enrichedMessage, persistResult.seq, receiverSession.getNodeId());
 
-        } else {
-            // 3.3. 处理离线场景 - 接收方离线，不生成用户级全局seq
-            log.debug("接收方离线，添加到离线消息队列 - 接收方: {}, 消息ID: {}", toUserId, persistResult.msgId);
+            log.info("私聊消息推送成功 - 接收方: {}, 消息ID: {}, 用户级seq: {}, 网关: {}",
+                    toUserId, persistResult.msgId, receiverUserSeq, receiverSession.getNodeId());
 
-            // 将消息ID存入离线消息队列，但不为接收方生成全局seq
-            // 接收方的全局seq将在其登录并拉取离线消息时生成
-            offlineMessageService.addOfflineMessage(toUserId, persistResult.msgId);
+        } else {
+            // 离线场景：消息已安全存储为"待拉取"状态，无需额外操作
+            log.info("接收方离线，消息已存储为待拉取状态 - 接收方: {}, 消息ID: {}", toUserId, persistResult.msgId);
+
+            // 注意：不再调用offlineMessageService.addOfflineMessage()
+            // 因为推拉结合模型中，客户端通过userSeq对比发现消息空洞后，会主动拉取消息
+            // user_msg_list记录已在processReceiverData中创建，客户端可以通过消息拉取API获取
         }
     }
 
     /**
-     * 4. 维护会话列表 (增强用户体验)
+     * 6. 维护会话列表 (增强用户体验)
      */
     private void updateConversationList(ChatMessage chatMessage, MessagePersistResult persistResult,
                                       String fromUserId, String toUserId) {
@@ -303,7 +329,7 @@ public class PrivateMessageProcessor {
     }
 
     /**
-     * 5. 数据缓存 (性能优化) - 重构现有方法
+     * 7. 数据缓存 (性能优化) - 重构现有方法
      */
     private void updateCache(ChatMessage chatMessage, MessagePersistResult persistResult,
                            String fromUserId, String toUserId) {
@@ -352,58 +378,50 @@ public class PrivateMessageProcessor {
         }
     }
 
-    /**
-     * 处理重复消息，发送回执
-     */
-    private void sendReceiptForDuplicateMessage(ChatMessage chatMessage, MessageIdempotentService.IdempotentResult idempotentResult) {
-        String clientSeq = chatMessage.getClientSeq();
 
-        try {
-            // 发送回执给发送方
-            sendReceiptService.sendReceipt(
-                    clientSeq,                                    // 客户端序列号
-                    idempotentResult.getMsgId(),                  // 之前的服务端消息ID
-                    String.valueOf(idempotentResult.getSeq()),    // 之前的服务端序列号
-                    chatMessage.getFromId()                       // 发送方用户ID
-            );
 
-            log.info("重复私聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId());
 
-        } catch (Exception e) {
-            // 回执发送失败不影响主流程
-            log.error("重复私聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId(), e);
-        }
-    }
 
     /**
-     * 7. 发送回执给发送方
+     * 3.5. 消息下推给发送方 (统一推送逻辑)
+     * 让发送方也接收到自己发送的消息，作为发送确认
      */
-    private void sendReceiptToSender(ChatMessage chatMessage, MessagePersistResult persistResult) {
-        // 检查是否有客户端序列号（只有新版本客户端才会发送）
-        String clientSeq = chatMessage.getClientSeq();
-        if (clientSeq == null || clientSeq.trim().isEmpty()) {
-            log.debug("消息无客户端序列号，跳过发送回执 - 消息ID: {}", persistResult.msgId);
-            return;
-        }
-
+    private void deliverMessageToSender(ChatMessage chatMessage, MessagePersistResult persistResult, String fromUserId) {
         try {
-            // 发送回执给发送方
-            sendReceiptService.sendReceipt(
-                    clientSeq,                          // 客户端序列号
-                    persistResult.msgId,                // 服务端消息ID
-                    String.valueOf(persistResult.seq),  // 服务端序列号
-                    chatMessage.getFromId()             // 发送方用户ID
-            );
+            // 查询发送方在线状态
+            UserSession senderSession = onlineStatusService.getUserOnlineStatus(fromUserId);
 
-            log.info("私聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, persistResult.msgId, chatMessage.getFromId());
+            if (senderSession != null && senderSession.getNodeId() != null) {
+                log.debug("发送方在线，推送消息给发送方作为发送确认 - 发送方: {}, 网关ID: {}", fromUserId, senderSession.getNodeId());
+
+                // 获取发送方的用户级全局序列号（已在saveMessageData中生成）
+                Long senderUserSeq = redisService.getUserMaxGlobalSeq(fromUserId);
+                log.debug("获取发送方用户级全局序列号 - 发送方: {}, 用户级seq: {}", fromUserId, senderUserSeq);
+
+                // 填充服务端生成的消息ID和序列号，包括推拉结合模式所需的序列号
+                ChatMessage enrichedMessage = chatMessage.toBuilder()
+                        .setUid(persistResult.msgId) // 使用服务端生成的消息ID
+                        .setUserSeq(senderUserSeq != null ? senderUserSeq : 0L) // 设置用户级全局序列号
+                        .setConversationSeq(0L) // 私聊消息不使用会话级序列号
+                        .setClientSeq(chatMessage.getClientSeq()) // 保留客户端序列号（用于重发队列匹配）
+                        .setServerMsgId(persistResult.msgId) // 设置服务端消息ID（用于客户端匹配）
+                        .setServerSeq(String.valueOf(persistResult.seq)) // 设置服务端序列号（用于客户端匹配）
+                        .build();
+
+                // 推送到发送方的gateway，设置targetUserId为发送方ID（因为toId是原始接收方）
+                gatewayMessagePushService.pushMessageToGateway(enrichedMessage, persistResult.seq, senderSession.getNodeId(), fromUserId);
+
+                log.info("私聊消息推送给发送方成功 - 发送方: {}, 消息ID: {}, 网关: {}",
+                        fromUserId, persistResult.msgId, senderSession.getNodeId());
+
+            } else {
+                log.debug("发送方离线，跳过推送 - 发送方: {}", fromUserId);
+                // 发送方离线时不需要特殊处理，因为发送方离线时本身就不会发送消息
+            }
 
         } catch (Exception e) {
-            // 回执发送失败不影响消息处理流程
-            log.error("私聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, persistResult.msgId, chatMessage.getFromId(), e);
+            // 发送方推送失败不影响主流程，只记录日志
+            log.error("推送消息给发送方失败 - 发送方: {}, 消息ID: {}", fromUserId, persistResult.msgId, e);
         }
     }
 

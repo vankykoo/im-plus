@@ -93,35 +93,6 @@ im-plus/
 | **im-user** | 8090 | HTTP | 用户服务API端口 |
 | **im-message-server** | 8100 | HTTP | 消息服务API端口 |
 
-### 🗄️ 中间件配置
-| 组件 | 地址 | 说明 |
-|------|------|------|
-| **MySQL数据库** | localhost:3306 | 数据库名: im-plus |
-| **Redis缓存** | 192.168.200.137:6379 | 密码: 123456 |
-| **RocketMQ NameServer** | localhost:9876 | 消息队列服务 |
-
-### 📱 客户端连接地址
-```bash
-# WebSocket连接
-ws://localhost:8080/websocket
-
-# HTTP API服务
-http://localhost:8090  # 用户服务
-http://localhost:8100  # 消息服务
-
-# TCP/UDP连接
-tcp://localhost:8900   # TCP长连接
-udp://localhost:8901   # UDP连接
-```
-
-### ⚙️ 端口常量定义
-在 `im-common/src/main/java/com/vanky/im/common/constant/PortConstant.java` 中定义：
-```java
-DEFAULT_TCP_PORT = 8900        // TCP连接端口
-DEFAULT_UDP_PORT = 8901        // UDP连接端口
-DEFAULT_WEBSOCKET_PORT = 8902  // WebSocket连接端口
-```
-
 ## 📋 已实现功能
 
 ### 1. 用户管理系统
@@ -222,42 +193,52 @@ GET  /users/logout/{userId} - 用户退出
 #### 阶段3：消息服务层处理（im-message-server）
 8. **消息消费**：ConversationMessageConsumer使用MessageListenerOrderly接口从RocketMQ顺序消费私聊消息
 9. **幂等性检查**：基于clientSeq检查消息是否重复处理，重复消息直接返回之前的处理结果
-10. **完整的6步处理流程**：
+10. **完整的9步处理流程**（PrivateMessageProcessor）：
     - **步骤1 - 关系与权限校验**：
       - 验证发送方和接收方的用户状态（是否被禁用）
       - 检查好友关系和黑名单状态
       - 业务异常（如被拉黑）不重试，直接返回成功避免重复处理
     - **步骤2 - 消息持久化**：
       - 保存消息主体到统一的`message`表，设置消息类型为私聊（1）
-      - 为发送方创建`user_msg_list`记录，生成用户级全局序列号
+      - **仅为发送方**创建`user_msg_list`记录，生成用户级全局序列号
       - 处理会话信息，创建或更新`conversation`表记录
-    - **步骤3 - 消息下推**：
+    - **步骤3 - 接收方数据持久化**（推拉结合核心）：
+      - **无论接收方在线离线**，都为其创建`user_msg_list`记录
+      - 生成接收方的用户级全局序列号，确保userSeq连续性
+      - 这是推拉结合同步模型的基础，保证序列号不被破坏
+    - **步骤4 - 消息下推给接收方**：
       - 查询接收方在线状态，获取所在网关节点信息
-      - **在线场景**：为接收方创建`user_msg_list`记录，生成用户级全局序列号，通过RocketMQ推送到目标网关
-      - **离线场景**：将消息ID添加到离线消息队列，不生成接收方的全局序列号
-    - **步骤4 - 维护会话列表**：
-      - 更新发送方和接收方的`user_conversation_list`表
-      - 更新未读消息数、最新消息ID、最后更新时间等字段
-    - **步骤5 - 数据缓存**：
+      - **在线场景**：构建包含userSeq的enrichedMessage，通过RocketMQ推送到目标网关
+      - **离线场景**：消息已安全存储为"待拉取"状态，客户端上线后通过userSeq对比发现空洞并主动拉取
+    - **步骤5 - 消息下推给发送方**（统一推送理念）：
+      - 发送方在线时，推送消息作为发送确认
+      - 包含完整的clientSeq、serverMsgId、serverSeq字段用于重发队列匹配
+      - 设置targetUserId为发送方ID，确保网关正确路由
+    - **步骤6 - 维护会话列表**：
+      - 激活发送方和接收方的`user_conversation_list`记录
+      - 为接收方增加未读消息数
+    - **步骤7 - 数据缓存**：
       - 将消息内容缓存到Redis（TTL 1天）
       - 更新用户消息链缓存（ZSet结构，msgId -> seq映射）
       - 限制缓存大小，自动清理旧消息
-    - **步骤6 - 最终确认**：
-      - 记录幂等性结果（基于客户端序列号）
-      - 发送投递回执给发送方（MESSAGE_SEND_RECEIPT）
-      - 事务提交，确保数据一致性
+    - **步骤8 - 记录幂等性结果**：
+      - 基于clientSeq记录处理结果，TTL=300秒
+      - 支持客户端重试时的幂等性保证
+    - **步骤9 - 事务提交**：
+      - 通过Spring事务管理自动完成最终确认
+      - 确保数据一致性
 
 #### 阶段4：消息推送和确认
-11. **网关推送**：GatewayPushMessageConsumer接收推送消息，通过WebSocket/TCP连接推送给在线客户端
+11. **网关推送**：GatewayPushMessageConsumer接收推送消息，通过targetUserId属性正确路由到目标用户
 12. **超时重发**：基于时间轮算法的消息超时重发机制，只有真正推送给客户端的消息才添加超时任务
 13. **客户端确认**：客户端接收消息后发送ACK确认到专门的TOPIC_MESSAGE_ACK主题
 14. **ACK消息分离处理**：MessageAckConsumer使用并发模式处理ACK消息，通过统一分发器ImMessageHandler路由到MessageAckProcessor
 15. **消息状态更新**：ACK处理器更新消息状态为"推送成功"，取消超时重发任务
-16. **发送回执处理**：客户端接收到MESSAGE_SEND_RECEIPT后更新本地消息状态，取消重试任务
+16. **发送回执处理**：客户端通过clientSeq匹配重发队列中的消息，更新本地状态并移除重发任务
 
 **涉及的数据表操作**：
 - `message`表：插入1条消息记录
-- `user_msg_list`表：插入1-2条记录（发送方必有，接收方在线时有）
+- `user_msg_list`表：插入2条记录（发送方和接收方各1条，确保userSeq连续性）
 - `user_conversation_list`表：更新2条记录（发送方和接收方的会话信息）
 - `conversation`表：创建或更新1条会话记录
 
@@ -278,27 +259,34 @@ GET  /users/logout/{userId} - 用户退出
 
 #### 阶段3：消息服务层处理（im-message-server）
 7. **群聊消息消费**：ConversationMessageConsumer使用MessageListenerOrderly接口从RocketMQ顺序消费群聊消息
-8. **幂等性检查**：基于clientSeq检查消息是否重复处理，重复消息直接返回之前的处理结果
-9. **完整的11步处理流程**（读扩散模式）：
+8. **幂等性检查**：基于clientSeq检查消息是否重复处理，重复消息直接忽略（统一推送理念：发送方通过消息拉取补偿获取消息）
+9. **完整的12步处理流程**（GroupMessageProcessor，读扩散模式）：
    - **步骤1 - 群成员验证**：验证发送方是否为群组成员，检查群组状态
-   - **步骤2 - 消息ID处理**：直接使用网关传入的全局唯一消息ID
-   - **步骤3 - 会话序列号生成**：为群聊会话生成递增的序列号，保证消息顺序
-   - **步骤4 - 消息存储**（读扩散核心）：
+   - **步骤2 - 群成员信息获取**：获取群成员列表和成员数量
+   - **步骤3 - 群聊会话信息处理**：创建或更新群聊会话信息，包含成员数量
+   - **步骤4 - 会话序列号生成**：为群聊会话生成递增的序列号，保证消息顺序
+   - **步骤5 - 消息存储**（读扩散核心）：
      - 保存消息主体到统一的`message`表，设置消息类型为群聊（2）
-     - 仅保存1条记录到`conversation_msg_list`表，建立消息ID与会话序列号的映射
-     - **不为每个群成员创建user_msg_list记录**，避免写扩散的存储开销
-   - **步骤5 - 消息缓存**：缓存消息内容到Redis，便于快速读取
-   - **步骤6 - 简化会话更新**：只更新`conversation`表的last_update_time，不计算unread_count
-   - **步骤7 - 轻量级通知推送**：向在线群成员推送包含conversationId和seq的轻量级通知
-   - **步骤8 - 更新发送方会话级seq**：发送方消息处理完成后，自动更新其在该会话中的最大seq
-   - **步骤9 - 记录幂等性结果**：基于clientSeq记录处理结果
-   - **步骤10 - 发送回执**：向发送方发送MESSAGE_SEND_RECEIPT确认消息处理完成
+     - **仅保存1条记录**到`conversation_msg_list`表，建立消息ID与会话序列号的映射
+     - **不为每个群成员创建user_msg_list记录**，避免写扩散的存储开销，写入成本O(1)
+   - **步骤6 - 消息缓存**：缓存消息内容到Redis，便于快速读取
+   - **步骤7 - 简化会话视图更新**：只更新`user_conversation_list`表的last_update_time，不计算unread_count
+   - **步骤8 - 轻量级通知推送**（读扩散核心）：
+     - 获取在线群成员列表及其所在网关节点
+     - **统一推送理念**：发送方也接收自己的消息作为发送确认，不跳过发送者
+     - 向在线成员推送GROUP_MESSAGE_NOTIFICATION（1007）轻量级通知
+     - 通知消息包含：fromId=发送方，toId=接收方，conversationId=群聊会话，conversationSeq=会话级序列号
+     - **发送方通知包含完整字段**：clientSeq、serverMsgId、serverSeq用于重发队列匹配
+   - **步骤9 - 更新发送方会话级seq**：发送方消息处理完成后，更新其在该会话中的最大seq
+   - **步骤10 - 记录幂等性结果**：基于clientSeq记录处理结果，TTL=300秒
+   - **步骤11 - 事务提交**：通过Spring事务管理确保数据一致性
+   - **步骤12 - 统一推送逻辑**：原有回执机制已被统一推送逻辑替代，无需单独发送回执
 
 #### 阶段4：群成员消息分发
 10. **轻量级通知机制**（读扩散核心）：
-    - 获取在线群成员列表及其所在网关节点
-    - **推送通知而非完整消息**：向在线成员推送GROUP_MESSAGE_NOTIFICATION（1007）
-    - 通知消息包含：fromId=发送方，toId=接收方，conversationId=群聊会话，conversationSeq=会话级序列号
+    - GroupNotificationService创建轻量级通知消息
+    - **关键字段设置**：toId=目标用户ID（不是群组ID），conversationSeq=会话级序列号
+    - **发送方特殊处理**：如果是发送方，添加clientSeq、serverMsgId、serverSeq字段
     - 客户端收到通知后，主动调用群聊消息拉取API获取完整消息内容
 11. **离线成员处理**：
     - 离线成员不接收实时通知
@@ -317,7 +305,7 @@ GET  /users/logout/{userId} - 用户退出
 **涉及的数据表操作**：
 - `message`表：插入1条消息记录
 - `conversation_msg_list`表：插入1条记录（消息ID与会话序列号映射）
-- `user_conversation_list`表：简化更新（只更新last_update_time）
+- `user_conversation_list`表：简化更新（只更新last_update_time，不计算unread_count）
 - `conversation`表：更新1条群聊会话记录
 
 ### 推拉结合消息传输模式（重大架构特性）
@@ -368,13 +356,17 @@ ChatMessage.proto新增字段：
 | 对比维度 | 私聊（写扩散） | 群聊（读扩散） |
 |---------|---------------|---------------|
 | **存储策略** | 为每个用户创建消息副本 | 消息只存储一份 |
-| **写入成本** | O(用户数) | O(1) |
+| **写入成本** | O(用户数) = O(2) | O(1) |
 | **读取成本** | O(1) | O(消息数) |
 | **存储空间** | 高（冗余存储） | 低（单份存储） |
 | **适用场景** | 用户数少，读取频繁 | 用户数多，读取相对较少 |
 | **数据表** | user_msg_list | conversation_msg_list |
 | **推送方式** | 完整消息推送 | 轻量级通知推送 |
 | **拉取机制** | 基于用户级全局seq | 基于会话级seq |
+| **序列号管理** | userSeq（用户级全局） | conversationSeq（会话级） |
+| **离线处理** | 消息已存储，上线后通过userSeq空洞检测拉取 | 上线后通过会话同步发现新消息并拉取 |
+| **发送确认** | 推送包含clientSeq的完整消息给发送方 | 推送包含clientSeq的轻量级通知给发送方 |
+| **数据一致性** | 每用户一条user_msg_list记录 | 每消息一条conversation_msg_list记录 |
 
 ### 消息状态生命周期
 1. **0-已发送**：消息已保存到数据库，等待推送
@@ -463,69 +455,6 @@ ChatMessage.proto新增字段：
 
 
 ## 📁 项目结构
-
-```
-im-plus/
-├── 📦 im-gateway/              # 🌐 网关服务 - 连接管理和消息路由
-│   ├── src/main/java/com/vanky/im/gateway/
-│   │   ├── netty/              # Netty服务器实现 (TCP/UDP/WebSocket)
-│   │   ├── handler/            # 消息处理器和协议适配
-│   │   ├── consumer/           # RocketMQ消息消费者
-│   │   ├── service/            # 业务服务层
-│   │   └── config/             # 配置类和Bean定义
-│   └── src/main/resources/
-│       └── application.yml     # 网关服务配置
-│
-├── 📦 im-user/                 # 👤 用户服务 - 用户管理和认证
-│   ├── src/main/java/com/vanky/im/user/
-│   │   ├── controller/         # REST API控制器
-│   │   ├── service/            # 用户业务逻辑
-│   │   ├── entity/             # 用户数据实体
-│   │   └── mapper/             # MyBatis数据访问层
-│   └── src/main/resources/
-│       ├── application.yml     # 用户服务配置
-│       └── mapper/             # MyBatis XML映射文件
-│
-├── 📦 im-message-server/       # 💬 消息服务 - 消息处理和存储
-│   ├── src/main/java/com/vanky/im/message/
-│   │   ├── processor/          # 消息处理器 (私聊/群聊)
-│   │   ├── consumer/           # RocketMQ消息消费者
-│   │   ├── service/            # 消息业务服务
-│   │   ├── controller/         # 消息API控制器
-│   │   ├── entity/             # 消息数据实体
-│   │   └── mapper/             # 数据访问层
-│   └── src/main/resources/
-│       ├── application.yml     # 消息服务配置
-│       └── mapper/             # MyBatis XML映射文件
-│
-├── 📦 im-common/               # 🔧 通用模块 - 协议定义和工具类
-│   ├── src/main/java/com/vanky/im/common/
-│   │   ├── constant/           # 常量定义 (消息类型/Redis Key等)
-│   │   ├── protocol/           # Protobuf协议定义
-│   │   ├── model/              # 通用数据模型
-│   │   ├── util/               # 工具类和帮助方法
-│   │   └── config/             # 通用配置类
-│   └── src/main/resources/
-│       └── proto/              # Protobuf协议文件
-│
-├── 📦 im-client/               # 📱 客户端 - 多协议客户端实现
-│   └── src/main/java/com/vanky/im/client/
-│       ├── ui/                 # Swing用户界面
-│       ├── network/            # 网络通信层 (WebSocket/TCP)
-│       ├── storage/            # 本地存储 (Redis模拟)
-│       ├── sync/               # 离线消息同步
-│       └── message/            # 消息处理和确认
-│
-├── 📚 docs/                    # 📖 项目文档
-│   ├── memory_bank.md          # 项目记忆库 - 完整的项目历史
-│   ├── offline-message-sync-*.md # 离线消息同步技术文档
-│   ├── quick_test_guide.md     # 快速测试指南
-│   ├── task_*.md              # 开发任务文档
-│   └── *-guide.md             # 各种技术指南
-│
-├── 🖼️ pic/                     # 图片资源
-└── 📄 pom.xml                  # Maven父级配置文件
-```
 
 ### 🔍 关键目录说明
 

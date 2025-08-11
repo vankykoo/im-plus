@@ -266,20 +266,14 @@ public class UnifiedMessageProcessor {
      * @param message 消息
      */
     private void renderMessage(ChatMessage message) {
-        // {{CHENGQI:
-        // Action: Modified; Timestamp: 2025-08-06 21:48:54 +08:00; Reason: 修复群聊消息重复显示问题，过滤自己发送的群聊通知消息;
-        // }}
-        // {{START MODIFICATIONS}}
-        // 检查是否为自己发送的群聊通知消息，如果是则跳过显示
-        if (message.getType() == com.vanky.im.common.constant.MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION) {
-            if (userId != null && userId.equals(message.getFromId())) {
-                log.info("跳过显示自己发送的群聊通知消息 - 消息ID: " + message.getUid() +
-                        ", 发送方: " + message.getFromId() + ", 当前用户: " + userId);
-                return;
-            }
+        // 统一推送逻辑：检查是否为自己发送的消息，如果是则作为发送确认处理
+        if (userId != null && userId.equals(message.getFromId())) {
+            // 处理自己发送的消息作为发送确认
+            handleSelfSentMessage(message);
+            return; // 不在UI中显示自己发送的消息
         }
-        // {{END MODIFICATIONS}}
 
+        // 处理其他用户发送的消息，正常显示
         if (messageCallback != null) {
             messageCallback.onMessageReceived(message);
         } else {
@@ -422,12 +416,79 @@ public class UnifiedMessageProcessor {
     }
     
     /**
+     * 处理自己发送的消息（统一推送理念：发送方也是接收方）
+     *
+     * @param message 自己发送的消息
+     */
+    private void handleSelfSentMessage(ChatMessage message) {
+        try {
+            log.info("接收到自己发送的消息 - 消息ID: " + message.getUid() +
+                    ", 消息类型: " + message.getType() + ", 客户端序列号: " + message.getClientSeq());
+
+            // 检查是否包含完整的消息字段
+            String clientSeq = message.getClientSeq();
+            String serverMsgId = message.getServerMsgId();
+            String serverSeq = message.getServerSeq();
+
+            if (clientSeq != null && !clientSeq.trim().isEmpty() &&
+                serverMsgId != null && !serverMsgId.trim().isEmpty() &&
+                serverSeq != null && !serverSeq.trim().isEmpty()) {
+
+                // 通知待确认消息管理器更新消息状态
+                if (messageDeliveryCallback != null) {
+                    boolean success = messageDeliveryCallback.onMessageDelivered(clientSeq, serverMsgId, serverSeq);
+                    if (success) {
+                        log.info("消息状态更新成功 - 客户端序列号: " + clientSeq +
+                                ", 服务端消息ID: " + serverMsgId + ", 服务端序列号: " + serverSeq);
+                    } else {
+                        log.warning("消息状态更新失败 - 客户端序列号: " + clientSeq);
+                    }
+                } else {
+                    log.warning("消息投递回调未设置，无法更新消息状态");
+                }
+            } else {
+                log.info("消息不包含完整的字段，跳过状态更新 - 消息ID: " + message.getUid());
+            }
+
+        } catch (Exception e) {
+            log.warning("处理自己发送的消息失败 - 消息ID: " + message.getUid() + ", 错误: " + e.getMessage());
+        }
+    }
+
+    /** 消息投递回调接口 */
+    private MessageDeliveryCallback messageDeliveryCallback;
+
+    /**
+     * 设置消息投递回调
+     *
+     * @param callback 消息投递回调
+     */
+    public void setMessageDeliveryCallback(MessageDeliveryCallback callback) {
+        this.messageDeliveryCallback = callback;
+    }
+
+    /**
+     * 消息投递回调接口（统一推送理念：发送方接收到自己的消息时更新状态）
+     */
+    public interface MessageDeliveryCallback {
+        /**
+         * 消息投递回调
+         *
+         * @param clientSeq 客户端序列号
+         * @param serverMsgId 服务端消息ID
+         * @param serverSeq 服务端序列号
+         * @return 是否处理成功
+         */
+        boolean onMessageDelivered(String clientSeq, String serverMsgId, String serverSeq);
+    }
+
+    /**
      * 消息处理回调接口
      */
     public interface MessageProcessCallback {
         /**
          * 消息接收回调
-         * 
+         *
          * @param message 接收到的消息
          */
         void onMessageReceived(ChatMessage message);

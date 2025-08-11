@@ -71,10 +71,8 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
             String gatewayNodeId = entry.getValue();
 
             try {
-                // 跳过发送者自己
-                if (memberId.equals(originalMessage.getFromId())) {
-                    continue;
-                }
+                // 统一推送逻辑：发送方也接收自己的消息作为发送确认
+                // 移除跳过发送者的逻辑，让发送方也能收到群聊通知
 
                 // 为每个成员创建专门的通知消息，传递会话级seq
                 ChatMessage notificationMessage = createNotificationMessage(originalMessage, memberId, conversationSeq);
@@ -82,6 +80,12 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
                 // 推送通知，使用会话级seq
                 pushNotificationToUser(notificationMessage, conversationSeq, gatewayNodeId);
                 successCount++;
+
+                // 如果是发送方，记录日志便于调试
+                if (memberId.equals(originalMessage.getFromId())) {
+                    log.debug("群聊通知已推送给发送方作为发送确认 - 发送方: {}, 会话ID: {}",
+                            memberId, originalMessage.getConversationId());
+                }
 
             } catch (Exception e) {
                 log.error("推送群聊通知给成员失败 - 成员ID: {}, 会话ID: {}", memberId, originalMessage.getConversationId(), e);
@@ -118,7 +122,8 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
             notificationContent = originalMessage.getContent();
         }
 
-        ChatMessage notificationMessage = ChatMessage.newBuilder()
+        // 构建通知消息，如果是发送方则添加回执相关字段
+        ChatMessage.Builder messageBuilder = ChatMessage.newBuilder()
                 .setType(MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION) // 特殊的通知类型
                 .setContent(notificationContent) // 简化的通知内容
                 .setFromId(originalMessage.getFromId()) // 保持发送方ID
@@ -131,8 +136,20 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
                 // 推拉结合模式新增字段
                 .setUserSeq(0L) // 群聊消息不使用用户级全局序列号
                 .setConversationSeq(conversationSeq) // 设置会话级序列号
-                .setExpectedSeq(0L) // 通知消息不需要期望序列号
-                .build();
+                .setExpectedSeq(0L); // 通知消息不需要期望序列号
+
+        // 如果是发送方，添加完整的消息字段（统一推送理念：发送方也是接收方）
+        if (targetUserId.equals(originalMessage.getFromId())) {
+            messageBuilder
+                    .setClientSeq(originalMessage.getClientSeq()) // 保持客户端序列号
+                    .setServerMsgId(originalMessage.getUid()) // 设置服务端消息ID
+                    .setServerSeq(String.valueOf(conversationSeq)); // 设置服务端序列号
+
+            log.debug("为发送方添加完整消息字段 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}, 服务端序列号: {}",
+                    targetUserId, originalMessage.getClientSeq(), originalMessage.getUid(), conversationSeq);
+        }
+
+        ChatMessage notificationMessage = messageBuilder.build();
 
         log.debug("创建群聊通知消息 - 会话ID: {}, 目标用户: {}, 会话seq: {}, 通知内容: {}",
                 originalMessage.getConversationId(), targetUserId, conversationSeq, notificationContent);

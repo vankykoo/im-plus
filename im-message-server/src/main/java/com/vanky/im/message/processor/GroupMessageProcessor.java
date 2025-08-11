@@ -64,7 +64,7 @@ public class GroupMessageProcessor {
     private RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
-    private SendReceiptService sendReceiptService;
+    private OnlineStatusService onlineStatusService;
 
     @Autowired
     private MessageIdempotentService messageIdempotentService;
@@ -99,12 +99,11 @@ public class GroupMessageProcessor {
                         messageIdempotentService.checkIdempotent(clientSeq);
 
                 if (idempotentResult != null) {
-                    // 重复消息，直接发送回执并返回
-                    log.info("检测到重复群聊消息，直接返回之前结果 - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
+                    // 重复消息，直接忽略（统一推送理念：发送方通过消息拉取补偿获取消息，不主动推送）
+                    log.info("检测到重复群聊消息，直接忽略 - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
                             clientSeq, idempotentResult.getMsgId(), idempotentResult.getSeq());
 
-                    // 发送回执给发送方
-                    sendReceiptForDuplicateMessage(chatMessage, idempotentResult);
+                    // 不做任何推送，发送方如果需要确认，通过消息拉取补偿机制获取
                     return;
                 }
             }
@@ -148,8 +147,7 @@ public class GroupMessageProcessor {
                 messageIdempotentService.recordIdempotent(clientSeq, msgId, seq);
             }
 
-            // 12. 发送回执给发送方
-            sendReceiptToSender(chatMessage, msgId, seq);
+            // 12. 原有回执机制已被统一推送逻辑替代，无需单独发送回执
 
             log.info("群聊消息处理完成 - 会话ID: {}, 消息ID: {}, Seq: {}", conversationId, msgId, seq);
             
@@ -297,10 +295,8 @@ public class GroupMessageProcessor {
 
             for (String memberId : onlineMembers) {
                 try {
-                    // 跳过发送者自己
-                    if (memberId.equals(chatMessage.getFromId())) {
-                        continue;
-                    }
+                    // 统一推送逻辑：发送方也接收自己的消息作为发送确认
+                    // 移除跳过发送者的逻辑，让发送方也能收到群聊消息
 
                     // 获取成员的会话信息
                     String userSessionKey = SessionConstants.getUserSessionKey(memberId);
@@ -311,6 +307,11 @@ public class GroupMessageProcessor {
 
                         // 为活跃用户添加消息缓存
                         cacheMessageForUser(memberId, msgId, seq);
+
+                        // 如果是发送方，记录日志便于调试
+                        if (memberId.equals(chatMessage.getFromId())) {
+                            log.debug("群聊消息将推送给发送方作为发送确认 - 发送方: {}, 群组: {}", memberId, groupId);
+                        }
                     }
                 } catch (Exception e) {
                     log.error("获取成员会话信息失败 - 成员ID: {}", memberId, e);
@@ -398,58 +399,7 @@ public class GroupMessageProcessor {
         }
     }
 
-    /**
-     * 处理重复消息，发送回执
-     */
-    private void sendReceiptForDuplicateMessage(ChatMessage chatMessage, MessageIdempotentService.IdempotentResult idempotentResult) {
-        String clientSeq = chatMessage.getClientSeq();
 
-        try {
-            // 发送回执给发送方
-            sendReceiptService.sendReceipt(
-                    clientSeq,                                    // 客户端序列号
-                    idempotentResult.getMsgId(),                  // 之前的服务端消息ID
-                    String.valueOf(idempotentResult.getSeq()),    // 之前的服务端序列号
-                    chatMessage.getFromId()                       // 发送方用户ID
-            );
 
-            log.info("重复群聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId());
 
-        } catch (Exception e) {
-            // 回执发送失败不影响主流程
-            log.error("重复群聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, idempotentResult.getMsgId(), chatMessage.getFromId(), e);
-        }
-    }
-
-    /**
-     * 12. 发送回执给发送方
-     */
-    private void sendReceiptToSender(ChatMessage chatMessage, String msgId, Long seq) {
-        // 检查是否有客户端序列号（只有新版本客户端才会发送）
-        String clientSeq = chatMessage.getClientSeq();
-        if (clientSeq == null || clientSeq.trim().isEmpty()) {
-            log.debug("消息无客户端序列号，跳过发送回执 - 消息ID: {}", msgId);
-            return;
-        }
-
-        try {
-            // 发送回执给发送方
-            sendReceiptService.sendReceipt(
-                    clientSeq,                    // 客户端序列号
-                    msgId,                        // 服务端消息ID
-                    String.valueOf(seq),          // 服务端序列号
-                    chatMessage.getFromId()       // 发送方用户ID
-            );
-
-            log.info("群聊消息回执发送成功 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, msgId, chatMessage.getFromId());
-
-        } catch (Exception e) {
-            // 回执发送失败不影响消息处理流程
-            log.error("群聊消息回执发送失败 - 客户端序列号: {}, 服务端消息ID: {}, 发送方: {}",
-                    clientSeq, msgId, chatMessage.getFromId(), e);
-        }
-    }
 }

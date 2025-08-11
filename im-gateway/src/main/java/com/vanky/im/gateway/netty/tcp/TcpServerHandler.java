@@ -1,5 +1,6 @@
 package com.vanky.im.gateway.netty.tcp;
 
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.gateway.server.processor.IMServiceHandler;
 import com.vanky.im.gateway.session.UserChannelManager;
@@ -34,8 +35,10 @@ public class TcpServerHandler extends SimpleChannelInboundHandler<ChatMessage> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ChatMessage msg) throws Exception {
-        log.info("TCP接收到消息 - 类型: {}, 发送方: {}, 接收方: {}, 消息ID: {}",
-                msg.getType(), msg.getFromId(), msg.getToId(), msg.getUid());
+        if(msg.getType() != MessageTypeConstants.HEARTBEAT) {
+            log.info("TCP接收到消息 - 类型: {}, 发送方: {}, 接收方: {}, 消息ID: {}",
+                    msg.getType(), msg.getFromId(), msg.getToId(), msg.getUid());
+        }
 
         // 委托给统一消息分发器处理
         imServiceHandler.handleMessage(msg, ctx.channel());

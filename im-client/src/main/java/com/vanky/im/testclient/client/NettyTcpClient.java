@@ -4,7 +4,7 @@ import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 import com.vanky.im.testclient.manager.PendingMessageManager;
-import com.vanky.im.testclient.handler.MessageSendReceiptHandler;
+
 import com.vanky.im.testclient.model.PendingMessage;
 import com.vanky.im.testclient.model.MessageStatus;
 import com.vanky.im.testclient.pushpull.UnifiedMessageProcessor;
@@ -56,7 +56,6 @@ public class NettyTcpClient {
 
     // 消息发送确认机制
     private PendingMessageManager pendingMessageManager;
-    private MessageSendReceiptHandler receiptHandler;
 
     // 推拉结合模式的统一消息处理器
     private UnifiedMessageProcessor unifiedMessageProcessor;
@@ -73,7 +72,6 @@ public class NettyTcpClient {
 
         // 初始化消息发送确认机制
         this.pendingMessageManager = new PendingMessageManager();
-        this.receiptHandler = new MessageSendReceiptHandler(pendingMessageManager);
 
         // 设置超时回调
         this.pendingMessageManager.setTimeoutCallback(new PendingMessageManager.TimeoutCallback() {
@@ -106,6 +104,15 @@ public class NettyTcpClient {
                 if (messageHandler != null) {
                     messageHandler.handleMessage(message);
                 }
+            }
+        });
+
+        // 设置消息投递回调（统一推送逻辑：发送方接收到自己的消息时更新状态）
+        this.unifiedMessageProcessor.setMessageDeliveryCallback(new UnifiedMessageProcessor.MessageDeliveryCallback() {
+            @Override
+            public boolean onMessageDelivered(String clientSeq, String serverMsgId, String serverSeq) {
+                // 委托给待确认消息管理器处理
+                return pendingMessageManager.handleSendReceipt(clientSeq, serverMsgId, serverSeq);
             }
         });
     }
@@ -177,9 +184,11 @@ public class NettyTcpClient {
         
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, ChatMessage chatMessage) throws Exception {
-            System.out.println("收到消息 - 类型: " + chatMessage.getType() + 
-                             ", 发送方: " + chatMessage.getFromId() + 
-                             ", 内容: " + chatMessage.getContent());
+            if (chatMessage.getType() != 2003) {
+                System.out.println("收到消息 - 类型: " + chatMessage.getType() +
+                        ", 发送方: " + chatMessage.getFromId() +
+                        ", 内容: " + chatMessage.getContent());
+            }
             
             // 处理登录响应
             if (chatMessage.getType() == 1001) { // LOGIN_RESPONSE
@@ -211,11 +220,7 @@ public class NettyTcpClient {
                                  ", 发送方: " + chatMessage.getFromId() +
                                  ", 内容: " + chatMessage.getContent());
             }
-            // 处理消息发送回执
-            else if (chatMessage.getType() == MessageTypeConstants.MESSAGE_SEND_RECEIPT) {
-                // 处理发送回执
-                receiptHandler.handleSendReceipt(chatMessage);
-            }
+            // 原有的MESSAGE_SEND_RECEIPT处理已被统一推送逻辑替代
 
             // {{CHENGQI:
             // Action: Removed; Timestamp: 2025-08-06 22:01:47 +08:00; Reason: 删除重复的messageHandler调用，避免消息重复显示，消息已通过UnifiedMessageProcessor回调处理;

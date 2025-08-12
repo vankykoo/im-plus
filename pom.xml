@@ -16,6 +16,7 @@
         <module>im-user</module>
         <module>im-message-server</module>
         <module>im-client</module>
+        <module>im-sequence</module>
     </modules>
 
     <properties>

@@ -108,4 +108,50 @@ public interface RedisService {
      * @return 用户最大全局序列号，如果用户无消息则返回0
      */
     Long getUserMaxGlobalSeq(String userId);
+
+    // ========== 新增方法：消息已读功能支持 ==========
+
+    /**
+     * 获取用户在指定会话的最后已读序列号
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @return 最后已读序列号，如果没有记录则返回null
+     */
+    Long getUserLastReadSeq(String userId, String conversationId);
+
+    /**
+     * 设置用户在指定会话的最后已读序列号
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @param lastReadSeq 最后已读序列号
+     */
+    void setUserLastReadSeq(String userId, String conversationId, long lastReadSeq);
+
+    /**
+     * 原子增加群聊消息的已读计数
+     * @param msgId 消息ID
+     * @return 增加后的已读数
+     */
+    long incrementGroupReadCount(String msgId);
+
+    /**
+     * 获取群聊消息的已读计数
+     * @param msgId 消息ID
+     * @return 已读数
+     */
+    int getGroupReadCount(String msgId);
+
+    /**
+     * 添加用户到群聊消息的已读用户列表（仅小群使用）
+     * @param msgId 消息ID
+     * @param userId 用户ID
+     */
+    void addGroupReadUser(String msgId, String userId);
+
+    /**
+     * 获取群聊消息的已读用户列表（仅小群使用）
+     * @param msgId 消息ID
+     * @return 已读用户ID列表
+     */
+    List<String> getGroupReadUsers(String msgId);
 }

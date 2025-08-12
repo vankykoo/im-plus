@@ -2,6 +2,7 @@ package com.vanky.im.message.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.vanky.im.message.entity.Message;
+import java.util.Map;
 
 import java.util.List;
 
@@ -93,5 +94,48 @@ public interface MessageService extends IService<Message> {
     default List<Message> getByMsgIds(List<Long> msgIds) {
         return listByMsgIds(msgIds);
     }
+
+    // ========== 新增方法：消息已读功能支持 ==========
+
+    /**
+     * 批量更新私聊消息为已读状态
+     * 更新指定会话中，用户作为接收方的消息状态为已读
+     *
+     * @param conversationId 会话ID
+     * @param receiverId 接收方用户ID
+     * @param startSeq 开始序列号（包含）
+     * @param endSeq 结束序列号（包含）
+     * @return 更新的消息数量
+     */
+    int updateMessagesReadStatus(String conversationId, String receiverId, long startSeq, long endSeq);
+
+    /**
+     * 获取群聊消息ID列表（按序列号范围）
+     * 用于群聊已读功能，根据会话序列号范围获取消息ID
+     *
+     * @param conversationId 会话ID
+     * @param startSeq 开始序列号（包含）
+     * @param endSeq 结束序列号（包含）
+     * @return 消息ID列表
+     */
+    List<String> getGroupMessageIdsBySeqRange(String conversationId, long startSeq, long endSeq);
+
+    /**
+     * 获取消息发送方信息
+     * 根据消息ID列表获取对应的发送方用户ID
+     *
+     * @param messageIds 消息ID列表
+     * @return 消息ID -> 发送方用户ID的映射
+     */
+    Map<String, String> getMessageSenders(List<String> messageIds);
+
+    /**
+     * 获取消息的会话ID
+     * 根据消息ID获取对应的会话ID
+     *
+     * @param msgId 消息ID
+     * @return 会话ID，如果消息不存在则返回null
+     */
+    String getMessageConversationId(String msgId);
 }
 // {{END MODIFICATIONS}}

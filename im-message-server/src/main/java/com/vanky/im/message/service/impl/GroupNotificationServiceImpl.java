@@ -142,10 +142,10 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
         if (targetUserId.equals(originalMessage.getFromId())) {
             messageBuilder
                     .setClientSeq(originalMessage.getClientSeq()) // 保持客户端序列号
-                    .setServerMsgId(originalMessage.getUid()) // 设置服务端消息ID
-                    .setServerSeq(String.valueOf(conversationSeq)); // 设置服务端序列号
+                    .setServerMsgId(originalMessage.getUid()); // 设置服务端消息ID
+                    // 磐石计划：移除serverSeq，统一使用conversationSeq
 
-            log.debug("为发送方添加完整消息字段 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}, 服务端序列号: {}",
+            log.debug("为发送方添加完整消息字段 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}, 会话序列号: {}",
                     targetUserId, originalMessage.getClientSeq(), originalMessage.getUid(), conversationSeq);
         }
 

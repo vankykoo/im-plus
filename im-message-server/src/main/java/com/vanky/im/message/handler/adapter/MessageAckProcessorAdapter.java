@@ -37,6 +37,9 @@ public class MessageAckProcessorAdapter implements MessageProcessor {
         } else if (messageType == MessageTypeConstants.GROUP_CONVERSATION_ACK) {
             // 处理群聊会话ACK确认
             messageAckProcessor.processGroupConversationAck(chatMessage);
+        } else if (messageType == MessageTypeConstants.MESSAGE_READ_RECEIPT) {
+            // 处理消息已读回执
+            messageAckProcessor.processReadReceipt(chatMessage);
         } else {
             throw new IllegalArgumentException("不支持的ACK消息类型: " + messageType);
         }
@@ -47,7 +50,8 @@ public class MessageAckProcessorAdapter implements MessageProcessor {
         return new int[]{
             MessageTypeConstants.MESSAGE_ACK,
             MessageTypeConstants.BATCH_MESSAGE_ACK,
-            MessageTypeConstants.GROUP_CONVERSATION_ACK
+            MessageTypeConstants.GROUP_CONVERSATION_ACK,
+            MessageTypeConstants.MESSAGE_READ_RECEIPT
         };
     }
     

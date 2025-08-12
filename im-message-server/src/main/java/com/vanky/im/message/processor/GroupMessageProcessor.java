@@ -11,6 +11,7 @@ import com.vanky.im.message.entity.GroupMessage;
 import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.service.*;
 import com.vanky.im.message.util.MessageConverter;
+import com.vanky.im.message.client.SequenceClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,7 +69,10 @@ public class GroupMessageProcessor {
 
     @Autowired
     private MessageIdempotentService messageIdempotentService;
-    
+
+    @Autowired
+    private SequenceClient sequenceClient;
+
     // 消息缓存TTL（24小时）
     private static final long MESSAGE_CACHE_TTL = 24 * 60 * 60;
     
@@ -123,8 +127,13 @@ public class GroupMessageProcessor {
             log.debug("群聊会话信息处理完成 - 会话ID: {}, 群组ID: {}, 成员数: {}", 
                       conversationId, groupId, memberCount);
             
-            // 5. 原子生成Seq
-            Long seq = redisService.generateSeq(conversationId);
+            // 5. 使用新的序列号服务生成会话级序列号
+            Long seq = sequenceClient.getNextSequence(conversationId);
+            if (seq == null) {
+                // 降级处理：使用原有的Redis序列号生成
+                log.warn("Sequence service unavailable, falling back to Redis for conversation: {}", conversationId);
+                seq = redisService.generateSeq(conversationId);
+            }
             log.debug("生成会话序列号 - 会话ID: {}, Seq: {}", conversationId, seq);
             
             // 6. 数据入库（读扩散模式）

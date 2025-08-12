@@ -1,6 +1,7 @@
 package com.vanky.im.testclient.client;
 
 import com.vanky.im.common.protocol.ChatMessage;
+import com.vanky.im.common.protocol.ReadReceipt;
 import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 import com.vanky.im.testclient.manager.PendingMessageManager;
@@ -741,6 +742,34 @@ public class RealWebSocketClient implements WebSocket.Listener {
             return pendingMessageManager.getStatistics();
         }
         return "PendingMessageManager未初始化";
+    }
+
+    /**
+     * 发送已读回执
+     */
+    public void sendReadReceipt(String conversationId, long lastReadSeq) {
+        if (!isLoggedIn.get()) {
+            System.err.println("用户 " + userId + " 未登录，无法发送已读回执");
+            return;
+        }
+
+        // 构建已读回执消息体
+        ReadReceipt readReceipt = ReadReceipt.newBuilder()
+                .setConversationId(conversationId)
+                .setLastReadSeq(lastReadSeq)
+                .build();
+
+        // 构建已读回执消息
+        ChatMessage readReceiptMsg = ChatMessage.newBuilder()
+                .setType(MessageTypeConstants.MESSAGE_READ_RECEIPT)
+                .setFromId(userId)
+                .setUid(UUID.randomUUID().toString())
+                .setTimestamp(System.currentTimeMillis())
+                .setReadReceipt(readReceipt)
+                .build();
+
+        sendBinaryMessage(readReceiptMsg);
+        System.out.println("发送已读回执 - 用户: " + userId + ", 会话: " + conversationId + ", 已读序列号: " + lastReadSeq);
     }
 
     /**

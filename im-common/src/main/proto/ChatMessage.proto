@@ -19,10 +19,27 @@ message ChatMessage {
   string conversationId = 10; // 会话ID，用于标识具体的会话
   string clientSeq = 11;      // 客户端生成的临时序列号，用于回执匹配
   string serverMsgId = 12;    // 服务端生成的正式消息ID
-  string serverSeq = 13;      // 服务端生成的正式序列号
 
-  // 推拉结合模式新增字段
-  int64 userSeq = 14;         // 用户级全局序列号（私聊消息使用）
-  int64 conversationSeq = 15; // 会话级序列号（群聊消息使用）
+  // 统一的序列号体系（磐石计划优化）
+  int64 userSeq = 14;         // 用户级全局序列号，用于客户端消息同步和去重
+  int64 conversationSeq = 15; // 会话级序列号，用于保证单聊、群聊等所有会话内的消息顺序
   int64 expectedSeq = 16;     // 客户端期望的下一个序列号（用于空洞检测）
+
+  // 消息已读功能新增字段
+  ReadReceipt readReceipt = 17;         // 已读回执（客户端 -> 服务端）
+  ReadNotification readNotification = 18; // 已读通知（服务端 -> 客户端）
+}
+
+// 已读回执消息体（客户端上报已读状态）
+message ReadReceipt {
+  string conversationId = 1;  // 会话ID
+  int64 lastReadSeq = 2;      // 已读到的最大连续序列号
+}
+
+// 已读通知消息体（服务端通知已读状态变化）
+message ReadNotification {
+  string conversationId = 1;  // 会话ID
+  int64 lastReadSeq = 2;      // 对端已读的最大seq（私聊使用）
+  string msgId = 3;           // 哪条消息的已读状态更新了（群聊使用）
+  int32 readCount = 4;        // 最新的已读数（群聊使用）
 }

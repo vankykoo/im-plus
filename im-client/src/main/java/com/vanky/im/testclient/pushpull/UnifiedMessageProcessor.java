@@ -425,21 +425,21 @@ public class UnifiedMessageProcessor {
             log.info("接收到自己发送的消息 - 消息ID: " + message.getUid() +
                     ", 消息类型: " + message.getType() + ", 客户端序列号: " + message.getClientSeq());
 
-            // 检查是否包含完整的消息字段
+            // 检查是否包含完整的消息字段（磐石计划：使用conversationSeq替代serverSeq）
             String clientSeq = message.getClientSeq();
             String serverMsgId = message.getServerMsgId();
-            String serverSeq = message.getServerSeq();
+            long conversationSeq = message.getConversationSeq();
 
             if (clientSeq != null && !clientSeq.trim().isEmpty() &&
                 serverMsgId != null && !serverMsgId.trim().isEmpty() &&
-                serverSeq != null && !serverSeq.trim().isEmpty()) {
+                conversationSeq > 0) {
 
                 // 通知待确认消息管理器更新消息状态
                 if (messageDeliveryCallback != null) {
-                    boolean success = messageDeliveryCallback.onMessageDelivered(clientSeq, serverMsgId, serverSeq);
+                    boolean success = messageDeliveryCallback.onMessageDelivered(clientSeq, serverMsgId, String.valueOf(conversationSeq));
                     if (success) {
                         log.info("消息状态更新成功 - 客户端序列号: " + clientSeq +
-                                ", 服务端消息ID: " + serverMsgId + ", 服务端序列号: " + serverSeq);
+                                ", 服务端消息ID: " + serverMsgId + ", 会话序列号: " + conversationSeq);
                     } else {
                         log.warning("消息状态更新失败 - 客户端序列号: " + clientSeq);
                     }

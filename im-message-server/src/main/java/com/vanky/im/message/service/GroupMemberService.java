@@ -44,4 +44,20 @@ public interface GroupMemberService {
      * @param userId 用户ID
      */
     void removeGroupMember(String groupId, String userId);
+
+    /**
+     * 判断是否为小群（支持已读用户列表）
+     *
+     * @param groupId 群组ID
+     * @return true-小群，false-大群
+     */
+    boolean isSmallGroup(String groupId);
+
+    /**
+     * 获取群成员数量
+     *
+     * @param groupId 群组ID
+     * @return 群成员数量
+     */
+    int getGroupMemberCount(String groupId);
 }

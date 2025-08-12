@@ -36,6 +36,9 @@ public class MessageTypeConstants {
 
     /** 消息发送回执 */
     public static final int MESSAGE_SEND_RECEIPT = 2007;
+
+    /** 消息已读回执 */
+    public static final int MESSAGE_READ_RECEIPT = 2008;
     
     // ==================== 服务端到客户端消息 (1000-1999) ====================
     
@@ -59,6 +62,9 @@ public class MessageTypeConstants {
     
     /** 群聊消息通知（读扩散模式） - 修正冲突，从1001改为1007 */
     public static final int GROUP_MESSAGE_NOTIFICATION = 1007;
+
+    /** 消息已读通知 */
+    public static final int MESSAGE_READ_NOTIFICATION = 1008;
     
     // ==================== 客户端到客户端消息 (3000-3999) ====================
     
@@ -116,6 +122,7 @@ public class MessageTypeConstants {
             case BATCH_MESSAGE_ACK: return "批量消息确认";
             case GROUP_CONVERSATION_ACK: return "群聊会话ACK确认";
             case MESSAGE_SEND_RECEIPT: return "消息发送回执";
+            case MESSAGE_READ_RECEIPT: return "消息已读回执";
             
             // 服务端到客户端消息
             case LOGIN_RESPONSE: return "登录响应";
@@ -125,6 +132,7 @@ public class MessageTypeConstants {
             case MESSAGE_DELIVERY_SUCCESS: return "消息投递成功";
             case MESSAGE_DELIVERY_FAILED: return "消息投递失败";
             case GROUP_MESSAGE_NOTIFICATION: return "群聊消息通知";
+            case MESSAGE_READ_NOTIFICATION: return "消息已读通知";
             
             // 客户端到客户端消息
             case PRIVATE_CHAT_MESSAGE: return "私信聊天消息";

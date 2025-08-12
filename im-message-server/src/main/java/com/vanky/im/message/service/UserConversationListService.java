@@ -49,4 +49,16 @@ public interface UserConversationListService extends IService<UserConversationLi
      * @param lastMsgId 最新消息ID
      */
     void updateGroupConversationSimple(Long userId, String conversationId, Long lastMsgId);
+
+    // ========== 新增方法：消息已读功能支持 ==========
+
+    /**
+     * 更新用户已读状态
+     * 清零未读数，更新已读序列号
+     *
+     * @param userId 用户ID
+     * @param conversationId 会话ID
+     * @param lastReadSeq 已读到的最大序列号
+     */
+    void updateUserReadStatus(String userId, String conversationId, long lastReadSeq);
 }

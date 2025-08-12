@@ -50,9 +50,9 @@ public class PendingMessage {
     private String serverMsgId;
     
     /**
-     * 服务端生成的正式序列号（回执后填充）
+     * 会话级序列号（磐石计划：替代serverSeq）
      */
-    private String serverSeq;
+    private String conversationSeq;
     
     /**
      * 消息类型（私聊/群聊）
@@ -171,12 +171,12 @@ public class PendingMessage {
         this.serverMsgId = serverMsgId;
     }
     
-    public String getServerSeq() {
-        return serverSeq;
+    public String getConversationSeq() {
+        return conversationSeq;
     }
-    
-    public void setServerSeq(String serverSeq) {
-        this.serverSeq = serverSeq;
+
+    public void setConversationSeq(String conversationSeq) {
+        this.conversationSeq = conversationSeq;
     }
     
     public int getMessageType() {
@@ -199,8 +199,8 @@ public class PendingMessage {
     public String toString() {
         return String.format(
             "PendingMessage{clientSeq='%s', content='%s', toUserId='%s', " +
-            "sendTime=%d, retryCount=%d, status=%s, serverMsgId='%s', serverSeq='%s'}",
-            clientSeq, content, toUserId, sendTime, retryCount, status, serverMsgId, serverSeq
+            "sendTime=%d, retryCount=%d, status=%s, serverMsgId='%s', conversationSeq='%s'}",
+            clientSeq, content, toUserId, sendTime, retryCount, status, serverMsgId, conversationSeq
         );
     }
 }

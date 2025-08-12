@@ -5,6 +5,7 @@ import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.message.constant.MessageConstants;
 import com.vanky.im.message.service.MessageStatusService;
+import com.vanky.im.message.processor.ReadReceiptProcessor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -27,6 +28,9 @@ public class MessageAckProcessor {
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private ReadReceiptProcessor readReceiptProcessor;
 
     /**
      * 处理消息确认
@@ -326,5 +330,74 @@ public class MessageAckProcessor {
         } catch (Exception e) {
             log.error("更新用户群聊同步点异常 - 用户ID: {}, 错误: {}", userId, e.getMessage(), e);
         }
+    }
+
+    /**
+     * 处理消息已读回执
+     * @param chatMessage 已读回执消息
+     */
+    public void processReadReceipt(ChatMessage chatMessage) {
+        String userId = chatMessage.getFromId();
+
+        log.info("开始处理消息已读回执 - 用户: {}", userId);
+
+        try {
+            // 验证已读回执消息的有效性
+            if (!validateReadReceiptMessage(chatMessage)) {
+                log.warn("已读回执消息验证失败 - 用户: {}", userId);
+                return;
+            }
+
+            // 委托给专门的已读回执处理器
+            readReceiptProcessor.processReadReceipt(chatMessage, userId);
+
+            log.info("消息已读回执处理成功 - 用户: {}", userId);
+
+        } catch (Exception e) {
+            log.error("处理消息已读回执异常 - 用户: {}", userId, e);
+        }
+    }
+
+    /**
+     * 验证已读回执消息的有效性
+     * @param chatMessage 已读回执消息
+     * @return 是否有效
+     */
+    private boolean validateReadReceiptMessage(ChatMessage chatMessage) {
+        // 检查基本字段
+        if (chatMessage.getFromId() == null || chatMessage.getFromId().trim().isEmpty()) {
+            log.warn("已读回执消息发送方ID为空");
+            return false;
+        }
+
+        // 检查消息类型
+        if (chatMessage.getType() != MessageTypeConstants.MESSAGE_READ_RECEIPT) {
+            log.warn("已读回执消息类型不正确 - 期望: {}, 实际: {}",
+                    MessageTypeConstants.MESSAGE_READ_RECEIPT,
+                    chatMessage.getType());
+            return false;
+        }
+
+        // 检查是否包含已读回执信息
+        if (!chatMessage.hasReadReceipt()) {
+            log.warn("已读回执消息不包含ReadReceipt信息");
+            return false;
+        }
+
+        // 检查会话ID
+        String conversationId = chatMessage.getReadReceipt().getConversationId();
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            log.warn("已读回执消息会话ID为空");
+            return false;
+        }
+
+        // 检查已读序列号
+        long lastReadSeq = chatMessage.getReadReceipt().getLastReadSeq();
+        if (lastReadSeq < 0) {
+            log.warn("已读回执消息序列号无效 - 序列号: {}", lastReadSeq);
+            return false;
+        }
+
+        return true;
     }
 }

@@ -179,12 +179,13 @@ public class GroupMemberServiceImpl implements GroupMemberService {
      * @param groupId 群组ID
      * @return 成员数量
      */
-    public long getGroupMemberCount(String groupId) {
+    @Override
+    public int getGroupMemberCount(String groupId) {
         try {
             String key = RedisKeyConstants.getGroupMembersKey(groupId);
             Long count = redisTemplate.opsForSet().size(key);
             if (count != null && count > 0) {
-                return count;
+                return count.intValue();
             }
 
             // Redis缓存为空，从数据库查询
@@ -192,7 +193,7 @@ public class GroupMemberServiceImpl implements GroupMemberService {
             return memberIds.size();
         } catch (Exception e) {
             log.error("获取群组成员数量失败 - 群组ID: {}", groupId, e);
-            return 0L;
+            return 0;
         }
     }
 
@@ -255,6 +256,24 @@ public class GroupMemberServiceImpl implements GroupMemberService {
             return false;
         }
     }
+
+    @Override
+    public boolean isSmallGroup(String groupId) {
+        try {
+            int memberCount = getGroupMemberCount(groupId);
+            boolean isSmall = memberCount < RedisKeyConstants.SMALL_GROUP_THRESHOLD;
+
+            log.debug("判断群组规模 - 群组ID: {}, 成员数: {}, 是否小群: {}", groupId, memberCount, isSmall);
+            return isSmall;
+
+        } catch (Exception e) {
+            log.error("判断群组规模失败 - 群组ID: {}", groupId, e);
+            // 出错时默认认为是大群，避免性能问题
+            return false;
+        }
+    }
+
+
 
     /**
      * 将群组ID转换为会话ID格式

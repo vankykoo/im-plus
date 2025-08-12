@@ -87,3 +87,13 @@ message:
   push:
     topic: TOPIC_PUSH_TO_GATEWAY
 
+# 序列号服务配置
+sequence:
+  service:
+    url: http://localhost:8084
+    timeout: 10000
+    retry:
+      enabled: true
+      max-attempts: 3
+      delay: 1000
+

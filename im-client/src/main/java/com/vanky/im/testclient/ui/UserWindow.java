@@ -40,6 +40,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
     private JButton sendGroupButton;
     private JButton registerButton;
     private JButton createGroupButton;
+    private JButton markReadButton;
     private JLabel statusLabel;
     private JComboBox<String> protocolComboBox;
     
@@ -109,11 +110,13 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
         // 新功能按钮
         registerButton = new JButton("用户注册");
         createGroupButton = new JButton("创建群聊");
+        markReadButton = new JButton("标记已读");
 
         connectButton.addActionListener(e -> connect());
         disconnectButton.addActionListener(e -> disconnect());
         registerButton.addActionListener(e -> showRegisterDialog());
         createGroupButton.addActionListener(e -> showCreateGroupDialog());
+        markReadButton.addActionListener(e -> showMarkReadDialog());
 
         controlPanel.add(protocolLabel);
         controlPanel.add(protocolComboBox);
@@ -122,6 +125,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
         controlPanel.add(new JSeparator(SwingConstants.VERTICAL));
         controlPanel.add(registerButton);
         controlPanel.add(createGroupButton);
+        controlPanel.add(markReadButton);
         
         topPanel.add(statusPanel, BorderLayout.WEST);
         topPanel.add(controlPanel, BorderLayout.EAST);
@@ -441,6 +445,30 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
                 break;
             case MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION:
                 messageText = String.format("[群聊] %s@%s: %s", message.getFromId(), message.getConversationId(), message.getContent());
+                break;
+            case MessageTypeConstants.MESSAGE_READ_NOTIFICATION:
+                // 处理已读通知
+                if (message.hasReadNotification()) {
+                    var readNotification = message.getReadNotification();
+                    String conversationId = readNotification.getConversationId();
+                    String msgId = readNotification.getMsgId();
+                    int readCount = readNotification.getReadCount();
+                    long lastReadSeq = readNotification.getLastReadSeq();
+
+                    if (conversationId.startsWith("private_")) {
+                        // 私聊已读通知
+                        messageText = String.format("[已读通知] 私聊会话 %s 的消息已被读取，已读序列号: %d",
+                                conversationId, lastReadSeq);
+                    } else if (conversationId.startsWith("group_")) {
+                        // 群聊已读通知
+                        messageText = String.format("[已读通知] 群聊消息 %s 已被读取，当前已读数: %d",
+                                msgId, readCount);
+                    } else {
+                        messageText = String.format("[已读通知] 消息 %s 已被读取", msgId);
+                    }
+                } else {
+                    messageText = "[已读通知] 收到已读通知（格式异常）";
+                }
                 break;
             // 忽略系统消息和其他类型消息
             default:
@@ -904,6 +932,160 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
 
         } catch (Exception e) {
             System.err.println("发送群聊会话ACK失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 显示标记已读对话框
+     */
+    private void showMarkReadDialog() {
+        JDialog readDialog = new JDialog(this, "标记消息已读", true);
+        readDialog.setSize(500, 350);
+        readDialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        // 顶部说明
+        JLabel titleLabel = new JLabel("选择要标记为已读的会话");
+        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // 中间会话选择面板
+        JPanel conversationPanel = new JPanel(new BorderLayout(5, 5));
+        conversationPanel.setBorder(BorderFactory.createTitledBorder("会话信息"));
+
+        // 会话类型选择
+        JPanel typePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JLabel typeLabel = new JLabel("会话类型:");
+        ButtonGroup typeGroup = new ButtonGroup();
+        JRadioButton privateRadio = new JRadioButton("私聊", true);
+        JRadioButton groupRadio = new JRadioButton("群聊");
+        typeGroup.add(privateRadio);
+        typeGroup.add(groupRadio);
+        typePanel.add(typeLabel);
+        typePanel.add(privateRadio);
+        typePanel.add(groupRadio);
+
+        // 会话ID输入
+        JPanel idPanel = new JPanel(new BorderLayout(5, 5));
+        JLabel idLabel = new JLabel("对方用户ID/群聊ID:");
+        JTextField idField = new JTextField();
+        idField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLoweredBevelBorder(),
+                BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+        idPanel.add(idLabel, BorderLayout.WEST);
+        idPanel.add(idField, BorderLayout.CENTER);
+
+        // 已读序列号输入
+        JPanel seqPanel = new JPanel(new BorderLayout(5, 5));
+        JLabel seqLabel = new JLabel("已读到序列号:");
+        JTextField seqField = new JTextField();
+        seqField.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLoweredBevelBorder(),
+                BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+        seqField.setText("0"); // 默认值
+        seqPanel.add(seqLabel, BorderLayout.WEST);
+        seqPanel.add(seqField, BorderLayout.CENTER);
+
+        // 组装会话面板
+        JPanel inputPanel = new JPanel(new GridLayout(3, 1, 5, 5));
+        inputPanel.add(typePanel);
+        inputPanel.add(idPanel);
+        inputPanel.add(seqPanel);
+        conversationPanel.add(inputPanel, BorderLayout.CENTER);
+
+        // 底部按钮面板
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JButton confirmButton = new JButton("确认标记");
+        JButton cancelButton = new JButton("取消");
+
+        confirmButton.setPreferredSize(new Dimension(100, 30));
+        cancelButton.setPreferredSize(new Dimension(100, 30));
+
+        // 确认按钮事件
+        confirmButton.addActionListener(e -> {
+            String targetId = idField.getText().trim();
+            String seqText = seqField.getText().trim();
+
+            if (targetId.isEmpty()) {
+                JOptionPane.showMessageDialog(readDialog, "请输入对方用户ID或群聊ID！", "提示", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            long lastReadSeq;
+            try {
+                lastReadSeq = Long.parseLong(seqText);
+                if (lastReadSeq < 0) {
+                    throw new NumberFormatException("序列号不能为负数");
+                }
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(readDialog, "请输入有效的序列号（非负整数）！", "提示", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // 生成会话ID
+            String conversationId;
+            if (privateRadio.isSelected()) {
+                // 私聊会话ID：确保较小的用户ID在前
+                if (userId.compareTo(targetId) < 0) {
+                    conversationId = "private_" + userId + "_" + targetId;
+                } else {
+                    conversationId = "private_" + targetId + "_" + userId;
+                }
+            } else {
+                // 群聊会话ID
+                conversationId = "group_" + targetId;
+            }
+
+            // 发送已读回执
+            boolean sent = sendReadReceipt(conversationId, lastReadSeq);
+            if (sent) {
+                String typeText = privateRadio.isSelected() ? "私聊" : "群聊";
+                appendMessage(String.format("[已读] 已标记%s会话 %s 的消息为已读，序列号: %d",
+                        typeText, conversationId, lastReadSeq));
+                readDialog.dispose();
+            } else {
+                JOptionPane.showMessageDialog(readDialog, "发送已读回执失败！请检查连接状态。", "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        // 取消按钮事件
+        cancelButton.addActionListener(e -> readDialog.dispose());
+
+        buttonPanel.add(confirmButton);
+        buttonPanel.add(cancelButton);
+
+        // 组装主面板
+        panel.add(titleLabel, BorderLayout.NORTH);
+        panel.add(conversationPanel, BorderLayout.CENTER);
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+
+        readDialog.add(panel);
+        readDialog.setVisible(true);
+    }
+
+    /**
+     * 发送已读回执
+     */
+    private boolean sendReadReceipt(String conversationId, long lastReadSeq) {
+        try {
+            // 使用WebSocket客户端发送
+            if (realWebSocketClient != null && realWebSocketClient.isConnected()) {
+                realWebSocketClient.sendReadReceipt(conversationId, lastReadSeq);
+                return true;
+            }
+            // 使用TCP客户端发送
+            else if (tcpClient != null && tcpClient.isConnected()) {
+                tcpClient.sendReadReceipt(conversationId, lastReadSeq);
+                return true;
+            } else {
+                appendMessage("[错误] 未连接到服务器，无法发送已读回执");
+                return false;
+            }
+        } catch (Exception e) {
+            appendMessage("[错误] 发送已读回执失败: " + e.getMessage());
             return false;
         }
     }

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vanky.im.sequence.mapper.SequenceSectionMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="BaseResultMap" type="com.vanky.im.sequence.entity.SequenceSection">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="section_key" property="sectionKey" jdbcType="VARCHAR"/>
+        <result column="max_seq" property="maxSeq" jdbcType="BIGINT"/>
+        <result column="step" property="step" jdbcType="INTEGER"/>
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+        <result column="version" property="version" jdbcType="BIGINT"/>
+    </resultMap>
+
+    <!-- 基础字段 -->
+    <sql id="Base_Column_List">
+        id, section_key, max_seq, step, update_time, create_time, version
+    </sql>
+
+    <!-- 批量插入或更新分段信息 -->
+    <insert id="batchInsertOrUpdate" parameterType="java.util.List">
+        INSERT INTO sequence_section (section_key, max_seq, step)
+        VALUES
+        <foreach collection="sections" item="section" separator=",">
+            (#{section.sectionKey}, #{section.maxSeq}, #{section.step})
+        </foreach>
+        ON DUPLICATE KEY UPDATE
+            max_seq = VALUES(max_seq),
+            version = version + 1
+    </insert>
+
+    <!-- 根据更新时间查询需要同步的分段 -->
+    <select id="selectNeedSyncSections" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM sequence_section
+        WHERE update_time &lt; DATE_SUB(NOW(), INTERVAL #{intervalMinutes} MINUTE)
+        ORDER BY update_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 获取分段的当前最大序列号（用于冷启动恢复） -->
+    <select id="getMaxSeqForRecovery" resultType="java.lang.Long">
+        SELECT COALESCE(max_seq, 0)
+        FROM sequence_section
+        WHERE section_key = #{sectionKey}
+    </select>
+
+</mapper>

@@ -45,6 +45,17 @@ public class RedisKeyConstants {
     
     /** 用户群聊同步点前缀 */
     public static final String USER_CONVERSATION_SEQ_PREFIX = "user:conversation:seq:";
+
+    // ========== 消息已读功能相关 Redis Key ==========
+
+    /** 群聊消息已读计数前缀 */
+    public static final String GROUP_READ_COUNT_PREFIX = "group:read:count:";
+
+    /** 群聊消息已读用户列表前缀（小群使用） */
+    public static final String GROUP_READ_USERS_PREFIX = "group:read:users:";
+
+    /** 用户最后已读序列号缓存前缀（私聊使用） */
+    public static final String USER_LAST_READ_SEQ_PREFIX = "user:last:read:seq:";
     
     // ========== 用户状态相关 Redis Key ==========
     
@@ -106,6 +117,15 @@ public class RedisKeyConstants {
 
     /** 群组成员缓存过期时间（24小时） */
     public static final int CACHE_EXPIRE_HOURS = 24;
+
+    /** 群聊已读计数缓存TTL（7天） */
+    public static final long GROUP_READ_COUNT_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+    /** 群聊已读用户列表缓存TTL（7天） */
+    public static final long GROUP_READ_USERS_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+    /** 用户已读序列号缓存TTL（30天） */
+    public static final long USER_READ_SEQ_TTL_SECONDS = 30 * 24 * 60 * 60;
     
     // ========== 业务配置 ==========
     
@@ -120,6 +140,9 @@ public class RedisKeyConstants {
     
     /** 客户端消息最大保留条数 */
     public static final int CLIENT_MESSAGES_MAX_COUNT = 1000;
+
+    /** 小群阈值（小于此数量的群支持已读用户列表） */
+    public static final int SMALL_GROUP_THRESHOLD = 50;
     
     // ========== 工具方法 ==========
     

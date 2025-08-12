@@ -133,4 +133,53 @@ public class UserConversationListServiceImpl extends ServiceImpl<UserConversatio
         }
         // {{END MODIFICATIONS}}
     }
+
+    // ========== 新增方法实现：消息已读功能支持 ==========
+
+    @Override
+    public void updateUserReadStatus(String userId, String conversationId, long lastReadSeq) {
+        try {
+            Long userIdLong = Long.valueOf(userId);
+
+            // 查找现有的用户会话记录
+            UserConversationList userConversation = this.getByUserIdAndConversationId(userIdLong, conversationId);
+
+            if (userConversation != null) {
+                // 更新现有记录
+                userConversation.setUnreadCount(0); // 清零未读数
+                userConversation.setLastReadSeq(lastReadSeq); // 更新已读序列号
+                userConversation.setLastUpdateTime(new Date());
+                userConversation.setUpdateTime(new Date());
+
+                this.updateById(userConversation);
+
+                log.debug("更新用户已读状态 - 用户ID: {}, 会话ID: {}, 已读序列号: {}",
+                        userId, conversationId, lastReadSeq);
+            } else {
+                // 创建新的会话记录
+                UserConversationList newConversation = new UserConversationList();
+                newConversation.setUserId(userIdLong);
+                newConversation.setConversationId(conversationId);
+                newConversation.setLastReadSeq(lastReadSeq);
+                newConversation.setUnreadCount(0);
+                newConversation.setLastMsgId(null);
+                newConversation.setCreateTime(new Date());
+                newConversation.setLastUpdateTime(new Date());
+                newConversation.setUpdateTime(new Date());
+
+                this.save(newConversation);
+
+                log.debug("创建新的用户会话记录（已读状态） - 用户ID: {}, 会话ID: {}, 已读序列号: {}",
+                        userId, conversationId, lastReadSeq);
+            }
+
+        } catch (NumberFormatException e) {
+            log.error("用户ID格式错误 - 用户ID: {}", userId, e);
+            throw new IllegalArgumentException("用户ID格式错误: " + userId, e);
+        } catch (Exception e) {
+            log.error("更新用户已读状态失败 - 用户ID: {}, 会话ID: {}, 已读序列号: {}",
+                    userId, conversationId, lastReadSeq, e);
+            throw new RuntimeException("更新用户已读状态失败", e);
+        }
+    }
 }

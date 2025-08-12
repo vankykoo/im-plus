@@ -91,6 +91,9 @@ public class IMServiceHandler {
             } else if (messageType == MessageTypeConstants.GROUP_CONVERSATION_ACK) {
                 // 处理群聊会话ACK确认
                 handleGroupConversationAck(msg, channel);
+            } else if (messageType == MessageTypeConstants.MESSAGE_READ_RECEIPT) {
+                // 处理消息已读回执
+                handleMessageReadReceipt(msg, channel);
             }
             // 客户端到客户端消息处理
             else if (messageType == MessageTypeConstants.PRIVATE_CHAT_MESSAGE ||
@@ -345,6 +348,40 @@ public class IMServiceHandler {
 
         } catch (Exception e) {
             log.error("处理群聊会话ACK确认失败 - 用户: {}, 内容: {}", userId, content, e);
+        }
+    }
+
+    /**
+     * 处理消息已读回执
+     * @param msg 已读回执消息
+     * @param channel 客户端连接通道
+     */
+    private void handleMessageReadReceipt(ChatMessage msg, Channel channel) {
+        String userId = msg.getFromId();
+        String conversationId = msg.hasReadReceipt() ? msg.getReadReceipt().getConversationId() : "unknown";
+        long lastReadSeq = msg.hasReadReceipt() ? msg.getReadReceipt().getLastReadSeq() : 0;
+
+        log.info("收到消息已读回执 - 用户: {}, 会话: {}, 已读序列号: {}, Channel: {}",
+                userId, conversationId, lastReadSeq, channel.id().asShortText());
+
+        try {
+            // 对于UDP连接，需要额外的Token验证
+            if (isUdpChannel(channel)) {
+                if (!validateToken(userId, msg.getToken())) {
+                    log.warn("UDP已读回执Token验证失败 - 用户: {}", userId);
+                    return;
+                }
+            }
+
+            // 将已读回执消息发送到消息队列，由im-message-server处理
+            messageQueueService.sendReadReceiptToMessageServer(msg);
+
+            log.debug("已读回执消息已转发到消息服务器 - 用户: {}, 会话: {}, 已读序列号: {}",
+                    userId, conversationId, lastReadSeq);
+
+        } catch (Exception e) {
+            log.error("处理消息已读回执失败 - 用户: {}, 会话: {}, 已读序列号: {}",
+                    userId, conversationId, lastReadSeq, e);
         }
     }
 

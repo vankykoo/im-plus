@@ -359,4 +359,44 @@ public class MessageQueueService {
                     ackMessage.getFromId(), ackMessage.getContent(), e);
         }
     }
+
+    /**
+     * 发送消息已读回执到消息服务器
+     * @param readReceiptMessage 已读回执消息
+     */
+    public void sendReadReceiptToMessageServer(ChatMessage readReceiptMessage) {
+        try {
+            String userId = readReceiptMessage.getFromId();
+            String conversationId = readReceiptMessage.hasReadReceipt() ?
+                    readReceiptMessage.getReadReceipt().getConversationId() : "unknown";
+            long lastReadSeq = readReceiptMessage.hasReadReceipt() ?
+                    readReceiptMessage.getReadReceipt().getLastReadSeq() : 0;
+
+            log.debug("发送消息已读回执到消息队列 - 用户: {}, 会话: {}, 已读序列号: {}, Topic: {}",
+                    userId, conversationId, lastReadSeq, TopicConstants.TOPIC_MESSAGE_ACK);
+
+            // 将已读回执消息发送到专门的ACK消息Topic
+            Message message = new Message(TopicConstants.TOPIC_MESSAGE_ACK, readReceiptMessage.toByteArray());
+
+            // 设置消息Key为特殊格式，便于识别和路由
+            message.setKeys("read_receipt_" + userId + "_" + conversationId + "_" + System.currentTimeMillis());
+
+            producer.send(message, new SendCallback() {
+                @Override
+                public void onSuccess(SendResult sendResult) {
+                    log.debug("已读回执消息发送成功 - 用户: {}, 会话: {}, 已读序列号: {}, MessageId: {}",
+                            userId, conversationId, lastReadSeq, sendResult.getMsgId());
+                }
+
+                @Override
+                public void onException(Throwable e) {
+                    log.error("已读回执消息发送失败 - 用户: {}, 会话: {}, 已读序列号: {}",
+                            userId, conversationId, lastReadSeq, e);
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("发送已读回执到消息队列失败 - 消息: {}", readReceiptMessage, e);
+        }
+    }
 }

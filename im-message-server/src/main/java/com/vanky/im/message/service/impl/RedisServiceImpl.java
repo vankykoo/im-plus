@@ -7,6 +7,7 @@ import com.vanky.im.message.constant.MessageConstants;
 import com.vanky.im.message.mapper.UserMsgListMapper;
 import com.vanky.im.message.service.ConversationMsgListService;
 import com.vanky.im.message.service.RedisService;
+import com.vanky.im.message.client.SequenceClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.List;
 
 /**
  * Redis服务实现类
@@ -31,6 +33,9 @@ public class RedisServiceImpl implements RedisService {
 
     @Autowired
     private UserMsgListMapper userMsgListMapper;
+
+    @Autowired
+    private SequenceClient sequenceClient;
 
     @Override
     public Long generateSeq(String conversationId) {
@@ -71,9 +76,35 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public Long generateUserGlobalSeq(String userId) {
         // {{CHENGQI:
-        // Action: Modified; Timestamp: 2025-08-05 17:45:00 +08:00; Reason: 优化用户全局序列号生成，添加数据库降级策略确保seq连续性;
+        // Action: Modified; Timestamp: 2025-08-11 21:26:09 +08:00; Reason: 使用新的序列号服务生成用户级全局序列号，提供降级策略;
         // }}
         // {{START MODIFICATIONS}}
+        try {
+            // 1. 优先使用新的序列号服务
+            String businessKey = "user_" + userId;
+            Long seq = sequenceClient.getNextSequence(businessKey);
+
+            if (seq != null) {
+                log.debug("使用序列号服务生成用户全局seq - 用户ID: {}, seq: {}", userId, seq);
+                return seq;
+            }
+
+            // 2. 降级处理：使用原有的Redis序列号生成
+            log.warn("序列号服务不可用，降级使用Redis生成用户全局seq - 用户ID: {}", userId);
+            return generateUserGlobalSeqFallback(userId);
+
+        } catch (Exception e) {
+            log.error("生成用户全局序列号失败，尝试降级处理 - 用户ID: {}", userId, e);
+            // 降级处理
+            return generateUserGlobalSeqFallback(userId);
+        }
+        // {{END MODIFICATIONS}}
+    }
+
+    /**
+     * 降级处理：使用原有的Redis方式生成用户全局序列号
+     */
+    private Long generateUserGlobalSeqFallback(String userId) {
         String key = RedisKeyConstants.getUserGlobalSeqKey(userId);
         try {
             // 1. 检查Redis中是否存在该用户的seq
@@ -89,10 +120,9 @@ public class RedisServiceImpl implements RedisService {
             return initializeUserGlobalSeq(userId, key);
 
         } catch (Exception e) {
-            log.error("生成用户全局序列号失败, userId: {}", userId, e);
+            log.error("降级生成用户全局序列号失败, userId: {}", userId, e);
             throw new RuntimeException("生成用户全局序列号失败", e);
         }
-        // {{END MODIFICATIONS}}
     }
 
     /**
@@ -381,6 +411,131 @@ public class RedisServiceImpl implements RedisService {
             log.error("数据库查询用户最大全局序列号也失败 - 用户ID: {}", userId, e);
             // 完全降级：返回0，表示无法确定用户的seq状态
             return 0L;
+        }
+    }
+
+    // ========== 新增方法实现：消息已读功能支持 ==========
+
+    @Override
+    public Long getUserLastReadSeq(String userId, String conversationId) {
+        try {
+            String key = RedisKeyConstants.USER_LAST_READ_SEQ_PREFIX + userId + ":" + conversationId;
+            Object value = redisTemplate.opsForValue().get(key);
+
+            if (value instanceof Long) {
+                return (Long) value;
+            } else if (value instanceof Integer) {
+                return ((Integer) value).longValue();
+            } else if (value instanceof String) {
+                try {
+                    return Long.parseLong((String) value);
+                } catch (NumberFormatException e) {
+                    log.warn("无法解析已读序列号字符串 - 用户: {}, 会话: {}, 值: {}", userId, conversationId, value);
+                    return null;
+                }
+            }
+
+            return null;
+
+        } catch (Exception e) {
+            log.error("获取用户最后已读序列号失败 - 用户: {}, 会话: {}", userId, conversationId, e);
+            return null;
+        }
+    }
+
+    @Override
+    public void setUserLastReadSeq(String userId, String conversationId, long lastReadSeq) {
+        try {
+            String key = RedisKeyConstants.USER_LAST_READ_SEQ_PREFIX + userId + ":" + conversationId;
+            redisTemplate.opsForValue().set(key, lastReadSeq, RedisKeyConstants.USER_READ_SEQ_TTL_SECONDS, TimeUnit.SECONDS);
+
+            log.debug("设置用户最后已读序列号 - 用户: {}, 会话: {}, 序列号: {}", userId, conversationId, lastReadSeq);
+
+        } catch (Exception e) {
+            log.error("设置用户最后已读序列号失败 - 用户: {}, 会话: {}, 序列号: {}", userId, conversationId, lastReadSeq, e);
+        }
+    }
+
+    @Override
+    public long incrementGroupReadCount(String msgId) {
+        try {
+            String key = RedisKeyConstants.GROUP_READ_COUNT_PREFIX + msgId;
+            Long count = redisTemplate.opsForValue().increment(key);
+
+            // 设置TTL（仅在第一次创建时）
+            if (count != null && count == 1) {
+                redisTemplate.expire(key, RedisKeyConstants.GROUP_READ_COUNT_TTL_SECONDS, TimeUnit.SECONDS);
+            }
+
+            log.debug("增加群聊消息已读计数 - 消息: {}, 当前计数: {}", msgId, count);
+            return count != null ? count : 0L;
+
+        } catch (Exception e) {
+            log.error("增加群聊消息已读计数失败 - 消息: {}", msgId, e);
+            return 0L;
+        }
+    }
+
+    @Override
+    public int getGroupReadCount(String msgId) {
+        try {
+            String key = RedisKeyConstants.GROUP_READ_COUNT_PREFIX + msgId;
+            Object value = redisTemplate.opsForValue().get(key);
+
+            if (value instanceof Long) {
+                return ((Long) value).intValue();
+            } else if (value instanceof Integer) {
+                return (Integer) value;
+            } else if (value instanceof String) {
+                try {
+                    return Integer.parseInt((String) value);
+                } catch (NumberFormatException e) {
+                    log.warn("无法解析已读计数字符串 - 消息: {}, 值: {}", msgId, value);
+                    return 0;
+                }
+            }
+
+            return 0;
+
+        } catch (Exception e) {
+            log.error("获取群聊消息已读计数失败 - 消息: {}", msgId, e);
+            return 0;
+        }
+    }
+
+    @Override
+    public void addGroupReadUser(String msgId, String userId) {
+        try {
+            String key = RedisKeyConstants.GROUP_READ_USERS_PREFIX + msgId;
+            redisTemplate.opsForSet().add(key, userId);
+
+            // 设置TTL
+            redisTemplate.expire(key, RedisKeyConstants.GROUP_READ_USERS_TTL_SECONDS, TimeUnit.SECONDS);
+
+            log.debug("添加群聊消息已读用户 - 消息: {}, 用户: {}", msgId, userId);
+
+        } catch (Exception e) {
+            log.error("添加群聊消息已读用户失败 - 消息: {}, 用户: {}", msgId, userId, e);
+        }
+    }
+
+    @Override
+    public List<String> getGroupReadUsers(String msgId) {
+        try {
+            String key = RedisKeyConstants.GROUP_READ_USERS_PREFIX + msgId;
+            Set<Object> members = redisTemplate.opsForSet().members(key);
+
+            if (members != null && !members.isEmpty()) {
+                return members.stream()
+                        .map(Object::toString)
+                        .collect(java.util.stream.Collectors.toList());
+            }
+
+            return List.of();
+
+        } catch (Exception e) {
+            log.error("获取群聊消息已读用户列表失败 - 消息: {}", msgId, e);
+            return List.of();
         }
     }
 }

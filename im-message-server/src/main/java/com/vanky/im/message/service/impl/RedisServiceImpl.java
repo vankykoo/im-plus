@@ -40,31 +40,20 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public Long generateSeq(String conversationId) {
         // {{CHENGQI:
-        // Action: Modified; Timestamp: 2025-08-04 20:52:36 +08:00; Reason: 修复seq存储类型问题，统一使用整型存储而不是字符串;
+        // Action: Modified; Timestamp: 2025-08-12 22:12:45 +08:00; Reason: 删除Redis降级逻辑，改为只使用SequenceClient生成会话级序列号;
         // }}
         // {{START MODIFICATIONS}}
-        String key = RedisKeyConstants.getConversationSeqKey(conversationId);
         try {
-            // 1. 检查Redis中是否已存在该会话的seq
-            Object currentSeqObj = redisTemplate.opsForValue().get(key);
-
-            if (currentSeqObj != null) {
-                // Redis中存在，直接递增
-                return redisTemplate.opsForValue().increment(key);
+            // 使用新的序列号服务生成会话级序列号
+            Long seq = sequenceClient.getNextSequence(conversationId);
+            
+            if (seq != null) {
+                log.debug("使用序列号服务生成会话seq - 会话ID: {}, seq: {}", conversationId, seq);
+                return seq;
+            } else {
+                log.error("序列号服务返回null - 会话ID: {}", conversationId);
+                throw new RuntimeException("序列号服务生成会话序列号失败");
             }
-
-            // 2. Redis中不存在，查询数据库获取最大seq
-            log.debug("Redis中不存在会话seq，查询数据库 - 会话ID: {}", conversationId);
-            Long maxSeqFromDb = conversationMsgListService.getMaxSeq(conversationId);
-
-            // 3. 初始化Redis中的seq值（存储为整型，不是字符串）
-            Long nextSeq = maxSeqFromDb + 1;
-            redisTemplate.opsForValue().set(key, nextSeq);
-
-            log.info("初始化会话seq - 会话ID: {}, 数据库最大seq: {}, 生成seq: {}",
-                    conversationId, maxSeqFromDb, nextSeq);
-
-            return nextSeq;
 
         } catch (Exception e) {
             log.error("生成会话序列号失败, conversationId: {}", conversationId, e);
@@ -76,104 +65,30 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public Long generateUserGlobalSeq(String userId) {
         // {{CHENGQI:
-        // Action: Modified; Timestamp: 2025-08-11 21:26:09 +08:00; Reason: 使用新的序列号服务生成用户级全局序列号，提供降级策略;
+        // Action: Modified; Timestamp: 2025-08-12 22:12:45 +08:00; Reason: 删除Redis降级逻辑，改为只使用SequenceClient生成用户级全局序列号;
         // }}
         // {{START MODIFICATIONS}}
         try {
-            // 1. 优先使用新的序列号服务
+            // 使用新的序列号服务生成用户级全局序列号
             String businessKey = "user_" + userId;
             Long seq = sequenceClient.getNextSequence(businessKey);
 
             if (seq != null) {
                 log.debug("使用序列号服务生成用户全局seq - 用户ID: {}, seq: {}", userId, seq);
                 return seq;
+            } else {
+                log.error("序列号服务返回null - 用户ID: {}", userId);
+                throw new RuntimeException("序列号服务生成用户全局序列号失败");
             }
 
-            // 2. 降级处理：使用原有的Redis序列号生成
-            log.warn("序列号服务不可用，降级使用Redis生成用户全局seq - 用户ID: {}", userId);
-            return generateUserGlobalSeqFallback(userId);
-
         } catch (Exception e) {
-            log.error("生成用户全局序列号失败，尝试降级处理 - 用户ID: {}", userId, e);
-            // 降级处理
-            return generateUserGlobalSeqFallback(userId);
+            log.error("生成用户全局序列号失败 - 用户ID: {}", userId, e);
+            throw new RuntimeException("生成用户全局序列号失败", e);
         }
         // {{END MODIFICATIONS}}
     }
 
-    /**
-     * 降级处理：使用原有的Redis方式生成用户全局序列号
-     */
-    private Long generateUserGlobalSeqFallback(String userId) {
-        String key = RedisKeyConstants.getUserGlobalSeqKey(userId);
-        try {
-            // 1. 检查Redis中是否存在该用户的seq
-            Object existingValue = redisTemplate.opsForValue().get(key);
 
-            if (existingValue != null) {
-                // Redis中存在，直接递增
-                return redisTemplate.opsForValue().increment(key);
-            }
-
-            // 2. Redis中不存在，需要初始化
-            log.info("Redis中不存在用户全局seq，开始初始化 - 用户ID: {}", userId);
-            return initializeUserGlobalSeq(userId, key);
-
-        } catch (Exception e) {
-            log.error("降级生成用户全局序列号失败, userId: {}", userId, e);
-            throw new RuntimeException("生成用户全局序列号失败", e);
-        }
-    }
-
-    /**
-     * 初始化用户全局序列号
-     * 从数据库查询最大seq，如果不存在则从1开始，并写入Redis缓存
-     *
-     * @param userId 用户ID
-     * @param redisKey Redis键
-     * @return 初始化后的下一个seq值
-     */
-    private Long initializeUserGlobalSeq(String userId, String redisKey) {
-        try {
-            // 1. 从数据库查询用户的最大seq
-            Long maxSeqFromDb = userMsgListMapper.selectMaxSeqByUserId(userId);
-
-            if (maxSeqFromDb != null && maxSeqFromDb > 0) {
-                // 2. 数据库中存在记录，使用最大seq + 1作为下一个seq
-                Long nextSeq = maxSeqFromDb + 1;
-
-                // 3. 将下一个seq写入Redis缓存
-                redisTemplate.opsForValue().set(redisKey, nextSeq);
-
-                log.info("从数据库恢复用户全局seq - 用户ID: {}, 数据库最大seq: {}, 初始化Redis为: {}",
-                        userId, maxSeqFromDb, nextSeq);
-
-                return nextSeq;
-            } else {
-                // 4. 数据库中无记录，从seq=1开始
-                Long initialSeq = 1L;
-                redisTemplate.opsForValue().set(redisKey, initialSeq);
-
-                log.info("用户首次生成全局seq - 用户ID: {}, 初始化seq: {}", userId, initialSeq);
-
-                return initialSeq;
-            }
-
-        } catch (Exception e) {
-            log.error("初始化用户全局序列号失败 - 用户ID: {}", userId, e);
-
-            // 降级策略：如果数据库查询也失败，从1开始并写入Redis
-            try {
-                Long fallbackSeq = 1L;
-                redisTemplate.opsForValue().set(redisKey, fallbackSeq);
-                log.warn("初始化用户全局seq降级处理 - 用户ID: {}, 使用默认seq: {}", userId, fallbackSeq);
-                return fallbackSeq;
-            } catch (Exception redisException) {
-                log.error("Redis写入也失败，抛出异常 - 用户ID: {}", userId, redisException);
-                throw new RuntimeException("初始化用户全局序列号完全失败", redisException);
-            }
-        }
-    }
 
     @Override
     public void cacheMessage(String msgId, String messageJson, long ttlSeconds) {

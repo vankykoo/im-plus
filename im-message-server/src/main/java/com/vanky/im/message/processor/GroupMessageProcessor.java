@@ -130,9 +130,8 @@ public class GroupMessageProcessor {
             // 5. 使用新的序列号服务生成会话级序列号
             Long seq = sequenceClient.getNextSequence(conversationId);
             if (seq == null) {
-                // 降级处理：使用原有的Redis序列号生成
-                log.warn("Sequence service unavailable, falling back to Redis for conversation: {}", conversationId);
-                seq = redisService.generateSeq(conversationId);
+                log.error("序列号服务生成失败 - 会话ID: {}", conversationId);
+                throw new RuntimeException("序列号服务生成会话序列号失败");
             }
             log.debug("生成会话序列号 - 会话ID: {}, Seq: {}", conversationId, seq);
             

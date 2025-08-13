@@ -1,7 +1,7 @@
 package com.vanky.im.gateway.server.processor.client;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.common.util.SnowflakeIdGenerator;
+
 import com.vanky.im.gateway.mq.MessageQueueService;
 import com.vanky.im.gateway.session.MsgSender;
 import io.netty.channel.Channel;
@@ -24,7 +24,7 @@ public class PrivateMsgProcessor {
     @Autowired
     private MsgSender msgSender;
     
-    private final SnowflakeIdGenerator snowflakeIdGenerator = SnowflakeIdGenerator.getInstance();
+
 
     /**
      * 处理私聊消息
@@ -33,13 +33,10 @@ public class PrivateMsgProcessor {
      */
     public void process(ChatMessage msg, Channel senderChannel) {
         try {
-            log.info("处理私聊消息 - 发送方: {}, 接收方: {}, 原始消息ID: {}",
-                    msg.getFromId(), msg.getToId(), msg.getUid());
+            log.info("处理私聊消息 - 发送方: {}, 接收方: {}, 客户端序列号: {}",
+                    msg.getFromId(), msg.getToId(), msg.getClientSeq());
 
-            // 1. 生成全局唯一的MsgId
-            String globalMsgId = snowflakeIdGenerator.nextIdString();
-
-            // 2. 使用客户端传入的会话ID，如果为空则作为兜底生成
+            // 1. 使用客户端传入的会话ID，如果为空则作为兜底生成
             String conversationId = msg.getConversationId();
             if (conversationId == null || conversationId.trim().isEmpty()) {
                 conversationId = generateConversationId(msg.getFromId(), msg.getToId());
@@ -48,21 +45,17 @@ public class PrivateMsgProcessor {
                 log.debug("使用客户端提供的会话ID: {}", conversationId);
             }
 
-            // 3. 构建新的消息对象，设置全局MsgId
-            ChatMessage processedMsg = ChatMessage.newBuilder(msg)
-                    .setUid(globalMsgId)
-                    .build();
+            // 2. 直接转发原始消息到RocketMQ，消息ID将在message-server中生成
+            log.debug("转发消息到MQ - 会话ID: {}, 客户端序列号: {}", conversationId, msg.getClientSeq());
 
-            log.debug("消息处理信息 - 全局MsgId: {}, 会话ID: {}", globalMsgId, conversationId);
+            // 3. 投递消息到RocketMQ
+            messageQueueService.sendMessageToPrivate(conversationId, msg, senderChannel);
 
-            // 4. 投递消息到RocketMQ
-            messageQueueService.sendMessageToPrivate(conversationId, processedMsg, senderChannel);
-
-            log.info("私聊消息处理完成 - 全局MsgId: {}, 会话ID: {}", globalMsgId, conversationId);
+            log.info("私聊消息转发完成 - 会话ID: {}, 客户端序列号: {}", conversationId, msg.getClientSeq());
 
         } catch (Exception e) {
-            log.error("处理私聊消息失败 - 发送方: {}, 接收方: {}, 消息ID: {}, 错误: {}",
-                    msg.getFromId(), msg.getToId(), msg.getUid(), e.getMessage(), e);
+            log.error("处理私聊消息失败 - 发送方: {}, 接收方: {}, 客户端序列号: {}, 错误: {}",
+                    msg.getFromId(), msg.getToId(), msg.getClientSeq(), e.getMessage(), e);
         }
     }
     

@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Date;
 import java.util.UUID;
+import com.vanky.im.common.util.SnowflakeIdGenerator;
 
 /**
  * 消息转换工具类
@@ -160,10 +161,11 @@ public class MessageConverter {
 
     /**
      * 生成全局唯一消息ID
+     * 使用雪花算法保证全局唯一性和有序性
      * @return 消息ID
      */
     public static String generateMsgId() {
-        return UUID.randomUUID().toString().replace("-", "");
+        return SnowflakeIdGenerator.getInstance().nextIdString();
     }
 
     // ==================== 统一消息转换方法 ====================

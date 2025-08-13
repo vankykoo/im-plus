@@ -12,6 +12,7 @@ import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.service.*;
 import com.vanky.im.message.util.MessageConverter;
 import com.vanky.im.message.client.SequenceClient;
+import com.vanky.im.common.util.SnowflakeIdGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +73,9 @@ public class GroupMessageProcessor {
 
     @Autowired
     private SequenceClient sequenceClient;
+    
+    // 雪花算法ID生成器
+    private final SnowflakeIdGenerator snowflakeIdGenerator = SnowflakeIdGenerator.getInstance();
 
     // 消息缓存TTL（24小时）
     private static final long MESSAGE_CACHE_TTL = 24 * 60 * 60;
@@ -91,11 +95,8 @@ public class GroupMessageProcessor {
             String groupId = chatMessage.getToId();
             String clientSeq = chatMessage.getClientSeq();
 
-            // 1. 使用传入的消息ID（雪花算法生成，保持ID一致性）
-            String msgId = chatMessage.getUid(); // 使用gateway传入的消息ID，避免重复生成
-
-            log.info("开始处理群聊消息 - 会话ID: {}, 消息ID: {}, 发送方: {}, 群组ID: {}, 客户端序列号: {}",
-                    conversationId, msgId, fromUserId, groupId, clientSeq);
+            log.info("开始处理群聊消息 - 会话ID: {}, 发送方: {}, 群组ID: {}, 客户端序列号: {}",
+                    conversationId, fromUserId, groupId, clientSeq);
 
             // 0. 幂等性检查（仅对包含client_seq的消息进行检查）
             if (clientSeq != null && !clientSeq.trim().isEmpty()) {
@@ -118,16 +119,25 @@ public class GroupMessageProcessor {
                 return;
             }
             
-            // 3. 获取群成员数量
+            // 3. 业务校验通过后，生成全局唯一的消息ID
+            String msgId = snowflakeIdGenerator.nextIdString();
+            log.info("生成消息ID - 会话ID: {}, 消息ID: {}, 发送方: {}", conversationId, msgId, fromUserId);
+            
+            // 构建包含新消息ID的ChatMessage
+            chatMessage = ChatMessage.newBuilder(chatMessage)
+                    .setUid(msgId)
+                    .build();
+            
+            // 4. 获取群成员数量
             List<String> groupMembers = groupMemberService.getGroupMemberIds(groupId);
             int memberCount = groupMembers.size();
             
-            // 4. 处理群聊会话信息（创建或更新）
+            // 5. 处理群聊会话信息（创建或更新）
             conversationService.handleGroupConversation(conversationId, fromUserId, groupId, memberCount);
             log.debug("群聊会话信息处理完成 - 会话ID: {}, 群组ID: {}, 成员数: {}", 
                       conversationId, groupId, memberCount);
             
-            // 5. 使用新的序列号服务生成会话级序列号
+            // 6. 使用新的序列号服务生成会话级序列号
             Long seq = sequenceClient.getNextSequence(conversationId);
             if (seq == null) {
                 log.error("序列号服务生成失败 - 会话ID: {}", conversationId);
@@ -135,10 +145,10 @@ public class GroupMessageProcessor {
             }
             log.debug("生成会话序列号 - 会话ID: {}, Seq: {}", conversationId, seq);
             
-            // 6. 数据入库（读扩散模式）
+            // 7. 数据入库（读扩散模式）
             saveMessageData(chatMessage, msgId, conversationId, seq);
             
-            // 7. 更新缓存
+            // 8. 更新缓存
             updateCache(chatMessage, msgId, conversationId, seq);
 
             // 8. 简化更新会话视图（读扩散模式）

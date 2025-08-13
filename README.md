@@ -120,8 +120,7 @@ im-plus/
 ├── im-message-server/   # 💬 消息服务 - 消息处理和存储
 ├── im-sequence/         # 🎲 序列号服务 - 高性能序列号生成
 ├── im-common/           # 🔧 通用模块 - 协议定义和工具类
-├── im-client/           # 📱 客户端 - 多协议客户端实现
-└── docs/               # � 项目文档 - 技术文档和指南
+└── im-client/           # 📱 客户端 - 多协议客户端实现
 ```
 
 #### 核心模块职责
@@ -189,13 +188,14 @@ message ChatMessage {
   string token = 9;         // 身份验证token，用于连接验证
   string conversationId = 10; // 会话ID，用于标识具体的会话
   string clientSeq = 11;      // 客户端生成的临时序列号，用于回执匹配
-  string serverMsgId = 12;    // 服务端生成的正式消息ID
-  string serverSeq = 13;      // 服务端生成的正式序列号
-
   // 推拉结合模式新增字段
-  int64 userSeq = 14;         // 用户级全局序列号（私聊消息使用）
-  int64 conversationSeq = 15; // 会话级序列号（群聊消息使用）
-  int64 expectedSeq = 16;     // 客户端期望的下一个序列号（用于空洞检测）
+  int64 userSeq = 12;         // 用户级全局序列号（私聊消息使用）
+  int64 conversationSeq = 13; // 会话级序列号（群聊消息使用）
+  int64 expectedSeq = 14;     // 客户端期望的下一个序列号（用于空洞检测）
+  
+  // 消息回执相关字段
+  ReadReceipt readReceipt = 15;     // 已读回执信息
+  ReadNotification readNotification = 16; // 已读通知信息
 }
 ```
 
@@ -227,8 +227,8 @@ message ChatMessage {
 | 字段 | 类型 | 说明 | 使用场景 |
 |------|------|------|----------|
 | `clientSeq` | string | 客户端临时序列号，UUID格式 | 消息发送回执匹配、幂等性保证、重发队列管理 |
-| `serverMsgId` | string | 服务端生成的正式消息ID | 发送确认、状态更新、客户端消息匹配 |
-| `serverSeq` | string | 服务端生成的正式序列号 | 发送确认、客户端状态同步 |
+| `readReceipt` | ReadReceipt | 已读回执信息 | 消息已读状态管理、已读回执通知 |
+| `readNotification` | ReadNotification | 已读通知信息 | 已读状态变更通知、消息状态同步 |
 
 #### 🔹 推拉结合模式字段（核心创新）
 | 字段 | 类型 | 说明 | 使用场景 |
@@ -241,7 +241,7 @@ message ChatMessage {
 
 #### 私聊消息流程
 1. **发送阶段**：客户端设置`type=3001`、`fromId`、`toId`、`content`、`clientSeq`、`conversationId`
-2. **服务端处理**：生成`uid`、`serverMsgId`、`serverSeq`、`userSeq`
+2. **服务端处理**：生成`uid`、`userSeq`，分配消息序列号
 3. **推送阶段**：服务端推送时携带`userSeq`，客户端检查序列号连续性
 4. **确认阶段**：客户端发送ACK，服务端更新消息状态
 

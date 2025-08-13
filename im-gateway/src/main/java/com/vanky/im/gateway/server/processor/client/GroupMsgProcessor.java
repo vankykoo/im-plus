@@ -1,7 +1,7 @@
 package com.vanky.im.gateway.server.processor.client;
 
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.common.util.SnowflakeIdGenerator;
+
 import com.vanky.im.gateway.mq.MessageQueueService;
 import io.netty.channel.Channel;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +20,7 @@ public class GroupMsgProcessor {
     @Autowired
     private MessageQueueService messageQueueService;
     
-    private final SnowflakeIdGenerator snowflakeIdGenerator = SnowflakeIdGenerator.getInstance();
+
     
     /**
      * 处理群聊消息
@@ -29,13 +29,10 @@ public class GroupMsgProcessor {
      */
     public void process(ChatMessage msg, Channel senderChannel) {
         try {
-            log.info("处理群聊消息 - 发送方: {}, 群组: {}, 原始消息ID: {}",
-                    msg.getFromId(), msg.getToId(), msg.getUid());
+            log.info("处理群聊消息 - 发送方: {}, 群组: {}, 客户端序列号: {}",
+                    msg.getFromId(), msg.getToId(), msg.getClientSeq());
 
-            // 1. 生成全局唯一的MsgId
-            String globalMsgId = snowflakeIdGenerator.nextIdString();
-
-            // 2. 使用客户端传入的会话ID，如果为空则作为兜底生成
+            // 1. 使用客户端传入的会话ID，如果为空则作为兜底生成
             String conversationId = msg.getConversationId();
             if (conversationId == null || conversationId.trim().isEmpty()) {
                 conversationId = "group_" + msg.getToId();
@@ -44,22 +41,17 @@ public class GroupMsgProcessor {
                 log.debug("使用客户端提供的会话ID: {}", conversationId);
             }
 
-            // 3. 构建新的消息对象，设置全局MsgId和会话ID
-            ChatMessage processedMsg = ChatMessage.newBuilder(msg)
-                    .setUid(globalMsgId)
-                    .setConversationId(conversationId) // 设置会话ID
-                    .build();
+            // 2. 直接转发原始消息到RocketMQ，消息ID将在message-server中生成
+            log.debug("转发消息到MQ - 会话ID: {}, 客户端序列号: {}", conversationId, msg.getClientSeq());
 
-            log.debug("消息处理信息 - 全局MsgId: {}, 会话ID: {}", globalMsgId, conversationId);
+            // 3. 投递消息到RocketMQ
+            messageQueueService.sendMessageToGroup(conversationId, msg, senderChannel);
 
-            // 4. 投递消息到RocketMQ
-            messageQueueService.sendMessageToGroup(conversationId, processedMsg, senderChannel);
-
-            log.info("群聊消息处理完成 - 全局MsgId: {}, 会话ID: {}", globalMsgId, conversationId);
+            log.info("群聊消息转发完成 - 会话ID: {}, 客户端序列号: {}", conversationId, msg.getClientSeq());
 
         } catch (Exception e) {
-            log.error("处理群聊消息失败 - 发送方: {}, 群组ID: {}, 消息ID: {}, 错误: {}",
-                    msg.getFromId(), msg.getToId(), msg.getUid(), e.getMessage(), e);
+            log.error("处理群聊消息失败 - 发送方: {}, 群组ID: {}, 客户端序列号: {}, 错误: {}",
+                    msg.getFromId(), msg.getToId(), msg.getClientSeq(), e.getMessage(), e);
         }
     }
 }

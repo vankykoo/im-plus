@@ -141,8 +141,7 @@ public class GroupNotificationServiceImpl implements GroupNotificationService {
         // 如果是发送方，添加完整的消息字段（统一推送理念：发送方也是接收方）
         if (targetUserId.equals(originalMessage.getFromId())) {
             messageBuilder
-                    .setClientSeq(originalMessage.getClientSeq()) // 保持客户端序列号
-                    .setServerMsgId(originalMessage.getUid()); // 设置服务端消息ID
+                    .setClientSeq(originalMessage.getClientSeq()); // 保持客户端序列号
                     // 磐石计划：移除serverSeq，统一使用conversationSeq
 
             log.debug("为发送方添加完整消息字段 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}, 会话序列号: {}",

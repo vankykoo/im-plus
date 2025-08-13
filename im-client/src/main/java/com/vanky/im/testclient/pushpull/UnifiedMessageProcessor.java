@@ -427,19 +427,19 @@ public class UnifiedMessageProcessor {
 
             // 检查是否包含完整的消息字段（磐石计划：使用conversationSeq替代serverSeq）
             String clientSeq = message.getClientSeq();
-            String serverMsgId = message.getServerMsgId();
+            String uid = message.getUid();
             long conversationSeq = message.getConversationSeq();
 
             if (clientSeq != null && !clientSeq.trim().isEmpty() &&
-                serverMsgId != null && !serverMsgId.trim().isEmpty() &&
+                uid != null && !uid.trim().isEmpty() &&
                 conversationSeq > 0) {
 
                 // 通知待确认消息管理器更新消息状态
                 if (messageDeliveryCallback != null) {
-                    boolean success = messageDeliveryCallback.onMessageDelivered(clientSeq, serverMsgId, String.valueOf(conversationSeq));
+                    boolean success = messageDeliveryCallback.onMessageDelivered(clientSeq, uid, String.valueOf(conversationSeq));
                     if (success) {
                         log.info("消息状态更新成功 - 客户端序列号: " + clientSeq +
-                                ", 服务端消息ID: " + serverMsgId + ", 会话序列号: " + conversationSeq);
+                                ", 服务端消息ID: " + uid + ", 会话序列号: " + conversationSeq);
                     } else {
                         log.warning("消息状态更新失败 - 客户端序列号: " + clientSeq);
                     }
@@ -475,11 +475,11 @@ public class UnifiedMessageProcessor {
          * 消息投递回调
          *
          * @param clientSeq 客户端序列号
-         * @param serverMsgId 服务端消息ID
+         * @param uid 服务端生成的全局唯一消息ID
          * @param serverSeq 服务端序列号
          * @return 是否处理成功
          */
-        boolean onMessageDelivered(String clientSeq, String serverMsgId, String serverSeq);
+        boolean onMessageDelivered(String clientSeq, String uid, String serverSeq);
     }
 
     /**

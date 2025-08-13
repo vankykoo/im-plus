@@ -111,9 +111,9 @@ public class NettyTcpClient {
         // 设置消息投递回调（统一推送逻辑：发送方接收到自己的消息时更新状态）
         this.unifiedMessageProcessor.setMessageDeliveryCallback(new UnifiedMessageProcessor.MessageDeliveryCallback() {
             @Override
-            public boolean onMessageDelivered(String clientSeq, String serverMsgId, String serverSeq) {
+            public boolean onMessageDelivered(String clientSeq, String uid, String serverSeq) {
                 // 委托给待确认消息管理器处理
-                return pendingMessageManager.handleSendReceipt(clientSeq, serverMsgId, serverSeq);
+                return pendingMessageManager.handleSendReceipt(clientSeq, uid, serverSeq);
             }
         });
     }

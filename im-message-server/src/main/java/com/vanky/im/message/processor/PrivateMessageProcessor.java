@@ -9,6 +9,7 @@ import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.service.*;
 import com.vanky.im.message.util.MessageConverter;
 import com.vanky.im.message.client.SequenceClient;
+import com.vanky.im.common.util.SnowflakeIdGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -58,6 +59,9 @@ public class PrivateMessageProcessor {
 
     @Autowired
     private GatewayMessagePushService gatewayMessagePushService;
+    
+    // 雪花算法ID生成器
+    private final SnowflakeIdGenerator snowflakeIdGenerator = SnowflakeIdGenerator.getInstance();
 
     private static class BusinessException extends RuntimeException {
         public BusinessException(String message) {
@@ -76,8 +80,8 @@ public class PrivateMessageProcessor {
         String toUserId = chatMessage.getToId();
         String clientSeq = chatMessage.getClientSeq();
 
-        log.info("处理私聊消息 - 发送方: {}, 接收方: {}, 消息ID: {}, 客户端序列号: {}",
-                fromUserId, toUserId, chatMessage.getUid(), clientSeq);
+        log.info("处理私聊消息 - 发送方: {}, 接收方: {}, 客户端序列号: {}",
+                fromUserId, toUserId, clientSeq);
 
         // 幂等性检查
         if (clientSeq != null && !clientSeq.trim().isEmpty()) {
@@ -94,7 +98,15 @@ public class PrivateMessageProcessor {
             // 1. 权限校验
             validateUserPermissions(fromUserId, toUserId);
 
-            String msgId = chatMessage.getUid();
+            // 2. 业务校验通过后，生成全局唯一的消息ID
+            String msgId = snowflakeIdGenerator.nextIdString();
+            log.info("生成消息ID - 会话ID: {}, 消息ID: {}, 发送方: {}, 接收方: {}", 
+                    conversationId, msgId, fromUserId, toUserId);
+            
+            // 构建包含新消息ID的ChatMessage
+            chatMessage = ChatMessage.newBuilder(chatMessage)
+                    .setUid(msgId)
+                    .build();
 
             // 2. 消息主体持久化
             persistMessage(chatMessage, msgId, conversationId);
@@ -201,7 +213,6 @@ public class PrivateMessageProcessor {
             ChatMessage message = buildEnrichedMessage(chatMessage, msgId, userSeq)
                     .toBuilder()
                     .setClientSeq(chatMessage.getClientSeq())  // 保留客户端序列号用于匹配
-                    .setServerMsgId(msgId)
                     .build();
             gatewayMessagePushService.pushMessageToGateway(message, userSeq, session.getNodeId(), fromUserId);
         }

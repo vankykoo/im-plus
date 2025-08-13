@@ -18,8 +18,6 @@ message ChatMessage {
   string token = 9;         // 身份验证token，用于连接验证
   string conversationId = 10; // 会话ID，用于标识具体的会话
   string clientSeq = 11;      // 客户端生成的临时序列号，用于回执匹配
-  string serverMsgId = 12;    // 服务端生成的正式消息ID
-
   // 统一的序列号体系（磐石计划优化）
   int64 userSeq = 14;         // 用户级全局序列号，用于客户端消息同步和去重
   int64 conversationSeq = 15; // 会话级序列号，用于保证单聊、群聊等所有会话内的消息顺序

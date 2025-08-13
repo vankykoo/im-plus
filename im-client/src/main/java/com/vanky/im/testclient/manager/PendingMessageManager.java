@@ -145,11 +145,11 @@ public class PendingMessageManager {
     /**
      * 处理发送回执（磐石计划：使用conversationSeq替代serverSeq）
      * @param clientSeq 客户端序列号
-     * @param serverMsgId 服务端消息ID
+     * @param uid 服务端生成的全局唯一消息ID
      * @param conversationSeq 会话序列号
      * @return 是否处理成功
      */
-    public boolean handleSendReceipt(String clientSeq, String serverMsgId, String conversationSeq) {
+    public boolean handleSendReceipt(String clientSeq, String uid, String conversationSeq) {
         if (clientSeq == null) {
             System.err.println("客户端序列号为空");
             return false;
@@ -163,14 +163,14 @@ public class PendingMessageManager {
 
         // 更新消息状态
         message.setStatus(MessageStatus.DELIVERED);
-        message.setServerMsgId(serverMsgId);
+        message.setUid(uid);
         message.setConversationSeq(conversationSeq); // 磐石计划：使用conversationSeq
 
         // 根据消息类型更新本地同步点
         updateLocalSyncPoint(message, conversationSeq);
 
         System.out.println("收到发送回执: " + clientSeq +
-                         " -> 服务端消息ID: " + serverMsgId +
+                         " -> 服务端消息ID: " + uid +
                          ", 会话序列号: " + conversationSeq);
         return true;
     }

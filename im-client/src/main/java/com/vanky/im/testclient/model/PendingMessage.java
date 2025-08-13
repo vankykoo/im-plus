@@ -45,9 +45,9 @@ public class PendingMessage {
     private MessageStatus status;
     
     /**
-     * 服务端生成的正式消息ID（回执后填充）
+     * 服务端生成的全局唯一消息ID（回执后填充）
      */
-    private String serverMsgId;
+    private String uid;
     
     /**
      * 会话级序列号（磐石计划：替代serverSeq）
@@ -163,12 +163,12 @@ public class PendingMessage {
         this.status = status;
     }
     
-    public String getServerMsgId() {
-        return serverMsgId;
+    public String getUid() {
+        return uid;
     }
     
-    public void setServerMsgId(String serverMsgId) {
-        this.serverMsgId = serverMsgId;
+    public void setUid(String uid) {
+        this.uid = uid;
     }
     
     public String getConversationSeq() {
@@ -199,8 +199,8 @@ public class PendingMessage {
     public String toString() {
         return String.format(
             "PendingMessage{clientSeq='%s', content='%s', toUserId='%s', " +
-            "sendTime=%d, retryCount=%d, status=%s, serverMsgId='%s', conversationSeq='%s'}",
-            clientSeq, content, toUserId, sendTime, retryCount, status, serverMsgId, conversationSeq
+            "sendTime=%d, retryCount=%d, status=%s, uid='%s', conversationSeq='%s'}",
+            clientSeq, content, toUserId, sendTime, retryCount, status, uid, conversationSeq
         );
     }
 }

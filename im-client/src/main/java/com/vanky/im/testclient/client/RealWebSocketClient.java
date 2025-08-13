@@ -204,7 +204,10 @@ public class RealWebSocketClient implements WebSocket.Listener {
                                  ", 发送方: " + chatMessage.getFromId() +
                                  ", 内容: " + chatMessage.getContent());
             }
-            // 原有的MESSAGE_SEND_RECEIPT处理已被统一推送逻辑替代
+            // 处理消息发送回执（端到端确认机制）
+            else if (chatMessage.getType() == MessageTypeConstants.MESSAGE_SEND_RECEIPT) {
+                handleMessageSendReceipt(chatMessage);
+            }
 
             // {{CHENGQI:
             // Action: Removed; Timestamp: 2025-08-06 22:01:47 +08:00; Reason: 删除重复的messageHandler调用，避免消息重复显示，消息已通过UnifiedMessageProcessor回调处理;
@@ -770,6 +773,38 @@ public class RealWebSocketClient implements WebSocket.Listener {
 
         sendBinaryMessage(readReceiptMsg);
         System.out.println("发送已读回执 - 用户: " + userId + ", 会话: " + conversationId + ", 已读序列号: " + lastReadSeq);
+    }
+
+    /**
+     * 处理消息发送回执
+     *
+     * 按照技术方案要求，处理MESSAGE_SEND_RECEIPT类型的回执消息
+     * 使用clientSeq匹配待确认消息，更新本地状态
+     *
+     * @param receiptMessage 回执消息
+     */
+    private void handleMessageSendReceipt(ChatMessage receiptMessage) {
+        String clientSeq = receiptMessage.getClientSeq();
+        String serverMsgId = receiptMessage.getUid();
+        Long userSeq = receiptMessage.getUserSeq();
+
+        System.out.println("收到消息发送回执 - 客户端序列号: " + clientSeq +
+                         ", 服务端消息ID: " + serverMsgId +
+                         ", 用户序列号: " + userSeq);
+
+        try {
+            // 使用PendingMessageManager处理回执
+            boolean success = pendingMessageManager.handleSendReceipt(clientSeq, serverMsgId, String.valueOf(userSeq));
+
+            if (success) {
+                System.out.println("消息发送回执处理成功 - 客户端序列号: " + clientSeq);
+            } else {
+                System.out.println("消息发送回执处理失败，未找到对应的待确认消息 - 客户端序列号: " + clientSeq);
+            }
+
+        } catch (Exception e) {
+            System.err.println("处理消息发送回执异常 - 客户端序列号: " + clientSeq + ", 错误: " + e.getMessage());
+        }
     }
 
     /**

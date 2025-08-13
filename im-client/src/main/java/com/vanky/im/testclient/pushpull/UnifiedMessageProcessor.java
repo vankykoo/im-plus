@@ -266,20 +266,51 @@ public class UnifiedMessageProcessor {
      * @param message 消息
      */
     private void renderMessage(ChatMessage message) {
-        // 统一推送逻辑：检查是否为自己发送的消息，如果是则作为发送确认处理
+        // 优化后的消息处理逻辑：
+        // - 私聊：发送方不会收到自己的消息，只收到MESSAGE_SEND_RECEIPT回执
+        // - 群聊：发送方会收到自己的消息（作为群成员）+ MESSAGE_SEND_RECEIPT回执
+
         if (userId != null && userId.equals(message.getFromId())) {
-            // 处理自己发送的消息作为发送确认
-            handleSelfSentMessage(message);
-            return; // 不在UI中显示自己发送的消息
+            // 检查是否为群聊消息
+            if (isGroupMessage(message)) {
+                // 群聊：发送方作为群成员，需要显示自己的消息
+                log.info("显示自己在群聊中发送的消息 - 消息ID: " + message.getUid());
+                displayMessage(message);
+
+                // 同时处理发送确认（更新本地状态）
+                handleSelfSentMessage(message);
+            } else {
+                // 私聊：发送方不应该收到自己的完整消息，只通过回执确认
+                // 如果收到了，说明可能是旧逻辑的残留，记录警告但仍处理
+                log.warning("私聊中收到自己发送的完整消息，这不应该发生 - 消息ID: " + message.getUid());
+                handleSelfSentMessage(message);
+            }
+            return;
         }
 
         // 处理其他用户发送的消息，正常显示
+        displayMessage(message);
+    }
+
+    /**
+     * 显示消息到UI
+     */
+    private void displayMessage(ChatMessage message) {
         if (messageCallback != null) {
             messageCallback.onMessageReceived(message);
         } else {
             // 默认处理：简单打印
             System.out.println("收到消息: " + message.getContent());
         }
+    }
+
+    /**
+     * 判断是否为群聊消息
+     */
+    private boolean isGroupMessage(ChatMessage message) {
+        return message.getType() == MessageTypeConstants.GROUP_CHAT_MESSAGE ||
+               message.getType() == MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION ||
+               (message.getConversationId() != null && message.getConversationId().startsWith("group_"));
     }
     
     /**
@@ -416,14 +447,21 @@ public class UnifiedMessageProcessor {
     }
     
     /**
-     * 处理自己发送的消息（统一推送理念：发送方也是接收方）
+     * 处理自己发送的消息（更新本地状态）
+     *
+     * 注意：优化后的逻辑
+     * - 私聊：发送方不应该收到完整消息，主要通过MESSAGE_SEND_RECEIPT回执确认
+     * - 群聊：发送方会收到完整消息（作为群成员）+ 回执，这里处理状态更新
      *
      * @param message 自己发送的消息
      */
     private void handleSelfSentMessage(ChatMessage message) {
         try {
-            log.info("接收到自己发送的消息 - 消息ID: " + message.getUid() +
-                    ", 消息类型: " + message.getType() + ", 客户端序列号: " + message.getClientSeq());
+            boolean isGroup = isGroupMessage(message);
+            log.info("处理自己发送的消息状态更新 - 消息ID: " + message.getUid() +
+                    ", 消息类型: " + message.getType() +
+                    ", 客户端序列号: " + message.getClientSeq() +
+                    ", 消息场景: " + (isGroup ? "群聊" : "私聊"));
 
             // 检查是否包含完整的消息字段（磐石计划：使用conversationSeq替代serverSeq）
             String clientSeq = message.getClientSeq();

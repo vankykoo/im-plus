@@ -73,7 +73,10 @@ public class GroupMessageProcessor {
 
     @Autowired
     private SequenceClient sequenceClient;
-    
+
+    @Autowired
+    private MessageSendReceiptService messageSendReceiptService;
+
     // 雪花算法ID生成器
     private final SnowflakeIdGenerator snowflakeIdGenerator = SnowflakeIdGenerator.getInstance();
 
@@ -165,7 +168,8 @@ public class GroupMessageProcessor {
                 messageIdempotentService.recordIdempotent(clientSeq, msgId, seq);
             }
 
-            // 12. 原有回执机制已被统一推送逻辑替代，无需单独发送回执
+            // 12. 发送消息发送确认回执给发送方（事务提交后异步执行）
+            sendGroupReceiptToSenderAsync(chatMessage, msgId, seq);
 
             log.info("群聊消息处理完成 - 会话ID: {}, 消息ID: {}, Seq: {}", conversationId, msgId, seq);
             
@@ -326,9 +330,12 @@ public class GroupMessageProcessor {
                         // 为活跃用户添加消息缓存
                         cacheMessageForUser(memberId, msgId, seq);
 
-                        // 如果是发送方，记录日志便于调试
+                        // 群聊特殊处理：发送方作为群成员也需要收到完整消息
+                        // 注意：发送方会收到两种消息：
+                        // 1. 完整的群聊消息（作为群成员，需要在群聊界面显示）
+                        // 2. MESSAGE_SEND_RECEIPT回执（确认消息发送状态）
                         if (memberId.equals(chatMessage.getFromId())) {
-                            log.debug("群聊消息将推送给发送方作为发送确认 - 发送方: {}, 群组: {}", memberId, groupId);
+                            log.debug("群聊消息将推送给发送方 - 发送方: {}, 群组: {} (发送方作为群成员需要看到消息)", memberId, groupId);
                         }
                     }
                 } catch (Exception e) {
@@ -417,7 +424,30 @@ public class GroupMessageProcessor {
         }
     }
 
+    /**
+     * 异步发送群聊消息发送确认回执给发送方
+     *
+     * 群聊场景下，使用会话级序列号作为userSeq
+     * 按照技术方案要求，回执必须在消息成功持久化后才发送
+     *
+     * @param originalMessage 原始群聊消息
+     * @param serverMsgId 服务端生成的消息ID
+     * @param conversationSeq 会话级序列号
+     */
+    private void sendGroupReceiptToSenderAsync(ChatMessage originalMessage, String serverMsgId, Long conversationSeq) {
+        try {
+            // 使用当前时间作为服务端权威时间戳
+            long serverTimestamp = System.currentTimeMillis();
 
+            // 调用回执服务发送群聊确认回执
+            messageSendReceiptService.sendGroupReceiptToSender(originalMessage, serverMsgId,
+                                                             conversationSeq, serverTimestamp);
 
-
+        } catch (Exception e) {
+            // 回执发送失败不应影响主消息处理流程，只记录错误日志
+            log.error("异步发送群聊消息回执失败 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}",
+                     originalMessage.getFromId(), originalMessage.getClientSeq(), serverMsgId, e);
+        }
+    }
+}
 }

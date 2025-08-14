@@ -186,4 +186,18 @@ public class SequencePersistenceService {
             return 0L;
         }
     }
+
+    /**
+     * 从业务消息表中查询最大序列号
+     * 通过RPC调用消息服务获取业务表中的最大序列号
+     *
+     * @param businessKey 业务键，如 "user_12345" 或 "conversation_67890"
+     * @return 最大序列号，查询失败时返回0
+     */
+    public Long getMaxSeqFromBusinessTable(String businessKey) {
+        // 这个方法将在SequenceService中通过MessageClient实现
+        // 这里只是预留接口，实际实现在SequenceService中
+        log.debug("getMaxSeqFromBusinessTable called with businessKey: {}", businessKey);
+        return 0L;
+    }
 }

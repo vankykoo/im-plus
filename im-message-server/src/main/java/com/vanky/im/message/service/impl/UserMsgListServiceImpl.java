@@ -5,6 +5,7 @@ import com.vanky.im.message.entity.UserMsgList;
 import com.vanky.im.message.mapper.UserMsgListMapper;
 import com.vanky.im.message.service.RedisService;
 import com.vanky.im.message.service.UserMsgListService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +18,7 @@ import java.util.List;
 * @description 针对表【user_msg_list】的数据库操作Service实现
 * @createDate 2025-06-06
 */
+@Slf4j
 @Service
 public class UserMsgListServiceImpl extends ServiceImpl<UserMsgListMapper, UserMsgList>
     implements UserMsgListService {
@@ -81,5 +83,16 @@ public class UserMsgListServiceImpl extends ServiceImpl<UserMsgListMapper, UserM
             throw new RuntimeException("保存用户消息记录失败", e);
         }
         // {{END MODIFICATIONS}}
+    }
+
+    @Override
+    public Long getMaxSeqByUserId(String userId) {
+        try {
+            Long maxSeq = baseMapper.selectMaxSeqByUserId(userId);
+            return maxSeq != null ? maxSeq : 0L;
+        } catch (Exception e) {
+            log.error("查询用户最大序列号失败 - 用户ID: {}", userId, e);
+            return 0L;
+        }
     }
 }

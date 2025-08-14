@@ -59,36 +59,48 @@ public class LuaScriptService {
 
     /**
      * 执行获取下一个序列号的脚本
-     * 
+     *
      * @param sectionKey Redis Hash key
      * @param stepSize 步长
      * @return 脚本执行结果 [序列号, 操作类型, 最大序列号(可选)]
      */
     public List<String> executeGetNextSeq(String sectionKey, int stepSize) {
+        return executeGetNextSeq(sectionKey, stepSize, 0L);
+    }
+
+    /**
+     * 执行获取下一个序列号的脚本（支持初始值）
+     *
+     * @param sectionKey Redis Hash key
+     * @param stepSize 步长
+     * @param initialValue 初始值
+     * @return 脚本执行结果 [序列号, 操作类型, 最大序列号(可选)]
+     */
+    public List<String> executeGetNextSeq(String sectionKey, int stepSize, long initialValue) {
         try {
             List<String> keys = Collections.singletonList(sectionKey);
-            Object[] args = {String.valueOf(stepSize)};
-            
+            Object[] args = {String.valueOf(stepSize), String.valueOf(initialValue)};
+
             @SuppressWarnings("unchecked")
             List<String> result = (List<String>) stringRedisTemplate.execute(getNextSeqScript, keys, args);
-            
+
             if (result == null || result.isEmpty()) {
                 log.error("Lua script returned null or empty result for key: {}", sectionKey);
                 return Collections.singletonList("-1");
             }
-            
+
             // 验证返回结果
             String seqStr = result.get(0);
             if ("-1".equals(seqStr)) {
                 log.error("Lua script execution failed for key: {}, result: {}", sectionKey, result);
             } else {
-                log.debug("Lua script executed successfully for key: {}, seq: {}, action: {}", 
-                         sectionKey, seqStr, result.size() > 1 ? result.get(1) : "NOP");
+                log.debug("Lua script executed successfully for key: {}, seq: {}, action: {}, initialValue: {}",
+                         sectionKey, seqStr, result.size() > 1 ? result.get(1) : "NOP", initialValue);
             }
-            
+
             return result;
         } catch (Exception e) {
-            log.error("Failed to execute Lua script for key: {}", sectionKey, e);
+            log.error("Failed to execute Lua script for key: {}, initialValue: {}", sectionKey, initialValue, e);
             return Collections.singletonList("-1");
         }
     }

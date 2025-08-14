@@ -35,6 +35,11 @@ public class SequenceConfig {
      */
     private Monitor monitor = new Monitor();
 
+    /**
+     * 序列号恢复配置
+     */
+    private Recovery recovery = new Recovery();
+
     @Data
     public static class Section {
         /**
@@ -100,5 +105,23 @@ public class SequenceConfig {
          * 统计间隔（秒）
          */
         private int statsIntervalSeconds = 60;
+    }
+
+    @Data
+    public static class Recovery {
+        /**
+         * 是否启用序列号恢复功能
+         */
+        private boolean enabled = true;
+
+        /**
+         * 消息服务URL
+         */
+        private String messageServiceUrl = "http://localhost:8081";
+
+        /**
+         * 恢复超时时间（毫秒）
+         */
+        private int timeoutMs = 5000;
     }
 }

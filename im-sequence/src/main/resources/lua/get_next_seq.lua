@@ -1,8 +1,9 @@
 -- 获取下一个序列号的Lua脚本
 -- 实现基于Redis Hash的原子操作，避免竞态条件
--- 
+--
 -- KEYS[1]: Redis Hash key, 格式: "seq:section:user_123" 或 "seq:section:conversation_456"
 -- ARGV[1]: step size, 步长，如 10000
+-- ARGV[2]: initial value, 初始值（可选，默认为0）
 --
 -- 返回值:
 -- 成功: {序列号, "PERSIST", 新的最大序列号} 或 {序列号, "NOP"}
@@ -10,6 +11,7 @@
 
 local section_key = KEYS[1]
 local step = tonumber(ARGV[1])
+local initial_value = tonumber(ARGV[2]) or 0
 
 -- 参数验证
 if not section_key or section_key == "" then
@@ -20,6 +22,10 @@ if not step or step <= 0 then
     return {"-1", "ERROR", "invalid step size"}
 end
 
+if initial_value < 0 then
+    return {"-1", "ERROR", "invalid initial value"}
+end
+
 -- 获取当前值和最大值
 local current_values = redis.call('HMGET', section_key, 'cur_seq', 'max_seq')
 local cur_seq = tonumber(current_values[1])
@@ -27,10 +33,10 @@ local max_seq = tonumber(current_values[2])
 
 -- 初始化逻辑：如果Hash或字段不存在
 if not cur_seq then
-    cur_seq = 0
+    cur_seq = initial_value
 end
 if not max_seq then
-    max_seq = 0
+    max_seq = initial_value
 end
 
 -- 递增当前seq

@@ -8,7 +8,6 @@ import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.service.*;
 import com.vanky.im.message.util.MessageConverter;
-import com.vanky.im.message.client.SequenceClient;
 import com.vanky.im.common.util.SnowflakeIdGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,11 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 私聊消息处理器
- * 
- * 核心功能：
- * 1. 在一个数据库事务内原子性生成发送方和接收方的userSeq
- * 2. 实现"写扩散"模式：为通信双方都创建消息索引记录
- * 3. 支持推拉结合的离线消息同步机制
+ * 负责私聊消息的完整处理流程：权限校验、消息持久化、序列号生成、消息推送和缓存更新
  */
 @Slf4j
 @Component
@@ -52,9 +47,6 @@ public class PrivateMessageProcessor {
     private OnlineStatusService onlineStatusService;
 
     @Autowired
-    private SequenceClient sequenceClient;
-
-    @Autowired
     private OfflineMessageService offlineMessageService;
 
     @Autowired
@@ -74,8 +66,6 @@ public class PrivateMessageProcessor {
 
     /**
      * 处理私聊消息完整流程
-     * 核心原则：私聊使用写扩散模型，完全依赖userSeq，不使用会话级seq
-     * 所有userSeq在一个事务内原子性生成和持久化
      */
     @Transactional(rollbackFor = Exception.class)
     public void processPrivateMessage(ChatMessage chatMessage, String conversationId) {
@@ -87,14 +77,8 @@ public class PrivateMessageProcessor {
                 fromUserId, toUserId, clientSeq);
 
         // 幂等性检查
-        if (clientSeq != null && !clientSeq.trim().isEmpty()) {
-            MessageIdempotentService.IdempotentResult idempotentResult =
-                    messageIdempotentService.checkIdempotent(clientSeq);
-            if (idempotentResult != null) {
-                log.info("检测到重复私聊消息，忽略 - 客户端序列号: {}, 消息ID: {}",
-                        clientSeq, idempotentResult.getMsgId());
-                return;
-            }
+        if (isIdempotentMessage(clientSeq)) {
+            return;
         }
 
         try {
@@ -123,16 +107,14 @@ public class PrivateMessageProcessor {
             // 5. 会话处理
             handleConversation(conversationId, fromUserId, toUserId);
             
-            // 6. 消息推送 - 私聊使用各自的userSeq
-            deliverMessage(chatMessage, msgId, senderUserSeq, receiverUserSeq, fromUserId, toUserId);
+            // 6. 消息推送
+            deliverMessage(chatMessage, msgId, receiverUserSeq, toUserId);
             
             // 7. 缓存更新 - 私聊使用各自的userSeq
             updateCache(chatMessage, msgId, senderUserSeq, receiverUserSeq, fromUserId, toUserId);
 
-            // 8. 幂等性记录 - 私聊使用senderUserSeq作为标识
-            if (clientSeq != null && !clientSeq.trim().isEmpty()) {
-                messageIdempotentService.recordIdempotent(clientSeq, msgId, senderUserSeq);
-            }
+            // 8. 幂等性记录
+            recordIdempotentIfNeeded(clientSeq, msgId, senderUserSeq);
 
             // 9. 发送消息发送确认回执给发送方（事务提交后异步执行）
             sendReceiptToSenderAsync(chatMessage, msgId, senderUserSeq);
@@ -151,6 +133,31 @@ public class PrivateMessageProcessor {
     }
 
     /**
+     * 检查消息是否为重复消息
+     */
+    private boolean isIdempotentMessage(String clientSeq) {
+        if (clientSeq != null && !clientSeq.trim().isEmpty()) {
+            MessageIdempotentService.IdempotentResult idempotentResult =
+                    messageIdempotentService.checkIdempotent(clientSeq);
+            if (idempotentResult != null) {
+                log.info("检测到重复私聊消息，忽略 - 客户端序列号: {}, 消息ID: {}",
+                        clientSeq, idempotentResult.getMsgId());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 记录幂等性信息
+     */
+    private void recordIdempotentIfNeeded(String clientSeq, String msgId, Long senderUserSeq) {
+        if (clientSeq != null && !clientSeq.trim().isEmpty()) {
+            messageIdempotentService.recordIdempotent(clientSeq, msgId, senderUserSeq);
+        }
+    }
+
+    /**
      * 校验用户权限：发送者状态（封禁、禁言）+ 好友关系（拉黑）
      */
     private void validateUserPermissions(String fromUserId, String toUserId) {
@@ -165,8 +172,6 @@ public class PrivateMessageProcessor {
             throw new BusinessException(MessageConstants.ERROR_BLOCKED_BY_USER);
         }
     }
-
-
 
     /**
      * 持久化消息主体到message表
@@ -188,25 +193,15 @@ public class PrivateMessageProcessor {
     }
 
     /**
-     * 推送消息给接收方（优化后：不再推送给发送方）
-     * 私聊模式：只推送给接收方，发送方通过回执确认
-     *
-     * 优化说明：
-     * - 发送方不再收到完整消息，只收到MESSAGE_SEND_RECEIPT回执
-     * - 减少了50%的私聊消息网络传输量
-     * - 提升了系统整体性能
+     * 推送消息给接收方
      */
-    private void deliverMessage(ChatMessage chatMessage, String msgId,
-                              Long senderUserSeq, Long receiverUserSeq, String fromUserId, String toUserId) {
-        // 只推送给接收方，发送方通过专门的回执机制确认
+    private void deliverMessage(ChatMessage chatMessage, String msgId, Long receiverUserSeq, String toUserId) {
         pushToReceiver(chatMessage, msgId, receiverUserSeq, toUserId);
-
-        log.debug("私聊消息推送完成 - 只推送给接收方: {}, 发送方: {} 将通过回执确认", toUserId, fromUserId);
+        log.debug("私聊消息推送完成 - 推送给接收方: {}", toUserId);
     }
 
     /**
-     * 推送消息给接收方（仅在线时推送）
-     * 私聊模式：使用接收方的userSeq
+     * 推送消息给在线接收方
      */
     private void pushToReceiver(ChatMessage chatMessage, String msgId, Long userSeq, String toUserId) {
         UserSession session = onlineStatusService.getUserOnlineStatus(toUserId);
@@ -216,25 +211,18 @@ public class PrivateMessageProcessor {
         }
     }
 
-    // 注意：原pushToSender方法已删除
-    // 发送方现在通过MessageSendReceiptService发送的MESSAGE_SEND_RECEIPT回执来确认消息发送状态
-    // 这样减少了不必要的完整消息传输，提升了系统性能
-
     /**
-     * 构建包含服务端信息的完整消息
-     * 私聊模式：只设置userSeq，不设置conversationSeq
+     * 构建包含服务端信息的消息
      */
     private ChatMessage buildEnrichedMessage(ChatMessage original, String msgId, Long userSeq) {
         return original.toBuilder()
-                .setUid(msgId)                                    // 服务端消息ID
-                .setUserSeq(userSeq != null ? userSeq : 0L)      // 用户级全局序列号
-                // 私聊不设置conversationSeq，因为完全依赖userSeq
+                .setUid(msgId)
+                .setUserSeq(userSeq != null ? userSeq : 0L)
                 .build();
     }
 
     /**
-     * 更新Redis缓存：消息内容缓存 + 用户消息列表缓存
-     * 私聊模式：为每个用户使用各自的userSeq进行缓存
+     * 更新Redis缓存
      */
     private void updateCache(ChatMessage chatMessage, String msgId, Long senderUserSeq, Long receiverUserSeq,
                            String fromUserId, String toUserId) {
@@ -242,10 +230,7 @@ public class PrivateMessageProcessor {
         Message message = MessageConverter.convertToMessage(chatMessage, msgId, conversationId, MessageTypeConstants.MSG_TYPE_PRIVATE);
         String messageJson = MessageConverter.toJson(message);
         
-        // 缓存消息内容
         redisService.cacheMessage(msgId, messageJson, RedisKeyConstants.MESSAGE_CACHE_TTL_SECONDS);
-        
-        // 为发送方和接收方分别使用各自的userSeq缓存消息列表
         redisService.addToUserMsgList(fromUserId, msgId, senderUserSeq, RedisKeyConstants.MAX_USER_MSG_CACHE_SIZE);
         redisService.addToUserMsgList(toUserId, msgId, receiverUserSeq, RedisKeyConstants.MAX_USER_MSG_CACHE_SIZE);
     }
@@ -262,26 +247,14 @@ public class PrivateMessageProcessor {
     }
 
     /**
-     * 异步发送消息发送确认回执给发送方
-     *
-     * 使用@TransactionalEventListener确保在事务提交后执行，避免影响主流程
-     * 按照技术方案要求，回执必须在消息成功持久化后才发送
-     *
-     * @param originalMessage 原始消息
-     * @param serverMsgId 服务端生成的消息ID
-     * @param senderUserSeq 发送方的userSeq
+     * 异步发送消息确认回执给发送方
      */
     private void sendReceiptToSenderAsync(ChatMessage originalMessage, String serverMsgId, Long senderUserSeq) {
         try {
-            // 使用当前时间作为服务端权威时间戳
             long serverTimestamp = System.currentTimeMillis();
-
-            // 调用回执服务发送确认回执
             messageSendReceiptService.sendReceiptToSender(originalMessage, serverMsgId,
                                                         senderUserSeq, serverTimestamp);
-
         } catch (Exception e) {
-            // 回执发送失败不应影响主消息处理流程，只记录错误日志
             log.error("异步发送私聊消息回执失败 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}",
                      originalMessage.getFromId(), originalMessage.getClientSeq(), serverMsgId, e);
         }

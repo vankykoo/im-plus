@@ -28,4 +28,13 @@ public interface UserMsgListService extends IService<UserMsgList> {
      * @return 用户级全局seq
      */
     Long saveUserMessageRecord(String userId, String msgId, String conversationId);
+
+    /**
+     * 获取指定用户的最大序列号
+     * 用于序列号服务恢复时查询数据库中的最大序列号
+     *
+     * @param userId 用户ID
+     * @return 用户最大序列号，如果用户无消息则返回0
+     */
+    Long getMaxSeqByUserId(String userId);
 }

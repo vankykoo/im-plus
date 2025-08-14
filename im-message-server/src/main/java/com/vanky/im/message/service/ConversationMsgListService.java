@@ -29,4 +29,13 @@ public interface ConversationMsgListService extends IService<ConversationMsgList
      * @return 最大seq，如果会话不存在返回0
      */
     Long getMaxSeq(String conversationId);
+
+    /**
+     * 获取指定会话的最大序列号
+     * 用于序列号服务恢复时查询数据库中的最大序列号
+     *
+     * @param conversationId 会话ID
+     * @return 会话最大序列号，如果会话不存在返回0
+     */
+    Long getMaxSeqByConversationId(String conversationId);
 }

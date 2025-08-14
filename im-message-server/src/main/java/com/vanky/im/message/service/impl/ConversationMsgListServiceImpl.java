@@ -61,4 +61,15 @@ public class ConversationMsgListServiceImpl extends ServiceImpl<ConversationMsgL
         return maxSeq;
         // {{END MODIFICATIONS}}
     }
+
+    @Override
+    public Long getMaxSeqByConversationId(String conversationId) {
+        try {
+            // 复用现有的getMaxSeq方法
+            return getMaxSeq(conversationId);
+        } catch (Exception e) {
+            log.error("查询会话最大序列号失败 - 会话ID: {}", conversationId, e);
+            return 0L;
+        }
+    }
 }

@@ -59,6 +59,12 @@ sequence:
     enabled: true
     stats-interval-seconds: 60
 
+  # 序列号恢复配置
+  recovery:
+    enabled: true
+    message-service-url: "http://localhost:8100"
+    timeout-ms: 5000
+
 # 日志配置
 logging:
   level:

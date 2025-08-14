@@ -2,11 +2,13 @@ package com.vanky.im.sequence.service;
 
 import com.vanky.im.sequence.config.SequenceConfig;
 import com.vanky.im.sequence.constant.SequenceConstants;
+import com.vanky.im.sequence.client.MessageClient;
 import com.vanky.im.sequence.dto.SequenceRequest;
 import com.vanky.im.sequence.dto.SequenceResponse;
 import com.vanky.im.sequence.util.SectionIdGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -33,6 +35,12 @@ public class SequenceService {
 
     @Autowired
     private SequenceConfig sequenceConfig;
+
+    @Autowired
+    private MessageClient messageClient;
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 统计信息
@@ -63,10 +71,16 @@ public class SequenceService {
 
             // 生成Redis Key
             String redisKey = sequenceConfig.getRedis().getKeyPrefix() + sectionKey;
-            
+
+            // 检查是否需要恢复序列号
+            long initialValue = 0L;
+            if (sequenceConfig.getRecovery().isEnabled()) {
+                initialValue = checkAndRecoverSequence(redisKey, businessKey);
+            }
+
             // 执行Lua脚本获取序列号
             List<String> luaResult = luaScriptService.executeGetNextSeq(
-                    redisKey, sequenceConfig.getSection().getStepSize());
+                    redisKey, sequenceConfig.getSection().getStepSize(), initialValue);
             
             if (luaResult == null || luaResult.isEmpty()) {
                 totalErrors.incrementAndGet();
@@ -211,7 +225,42 @@ public class SequenceService {
         details.put("sectionCount", SectionIdGenerator.getSectionCount());
         
         stats.setDetails(details);
-        
+
         return stats;
+    }
+
+    /**
+     * 检查并恢复序列号
+     * 如果Redis Key不存在，从业务消息表中查询最大序列号作为初始值
+     *
+     * @param redisKey Redis键
+     * @param businessKey 业务键
+     * @return 初始值，如果不需要恢复则返回0
+     */
+    private long checkAndRecoverSequence(String redisKey, String businessKey) {
+        try {
+            // 检查Redis Key是否存在
+            Boolean exists = stringRedisTemplate.hasKey(redisKey);
+            if (Boolean.TRUE.equals(exists)) {
+                // Key存在，不需要恢复
+                log.debug("Redis Key存在，无需恢复 - redisKey: {}", redisKey);
+                return 0L;
+            }
+
+            // Key不存在，需要从业务表恢复
+            log.info("Redis Key不存在，开始恢复序列号 - redisKey: {}, businessKey: {}", redisKey, businessKey);
+
+            Long maxSeq = messageClient.getMaxSeqByBusinessKey(businessKey);
+            if (maxSeq == null || maxSeq < 0) {
+                maxSeq = 0L;
+            }
+
+            log.info("从业务表恢复序列号成功 - businessKey: {}, 恢复的最大序列号: {}", businessKey, maxSeq);
+            return maxSeq;
+
+        } catch (Exception e) {
+            log.error("恢复序列号失败 - redisKey: {}, businessKey: {}", redisKey, businessKey, e);
+            return 0L;
+        }
     }
 }

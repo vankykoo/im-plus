@@ -5,7 +5,7 @@ import com.vanky.im.message.entity.Message;
 import com.vanky.im.message.entity.UserMsgList;
 import com.vanky.im.message.mapper.UserMsgListMapper;
 import com.vanky.im.message.service.MessageReceiverService;
-import com.vanky.im.message.service.OfflineMessageService;
+
 import com.vanky.im.message.util.MessageConverter;
 import com.vanky.im.message.model.MessageInfo;
 import com.vanky.im.message.model.PullMessagesRequest;
@@ -28,15 +28,14 @@ import java.util.stream.Collectors;
 import java.util.Comparator;
 
 /**
- * 离线消息同步服务实现类
- * 
+ * 消息同步服务实现类
+ * 基于"持久化是第一原则"的设计理念，直接从数据库查询用户未接收的消息
+ * 不再依赖离线消息缓存，统一消息存储流程
+ *
  * @author vanky
  * @create 2025/7/29
+ * @modified 2025/8/15 - 重构为基于数据库的消息同步，移除离线消息缓存依赖
  */
-// {{CHENGQI:
-// Action: Added; Timestamp: 2025-07-29 14:15:29 +08:00; Reason: 实现离线消息同步服务，提供消息内容同步的核心功能;
-// }}
-// {{START MODIFICATIONS}}
 @Service
 public class OfflineMessageSyncServiceImpl implements OfflineMessageSyncService {
 
@@ -54,8 +53,7 @@ public class OfflineMessageSyncServiceImpl implements OfflineMessageSyncService 
     @Autowired
     private MessageReceiverService messageReceiverService;
 
-    @Autowired
-    private OfflineMessageService offlineMessageService;
+
 
     @Override
     public SyncMessagesResponse checkSyncNeeded(SyncMessagesRequest request) {
@@ -88,7 +86,7 @@ public class OfflineMessageSyncServiceImpl implements OfflineMessageSyncService 
     @Override
     public PullMessagesResponse pullMessagesBatch(PullMessagesRequest request) {
         try {
-            log.info("批量拉取用户离线消息 - 用户ID: {}, 起始序列号: {}, 限制数量: {}",
+            log.info("批量拉取用户消息 - 用户ID: {}, 起始序列号: {}, 限制数量: {}",
                     request.getUserId(), request.getFromSeq(), request.getLimit());
 
             // 1. 参数校验
@@ -96,17 +94,19 @@ public class OfflineMessageSyncServiceImpl implements OfflineMessageSyncService 
                 return PullMessagesResponse.createErrorResponse("请求参数无效");
             }
 
-            // 2. 获取用户的离线消息ID列表
-            List<String> offlineMessageIds = offlineMessageService.getOfflineMessages(request.getUserId(), request.getLimit());
+            // 2. 基于数据库查询用户未接收的消息（持久化是第一原则）
+            // 使用现有的selectUndeliveredByUserIdAndSeqRange方法，直接从数据库查询
+            List<UserMsgList> userMsgLists = userMsgListMapper.selectUndeliveredByUserIdAndSeqRange(
+                    request.getUserId(), request.getFromSeq(), request.getLimit());
 
-            if (CollectionUtils.isEmpty(offlineMessageIds)) {
-                log.info("用户无离线消息 - 用户ID: {}", request.getUserId());
+            if (CollectionUtils.isEmpty(userMsgLists)) {
+                log.info("用户无未接收消息 - 用户ID: {}, 起始序列号: {}", request.getUserId(), request.getFromSeq());
                 return PullMessagesResponse.createEmptyResponse(request.getFromSeq());
             }
 
-            // 3. 将String类型的消息ID转换为Long类型
-            List<Long> msgIds = offlineMessageIds.stream()
-                    .map(Long::valueOf)
+            // 3. 提取消息ID列表
+            List<Long> msgIds = userMsgLists.stream()
+                    .map(UserMsgList::getMsgId)
                     .collect(Collectors.toList());
 
             // 4. 批量查询消息内容
@@ -117,37 +117,41 @@ public class OfflineMessageSyncServiceImpl implements OfflineMessageSyncService 
                 return PullMessagesResponse.createEmptyResponse(request.getFromSeq());
             }
 
-            // 5. 为用户生成全局seq并创建user_msg_list记录
+            // 5. 转换为MessageInfo，使用已存在的seq（持久化是第一原则，seq已在数据库中）
             List<MessageInfo> messageInfos = new ArrayList<>();
-            for (Message message : messages) {
-                // 为用户生成全局seq（用户真正接收到消息）
-                Long userGlobalSeq = messageReceiverService.processSingleReceiver(
-                        request.getUserId(), message.getMsgId().toString(), message.getConversationId());
+            for (UserMsgList userMsgList : userMsgLists) {
+                // 查找对应的消息内容
+                Message message = messages.stream()
+                        .filter(msg -> msg.getMsgId().equals(userMsgList.getMsgId()))
+                        .findFirst()
+                        .orElse(null);
 
-                // 转换为MessageInfo
-                MessageInfo messageInfo = MessageConverter.convertToMessageInfo(message);
-                messageInfo.setSeq(userGlobalSeq);
-                messageInfos.add(messageInfo);
+                if (message != null) {
+                    // 转换为MessageInfo，使用数据库中已存在的seq
+                    MessageInfo messageInfo = MessageConverter.convertToMessageInfo(message);
+                    messageInfo.setSeq(userMsgList.getSeq()); // 使用数据库中的seq
+                    messageInfos.add(messageInfo);
+                }
             }
 
             // 6. 按seq排序
             messageInfos.sort(Comparator.comparing(MessageInfo::getSeq));
 
-            // 7. 清除已拉取的离线消息
-            offlineMessageService.clearOfflineMessages(request.getUserId(), offlineMessageIds);
+            // 7. 不需要清除离线消息队列（因为不再使用离线消息缓存）
+            // 消息状态通过数据库的status字段管理
 
-            // 8. 计算分页信息（简化处理，实际可能需要更复杂的分页逻辑）
-            boolean hasMore = offlineMessageIds.size() >= request.getLimit();
+            // 8. 计算分页信息
+            boolean hasMore = userMsgLists.size() >= request.getLimit();
             Long nextSeq = messageInfos.isEmpty() ? request.getFromSeq() :
                           messageInfos.get(messageInfos.size() - 1).getSeq() + 1;
 
-            log.info("批量拉取用户离线消息完成 - 用户ID: {}, 返回消息数量: {}, 是否还有更多: {}",
+            log.info("批量拉取用户消息完成 - 用户ID: {}, 返回消息数量: {}, 是否还有更多: {}",
                     request.getUserId(), messageInfos.size(), hasMore);
 
             return PullMessagesResponse.createSuccessResponse(messageInfos, hasMore, nextSeq);
 
         } catch (Exception e) {
-            log.error("批量拉取用户离线消息异常 - {}", request, e);
+            log.error("批量拉取用户消息异常 - {}", request, e);
             return PullMessagesResponse.createErrorResponse("服务器内部错误，请稍后重试");
         }
     }

@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.vanky.im.common.util.TokenUtil;
 import com.vanky.im.user.entity.Users;
 import com.vanky.im.user.model.response.UserLoginResponse;
+import com.vanky.im.user.model.response.UserInfoDTO;
+import com.vanky.im.user.model.response.UserStatusDTO;
 import com.vanky.im.user.service.UsersService;
 import com.vanky.im.user.mapper.UsersMapper;
 import com.vanky.im.user.model.request.UserLoginRequest;
@@ -110,7 +112,80 @@ public class UsersServiceImpl extends ServiceImpl<UsersMapper, Users> implements
 
         return "退出成功";
     }
-    
+
+    @Override
+    public UserInfoDTO getUserInfoById(String userId) {
+        Users user = this.lambdaQuery()
+                .eq(Users::getUserId, userId)
+                .one();
+
+        if (user == null) {
+            return null;
+        }
+
+        // 转换为DTO，体现数据传输对象的单一职责
+        UserInfoDTO userInfo = new UserInfoDTO();
+        userInfo.setUserId(user.getUserId());
+        userInfo.setUsername(user.getUsername());
+        userInfo.setStatus(user.getStatus());
+        userInfo.setStatusDesc(getStatusDescription(user.getStatus()));
+        userInfo.setCreateTime(user.getCreateTime() != null ?
+            user.getCreateTime().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() : null);
+        userInfo.setLastLoginTime(user.getLastLoginTime() != null ?
+            user.getLastLoginTime().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() : null);
+
+        return userInfo;
+    }
+
+    @Override
+    public UserStatusDTO getUserStatusById(String userId) {
+        Users user = this.lambdaQuery()
+                .eq(Users::getUserId, userId)
+                .select(Users::getUserId, Users::getStatus, Users::getUpdateTime)
+                .one();
+
+        if (user == null) {
+            return null;
+        }
+
+        UserStatusDTO statusDTO = new UserStatusDTO();
+        statusDTO.setUserId(user.getUserId());
+        statusDTO.setStatus(user.getStatus());
+        statusDTO.setStatusDesc(getStatusDescription(user.getStatus()));
+        statusDTO.setUpdateTime(user.getUpdateTime() != null ?
+            user.getUpdateTime().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() :
+            System.currentTimeMillis());
+
+        return statusDTO;
+    }
+
+    @Override
+    public String getUsernameById(String userId) {
+        Users user = this.lambdaQuery()
+                .eq(Users::getUserId, userId)
+                .select(Users::getUsername)
+                .one();
+
+        return user != null ? user.getUsername() : null;
+    }
+
+
+
+    /**
+     * 获取状态描述
+     * 遵循DRY原则，避免重复的状态描述逻辑
+     */
+    private String getStatusDescription(Integer status) {
+        if (status == null) return "未知";
+        switch (status) {
+            case 1: return "正常";
+            case 0: return "禁用";
+            case -1: return "删除";
+            case 2: return "冻结";
+            default: return "未知";
+        }
+    }
+
     /**
      * 密码加密
      */

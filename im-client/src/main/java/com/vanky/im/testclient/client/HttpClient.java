@@ -216,12 +216,61 @@ public class HttpClient {
      * 从JSON字符串中提取一个完整的JSON对象（作为字符串）
      */
     private String extractJsonObject(String json, String fieldName) {
-        String regex = "\"" + fieldName + "\"\\s*:\\s*(\\{.*?\\})";
-        Pattern pattern = Pattern.compile(regex, Pattern.DOTALL);
+        // 查找字段名的位置
+        String fieldPattern = "\"" + fieldName + "\"\\s*:\\s*";
+        Pattern pattern = Pattern.compile(fieldPattern);
         Matcher matcher = pattern.matcher(json);
-        if (matcher.find()) {
-            return matcher.group(1);
+
+        if (!matcher.find()) {
+            return null;
         }
+
+        int startIndex = matcher.end();
+        if (startIndex >= json.length() || json.charAt(startIndex) != '{') {
+            return null;
+        }
+
+        // 使用括号计数来找到完整的JSON对象
+        int braceCount = 0;
+        int endIndex = startIndex;
+        boolean inString = false;
+        boolean escaped = false;
+
+        for (int i = startIndex; i < json.length(); i++) {
+            char c = json.charAt(i);
+
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (c == '{') {
+                    braceCount++;
+                } else if (c == '}') {
+                    braceCount--;
+                    if (braceCount == 0) {
+                        endIndex = i + 1;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (braceCount == 0 && endIndex > startIndex) {
+            return json.substring(startIndex, endIndex);
+        }
+
         return null;
     }
 
@@ -311,16 +360,19 @@ public class HttpClient {
                         
                         Map<String, Object> messageMap = new HashMap<>();
                         messageMap.put("msgId", parseJsonField(messageItem, "msgId"));
-                        messageMap.put("fromId", parseJsonField(messageItem, "fromUserId"));
-                        messageMap.put("toId", parseJsonField(messageItem, "toUserId"));
+                        messageMap.put("fromUserId", parseJsonField(messageItem, "fromUserId"));  // 修正字段名
+                        messageMap.put("toUserId", parseJsonField(messageItem, "toUserId"));      // 修正字段名
                         messageMap.put("content", parseJsonField(messageItem, "content"));
-                        messageMap.put("type", parseJsonField(messageItem, "msgType"));
+                        messageMap.put("msgType", parseJsonField(messageItem, "msgType"));        // 修正字段名
                         messageMap.put("conversationId", parseJsonField(messageItem, "conversationId"));
                         messageMap.put("seq", parseJsonField(messageItem, "seq"));
                         messageMap.put("createTime", parseJsonField(messageItem, "createTime"));
                         messageMap.put("groupId", parseJsonField(messageItem, "groupId"));
                         
                         System.out.println("[DEBUG] parseGroupMessageList - 解析后的消息Map: " + messageMap);
+                        System.out.println("[DEBUG] parseGroupMessageList - 字段验证 - fromUserId: " + messageMap.get("fromUserId") +
+                                         ", msgType: " + messageMap.get("msgType") +
+                                         ", conversationId: " + messageMap.get("conversationId"));
                         messages.add(messageMap);
                     }
                 }
@@ -366,10 +418,10 @@ public class HttpClient {
                 
                 Map<String, Object> messageMap = new HashMap<>();
                 messageMap.put("msgId", parseJsonField(messageItem, "msgId"));
-                messageMap.put("fromId", parseJsonField(messageItem, "fromId"));
-                messageMap.put("toId", parseJsonField(messageItem, "toId"));
+                messageMap.put("fromUserId", parseJsonField(messageItem, "fromUserId"));  // 修正字段名
+                messageMap.put("toUserId", parseJsonField(messageItem, "toUserId"));      // 修正字段名
                 messageMap.put("content", parseJsonField(messageItem, "content"));
-                messageMap.put("type", parseJsonField(messageItem, "type"));
+                messageMap.put("msgType", parseJsonField(messageItem, "msgType"));        // 修正字段名
                 messageMap.put("conversationId", parseJsonField(messageItem, "conversationId"));
                 messageMap.put("seq", parseJsonField(messageItem, "seq"));
                 messageMap.put("createTime", parseJsonField(messageItem, "createTime"));

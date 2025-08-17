@@ -85,3 +85,5 @@ yarn-error.log*
 /docs
 /.vercel
 /.trae
+/scripts
+/nacos-configs

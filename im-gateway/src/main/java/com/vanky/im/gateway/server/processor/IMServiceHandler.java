@@ -58,7 +58,10 @@ public class IMServiceHandler {
     @Autowired
     private TimeoutManager timeoutManager;
 
-    @Value("${server.node-id}")
+    @Autowired
+    private com.vanky.im.gateway.config.GatewayInstanceManager gatewayInstanceManager;
+
+    @Value("${server.node-id:}")
     private String gatewayNodeId;
 
     /**
@@ -184,9 +187,12 @@ public class IMServiceHandler {
             // 3. 异步处理Redis操作（不阻塞EventLoop）
             CompletableFuture.runAsync(() -> {
                 try {
+                    // 获取动态网关实例ID
+                    String currentGatewayId = gatewayInstanceManager.getGatewayInstanceId();
+
                     // 创建用户会话
                     UserSession userSession = new UserSession(userId, channel.localAddress().toString(),
-                            0, gatewayNodeId, channel);
+                            0, currentGatewayId, channel);
 
                     // 将用户会话存入Redis
                     String sessionKey = SessionConstants.getUserSessionKey(userId);
@@ -196,7 +202,7 @@ public class IMServiceHandler {
                     // 将用户ID添加到在线用户集合
                     redisTemplate.opsForSet().add(RedisKeyConstants.ONLINE_USERS_KEY, userId);
 
-                    log.debug("用户会话Redis存储完成 - 用户: {}", userId);
+                    log.debug("用户会话Redis存储完成 - 用户: {}, 网关ID: {}", userId, currentGatewayId);
                 } catch (Exception e) {
                     log.error("用户会话Redis存储异常 - 用户: {}", userId, e);
                 }

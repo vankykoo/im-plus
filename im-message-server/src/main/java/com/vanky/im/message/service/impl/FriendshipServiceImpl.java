@@ -1,19 +1,23 @@
 package com.vanky.im.message.service.impl;
 
 import com.vanky.im.common.constant.RedisKeyConstants;
+import com.vanky.im.common.model.ApiResponse;
+import com.vanky.im.message.client.UserClient;
 import com.vanky.im.message.service.FriendshipService;
 import com.vanky.im.message.service.FriendshipService.FriendshipInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.concurrent.TimeUnit;
 
 /**
  * 好友关系服务实现类
- * 通过缓存优先策略查询好友关系，缓存未命中时调用im-user服务
+ * 通过缓存优先策略查询好友关系，缓存未命中时使用 Feign 客户端调用 im-user 服务
+ * 体现 KISS 原则，简化 HTTP 调用复杂性
+ *
+ * @updated 2025-08-14 - 重构为使用 Feign 客户端
  */
 @Slf4j
 @Service
@@ -23,10 +27,7 @@ public class FriendshipServiceImpl implements FriendshipService {
     private RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
-    private RestTemplate restTemplate;
-
-    // im-user服务地址（可配置化）
-    private static final String USER_SERVICE_URL = "http://localhost:8081";
+    private UserClient userClient;
 
     @Override
     public boolean areFriends(String userId1, String userId2) {
@@ -97,20 +98,39 @@ public class FriendshipServiceImpl implements FriendshipService {
 
     /**
      * 从im-user服务获取好友关系信息
+     * 使用 Feign 客户端替换 RestTemplate，体现 KISS 原则
      */
     private FriendshipInfo fetchFriendshipInfoFromService(String userId1, String userId2) {
         try {
-            // TODO: 实际调用im-user服务的API
-            // String url = USER_SERVICE_URL + "/api/friendship/" + userId1 + "/" + userId2;
-            // FriendshipResponse response = restTemplate.getForObject(url, FriendshipResponse.class);
-            
-            // 暂时模拟返回好友关系
-            log.debug("调用im-user服务获取好友关系 - 用户1: {}, 用户2: {}", userId1, userId2);
-            return new FriendshipInfo(userId1, userId2, 1, System.currentTimeMillis(), System.currentTimeMillis());
-            
+            log.debug("通过Feign客户端调用im-user服务获取好友关系 - 用户1: {}, 用户2: {}", userId1, userId2);
+
+            // 使用 Feign 客户端调用 im-user 服务，简化 HTTP 调用
+            ApiResponse<UserClient.FriendshipResponse> response = userClient.getFriendship(userId1, userId2);
+
+            if (response != null && response.isSuccess() && response.getData() != null) {
+                UserClient.FriendshipResponse friendshipData = response.getData();
+
+                // 转换为内部的 FriendshipInfo 对象
+                FriendshipInfo friendshipInfo = new FriendshipInfo(
+                    friendshipData.getUserId1(),
+                    friendshipData.getUserId2(),
+                    friendshipData.getRelationshipType(),
+                    friendshipData.getCreateTime(),
+                    friendshipData.getUpdateTime()
+                );
+
+                log.debug("成功获取好友关系 - 用户1: {}, 用户2: {}, 关系类型: {}",
+                        userId1, userId2, friendshipData.getRelationshipType());
+                return friendshipInfo;
+            } else {
+                log.warn("获取好友关系失败 - 用户1: {}, 用户2: {}, 响应: {}", userId1, userId2, response);
+                // 服务调用失败时返回无关系状态
+                return new FriendshipInfo(userId1, userId2, 0, System.currentTimeMillis(), System.currentTimeMillis());
+            }
+
         } catch (Exception e) {
-            log.error("调用im-user服务失败 - 用户1: {}, 用户2: {}", userId1, userId2, e);
-            // 服务调用失败时返回无关系状态
+            log.error("调用用户服务失败 - 用户1: {}, 用户2: {}", userId1, userId2, e);
+            // 异常降级处理，返回无关系状态
             return new FriendshipInfo(userId1, userId2, 0, System.currentTimeMillis(), System.currentTimeMillis());
         }
     }

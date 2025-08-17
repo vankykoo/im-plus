@@ -2,16 +2,19 @@ package com.vanky.im.sequence.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.context.annotation.Configuration;
 
 /**
  * 序列号服务配置类
- * 
+ *
  * @author vanky
  * @since 2025-08-11
+ * 支持Nacos配置动态刷新
  */
 @Data
 @Configuration
+@RefreshScope  // 支持配置动态刷新
 @ConfigurationProperties(prefix = "sequence")
 public class SequenceConfig {
 

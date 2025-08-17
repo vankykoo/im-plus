@@ -46,8 +46,7 @@ public class PrivateMessageProcessor {
     @Autowired
     private OnlineStatusService onlineStatusService;
 
-    @Autowired
-    private OfflineMessageService offlineMessageService;
+
 
     @Autowired
     private GatewayMessagePushService gatewayMessagePushService;
@@ -183,13 +182,14 @@ public class PrivateMessageProcessor {
     }
 
     /**
-     * 处理会话相关逻辑：创建会话、激活用户会话列表、更新未读数
+     * 处理会话相关逻辑：创建会话、激活用户会话列表
+     * 注意：未读数通过user_conversation_list表的unread_count字段管理，在MessageReceiverService中处理
      */
     private void handleConversation(String conversationId, String fromUserId, String toUserId) {
         conversationService.handleConversation(conversationId, fromUserId, toUserId);
         conversationService.activateUserConversationList(fromUserId, conversationId);
         conversationService.activateUserConversationList(toUserId, conversationId);
-        offlineMessageService.incrementUnreadCount(toUserId, conversationId);
+        // 未读数在MessageReceiverService.processSingleReceiver中通过数据库更新，不使用Redis缓存
     }
 
     /**

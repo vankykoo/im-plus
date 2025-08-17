@@ -1,6 +1,7 @@
 package com.vanky.im.testclient.pushpull;
 
 import com.vanky.im.common.protocol.ChatMessage;
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.client.HttpClient;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 
@@ -381,11 +382,11 @@ public class PullCompensationManager {
             if (messageMap.get("msgId") != null) {
                 builder.setUid(messageMap.get("msgId").toString());
             }
-            if (messageMap.get("fromId") != null) {
-                builder.setFromId(messageMap.get("fromId").toString());
+            if (messageMap.get("fromUserId") != null) {  // 修正字段名
+                builder.setFromId(messageMap.get("fromUserId").toString());
             }
-            if (messageMap.get("toId") != null) {
-                builder.setToId(messageMap.get("toId").toString());
+            if (messageMap.get("toUserId") != null) {    // 修正字段名
+                builder.setToId(messageMap.get("toUserId").toString());
             }
             if (messageMap.get("content") != null) {
                 builder.setContent(messageMap.get("content").toString());
@@ -398,10 +399,17 @@ public class PullCompensationManager {
             }
 
             // 设置消息类型
-            if (messageMap.get("type") != null) {
+            if (messageMap.get("msgType") != null) {  // 修正字段名
                 try {
-                    int type = Integer.parseInt(messageMap.get("type").toString());
-                    builder.setType(type);
+                    int type = Integer.parseInt(messageMap.get("msgType").toString());
+                    // 根据MessageInfo的msgType转换为ChatMessage的type
+                    if (type == 1) {
+                        builder.setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE);
+                    } else if (type == 2) {
+                        builder.setType(MessageTypeConstants.GROUP_CHAT_MESSAGE);
+                    } else {
+                        builder.setType(0); // 默认类型
+                    }
                 } catch (NumberFormatException e) {
                     builder.setType(0); // 默认类型
                 }

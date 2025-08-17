@@ -271,9 +271,16 @@ public class OfflineMessageSyncManager {
             if (pullResponse.getTotalCount() > 0) {
                 java.util.List<Object> groupMessages = pullResponse.getMessages(httpClient);
                 System.out.println("[DEBUG] 群聊消息解析完成，消息数量: " + groupMessages.size());
+                System.out.println("[DEBUG] 群聊消息原始响应: " + pullResponse.getRawResponse());
+
                 if (!groupMessages.isEmpty()) {
+                    System.out.println("[DEBUG] 开始显示群聊消息，调用displayMessages");
                     displayMessages(groupMessages, "群聊");
+                } else {
+                    System.out.println("[DEBUG] 群聊消息列表为空，跳过显示");
                 }
+            } else {
+                System.out.println("[DEBUG] 群聊消息总数为0，无消息需要显示");
             }
 
             // 步骤3：处理响应并更新同步点
@@ -482,7 +489,7 @@ public class OfflineMessageSyncManager {
             return;
         }
 
-        // 同时在控制台和GUI中显示消息，确保用户能看到离线消息
+        // 同时在控制台和GUI中显示消息，确保用户能看到同步的消息
         System.out.println("[" + syncType + "] 拉取到 " + messages.size() + " 条消息:");
         for (int i = 0; i < messages.size(); i++) {
             Object messageObj = messages.get(i);
@@ -496,12 +503,12 @@ public class OfflineMessageSyncManager {
                 
                 String msgId = (String) messageMap.get("msgId");
                 String content = (String) messageMap.get("content");
-                String senderId = (String) messageMap.get("senderId");
+                String fromUserId = (String) messageMap.get("fromUserId");  // 修正字段名
                 Object timestamp = messageMap.get("timestamp");
-                
-                System.out.println("  [" + (i + 1) + "] 消息ID: " + msgId + 
-                                 ", 发送者: " + senderId + 
-                                 ", 内容: " + content + 
+
+                System.out.println("  [" + (i + 1) + "] 消息ID: " + msgId +
+                                 ", 发送者: " + fromUserId +
+                                 ", 内容: " + content +
                                  ", 时间: " + timestamp);
             } else {
                 System.out.println("[DEBUG] 消息对象不是Map类型: " + messageObj);

@@ -293,8 +293,8 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
             // 启动心跳
             startHeartbeat();
 
-            // 启动离线消息同步
-            startOfflineMessageSync();
+            // 启动消息同步
+            startMessageSync();
         }
     }
     
@@ -492,40 +492,79 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
     }
 
     /**
-     * 显示同步的离线消息
+     * 显示同步的消息
      * @param messages 消息列表
      * @param syncType 同步类型
      */
     public void displaySyncMessages(java.util.List<Object> messages, String syncType) {
         if (messages == null || messages.isEmpty()) {
+            System.out.println("[DEBUG] UserWindow.displaySyncMessages: 消息列表为空");
             return;
         }
 
-        for (Object messageObj : messages) {
+        System.out.println("[DEBUG] UserWindow.displaySyncMessages: 开始显示 " + messages.size() + " 条消息");
+
+        for (int i = 0; i < messages.size(); i++) {
+            Object messageObj = messages.get(i);
+            System.out.println("[DEBUG] 处理消息[" + i + "]: " + messageObj.getClass().getName());
+
             if (messageObj instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<String, Object> messageMap = (java.util.Map<String, Object>) messageObj;
-                
+
+                System.out.println("[DEBUG] 消息Map内容: " + messageMap);
+
                 String content = (String) messageMap.get("content");
-                String fromId = (String) messageMap.get("fromId");
-                String toId = (String) messageMap.get("toId");
+                String fromUserId = (String) messageMap.get("fromUserId");  // 修正字段名
+                String toUserId = (String) messageMap.get("toUserId");      // 修正字段名
                 String conversationId = (String) messageMap.get("conversationId");
-                String type = (String) messageMap.get("type");
-                
+                Object msgTypeObj = messageMap.get("msgType");              // 修正字段名
+
+                System.out.println("[DEBUG] 解析字段 - content: " + content +
+                                 ", fromUserId: " + fromUserId +
+                                 ", toUserId: " + toUserId +
+                                 ", conversationId: " + conversationId +
+                                 ", msgType: " + msgTypeObj);
+
                 String messageText = null;
-                
-                // 根据消息类型格式化显示
-                if ("1".equals(type)) { // 私聊消息
-                    messageText = String.format("[离线私聊] %s: %s", fromId, content);
-                } else if ("2".equals(type)) { // 群聊消息
-                    messageText = String.format("[离线群聊] %s@%s: %s", fromId, conversationId, content);
+
+                // 根据消息类型格式化显示（msgType是数值类型）
+                if (msgTypeObj != null) {
+                    int msgType = 0;
+                    if (msgTypeObj instanceof Number) {
+                        msgType = ((Number) msgTypeObj).intValue();
+                    } else if (msgTypeObj instanceof String) {
+                        try {
+                            msgType = Integer.parseInt((String) msgTypeObj);
+                        } catch (NumberFormatException e) {
+                            System.err.println("[DEBUG] 无法解析消息类型: " + msgTypeObj);
+                        }
+                    }
+
+                    if (msgType == 1) { // 私聊消息
+                        messageText = String.format("[同步私聊] %s: %s", fromUserId, content);
+                        System.out.println("[DEBUG] 格式化私聊消息: " + messageText);
+                    } else if (msgType == 2) { // 群聊消息
+                        messageText = String.format("[同步群聊] %s@%s: %s", fromUserId, conversationId, content);
+                        System.out.println("[DEBUG] 格式化群聊消息: " + messageText);
+                    } else {
+                        messageText = String.format("[同步消息] %s: %s", fromUserId, content);
+                        System.out.println("[DEBUG] 格式化未知类型消息 (msgType=" + msgType + "): " + messageText);
+                    }
                 }
-                
+
                 if (messageText != null) {
+                    System.out.println("[DEBUG] 显示消息: " + messageText);
                     appendMessage(messageText);
+                } else {
+                    System.err.println("[DEBUG] 无法格式化消息，跳过显示");
                 }
+            } else {
+                System.err.println("[DEBUG] 消息对象不是Map类型: " + messageObj);
             }
         }
+
+        System.out.println("[DEBUG] UserWindow.displaySyncMessages: 消息显示完成");
     }
     
     /**
@@ -549,13 +588,13 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
         SwingUtilities.invokeLater(() -> groupIdInput.setText(groupId));
     }
 
-    // ========== 离线消息同步相关方法 ==========
+    // ========== 消息同步相关方法 ==========
 
     /**
-     * 启动离线消息同步
+     * 启动消息同步
      */
-    private void startOfflineMessageSync() {
-        appendMessage("启动离线消息同步...");
+    private void startMessageSync() {
+        appendMessage("启动消息同步...");
         updateSyncStatus("检查中...", Color.ORANGE);
 
         // 启动同步，带进度回调
@@ -566,7 +605,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
                     switch (status) {
                         case STARTED:
                             updateSyncStatus("同步开始", Color.BLUE);
-                            appendMessage("离线消息同步开始: " + message);
+                            appendMessage("消息同步开始: " + message);
                             break;
                         case SYNCING:
                             updateSyncStatus("同步中...", Color.BLUE);
@@ -574,11 +613,11 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
                             break;
                         case COMPLETED:
                             updateSyncStatus("同步完成", Color.GREEN);
-                            appendMessage("离线消息同步完成: " + message);
+                            appendMessage("消息同步完成: " + message);
                             break;
                         case ERROR:
                             updateSyncStatus("同步失败", Color.RED);
-                            appendMessage("离线消息同步失败: " + message);
+                            appendMessage("消息同步失败: " + message);
                             break;
                     }
                 });

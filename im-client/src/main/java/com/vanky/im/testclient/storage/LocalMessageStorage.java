@@ -12,14 +12,15 @@ import java.util.ArrayList;
 import java.util.HashSet;
 
 /**
- * 本地消息存储管理器（Redis实现版本）
- * 负责管理客户端的本地消息存储和同步状态
- * 支持私聊写扩散和群聊读扩散的混合模式同步
- * 使用真正的Redis连接，替代本地文件存储，与服务端配置统一
+ * 客户端存储管理器（Redis实现版本）
+ * 负责管理客户端的同步序列号存储，符合README文档中的客户端存储Redis Key定义
+ * 只保留两个Redis Key：
+ * 1. client:sync:seq:{userId} - 客户端用户级全局序列号
+ * 2. client:sync:conversation_seq:{userId}:{conversationId} - 客户端会话级全局序列号
  *
  * @author vanky
  * @create 2025/8/3
- * @description 客户端Redis存储实现，替代本地文件存储
+ * @description 客户端Redis存储实现，符合README文档定义
  */
 public class LocalMessageStorage {
 
@@ -29,15 +30,11 @@ public class LocalMessageStorage {
     // Redis Key前缀
     private final String syncSeqPrefix;
     private final String conversationSeqPrefix;
-    private final String messagesPrefix;
-    private final String statsPrefix;
 
     public LocalMessageStorage() {
         // 初始化Key前缀
         this.syncSeqPrefix = RedisConfig.getSyncSeqPrefix();
         this.conversationSeqPrefix = RedisConfig.getConversationSeqPrefix();
-        this.messagesPrefix = RedisConfig.getMessagesPrefix();
-        this.statsPrefix = RedisConfig.getStatsPrefix();
 
         // 初始化Redis连接池
         this.jedisPool = createJedisPool();
@@ -124,7 +121,7 @@ public class LocalMessageStorage {
     public void updateLastSyncSeq(String userId, Long lastSyncSeq) {
         try (Jedis jedis = jedisPool.getResource()) {
             String key = syncSeqPrefix + userId;
-            jedis.setex(key, (int) RedisConfig.getClientDataExpire(), lastSyncSeq.toString());
+            jedis.setex(key, (int) RedisConfig.getClientUserSeqExpire(), lastSyncSeq.toString());
             System.out.println("更新同步序列号成功 - 用户ID: " + userId + ", 序列号: " + lastSyncSeq);
         } catch (Exception e) {
             System.err.println("更新同步序列号失败 - 用户ID: " + userId + ", 序列号: " + lastSyncSeq + ", 错误: " + e.getMessage());
@@ -215,7 +212,7 @@ public class LocalMessageStorage {
 
                 // 设置过期时间
                 if (updatedCount > 0) {
-                    jedis.expire(key, (int) RedisConfig.getClientDataExpire());
+                    jedis.expire(key, (int) RedisConfig.getClientConversationSeqExpire());
                 }
 
                 System.out.println("[DEBUG] 群聊同步点增量更新完成 - 用户ID: " + userId +
@@ -304,7 +301,7 @@ public class LocalMessageStorage {
             // 只有新seq大于当前seq时才更新
             if (newSeq > currentSeq) {
                 jedis.hset(key, conversationId, String.valueOf(newSeq));
-                jedis.expire(key, (int) RedisConfig.getClientDataExpire());
+                jedis.expire(key, (int) RedisConfig.getClientConversationSeqExpire());
 
                 System.out.println("更新群聊会话序列号成功 - 用户ID: " + userId +
                                  ", 会话ID: " + conversationId +
@@ -350,7 +347,7 @@ public class LocalMessageStorage {
             // 只有新seq大于当前seq时才更新
             if (lastSeq > currentSeq) {
                 jedis.hset(key, conversationId, lastSeq.toString());
-                jedis.expire(key, (int) RedisConfig.getClientDataExpire());
+                jedis.expire(key, (int) RedisConfig.getClientConversationSeqExpire());
 
                 System.out.println("更新群聊同步点成功 - 用户ID: " + userId +
                                  ", 会话ID: " + conversationId +
@@ -368,79 +365,9 @@ public class LocalMessageStorage {
         }
     }
 
-    /**
-     * 批量存储消息到Redis（替代本地文件存储）
-     * 使用Redis List存储消息，支持容量限制
-     *
-     * @param userId 用户ID
-     * @param messages 消息列表（JSON格式）
-     * @return 存储是否成功
-     */
-    public boolean storeMessages(String userId, String messages) {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = messagesPrefix + userId;
 
-            // 添加消息到列表头部
-            jedis.lpush(key, messages);
 
-            // 限制列表长度，保留最新的N条消息
-            long maxCount = RedisConfig.getMaxMessageCount();
-            jedis.ltrim(key, 0, maxCount - 1);
 
-            // 设置过期时间
-            jedis.expire(key, (int) RedisConfig.getClientDataExpire());
-
-            // 更新统计信息
-            updateMessageStats(userId, 1);
-
-            System.out.println("消息存储成功 - 用户ID: " + userId);
-            return true;
-        } catch (Exception e) {
-            System.err.println("消息存储失败 - 用户ID: " + userId + ", 错误: " + e.getMessage());
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    /**
-     * 获取用户的本地消息数量
-     *
-     * @param userId 用户ID
-     * @return 本地消息数量
-     */
-    public long getLocalMessageCount(String userId) {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = messagesPrefix + userId;
-            return jedis.llen(key);
-        } catch (Exception e) {
-            System.err.println("获取本地消息数量失败 - 用户ID: " + userId + ", 错误: " + e.getMessage());
-            return 0L;
-        }
-    }
-    
-    /**
-     * 更新消息统计信息
-     *
-     * @param userId 用户ID
-     * @param increment 增量
-     */
-    private void updateMessageStats(String userId, long increment) {
-        try (Jedis jedis = jedisPool.getResource()) {
-            String key = statsPrefix + userId;
-
-            String currentCountStr = jedis.hget(key, "message_count");
-            long currentCount = currentCountStr != null ? Long.parseLong(currentCountStr) : 0L;
-
-            Map<String, String> stats = new HashMap<>();
-            stats.put("message_count", String.valueOf(currentCount + increment));
-            stats.put("last_update", String.valueOf(System.currentTimeMillis()));
-
-            jedis.hmset(key, stats);
-            jedis.expire(key, (int) RedisConfig.getClientDataExpire());
-        } catch (Exception e) {
-            System.err.println("更新消息统计失败 - 用户ID: " + userId + ", 错误: " + e.getMessage());
-        }
-    }
 
     /**
      * 清理用户的本地数据
@@ -449,13 +376,19 @@ public class LocalMessageStorage {
      */
     public void clearUserData(String userId) {
         try (Jedis jedis = jedisPool.getResource()) {
-            // 清理所有相关的键
+            // 清理客户端存储相关的键
             String syncSeqKey = syncSeqPrefix + userId;
-            String conversationSeqKey = conversationSeqPrefix + userId;
-            String messagesKey = messagesPrefix + userId;
-            String statsKey = statsPrefix + userId;
 
-            jedis.del(syncSeqKey, conversationSeqKey, messagesKey, statsKey);
+            // 清理会话级序列号（需要模糊匹配）
+            Set<String> conversationSeqKeys = jedis.keys(conversationSeqPrefix + userId + ":*");
+
+            // 删除用户级序列号
+            jedis.del(syncSeqKey);
+
+            // 删除所有会话级序列号
+            if (!conversationSeqKeys.isEmpty()) {
+                jedis.del(conversationSeqKeys.toArray(new String[0]));
+            }
 
             System.out.println("用户数据清理完成 - 用户ID: " + userId);
         } catch (Exception e) {
@@ -469,16 +402,11 @@ public class LocalMessageStorage {
      */
     public StorageStats getStorageStats() {
         try (Jedis jedis = jedisPool.getResource()) {
-            // 统计Redis中的数据
+            // 统计Redis中的客户端存储数据
             Set<String> syncSeqKeys = jedis.keys(syncSeqPrefix + "*");
-            Set<String> messageKeys = jedis.keys(messagesPrefix + "*");
+            Set<String> conversationSeqKeys = jedis.keys(conversationSeqPrefix + "*");
 
-            long totalSize = 0;
-            for (String key : messageKeys) {
-                totalSize += jedis.llen(key);
-            }
-
-            return new StorageStats(totalSize, syncSeqKeys.size());
+            return new StorageStats(0L, syncSeqKeys.size() + conversationSeqKeys.size());
         } catch (Exception e) {
             System.err.println("获取存储统计信息失败: " + e.getMessage());
             return new StorageStats(0L, 0);

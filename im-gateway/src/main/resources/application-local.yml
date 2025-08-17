@@ -1,0 +1,112 @@
+# IM Gateway 本地配置（降级方案）
+# 当Nacos不可用时，使用此配置文件
+# 使用方式：--spring.profiles.active=local
+
+spring:
+  application:
+    name: im-gateway
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    nacos:
+      discovery:
+        enabled: false  # 禁用Nacos服务发现
+      config:
+        enabled: false  # 禁用Nacos配置中心
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/im-plus?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
+    username: root
+    password: vanky
+    druid:
+      initial-size: 5
+      min-idle: 10
+      max-active: 20
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      max-evictable-idle-time-millis: 900000
+      validation-query: SELECT 1 FROM DUAL
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+
+  data:
+    redis:
+      host: 192.168.10.6
+      port: 6379
+      database: 0
+      password: 123456
+      lettuce:
+        pool:
+          max-active: 20
+          max-wait: -1ms
+          max-idle: 10
+          min-idle: 5
+
+server:
+  port: 8080
+  node-id: gateway-node-1
+
+# Netty 服务器配置
+netty:
+  server:
+    tcp:
+      enabled: true
+      port: 8900
+    udp:
+      enabled: true
+      port: 8901
+    websocket:
+      enabled: true
+      port: 8902
+      path: /websocket
+
+# RocketMQ配置
+rocketmq:
+  name-server: 192.168.10.6:9876
+  producer:
+    group: im-gateway-producer-group
+    send-message-timeout: 3000
+    compress-message-body-threshold: 4096
+    max-message-size: 4194304
+    retry-times-when-send-failed: 2
+    retry-times-when-send-async-failed: 2
+    retry-next-server: true
+  push-consumer:
+    group: im-gateway-push-consumer-group
+    consume-thread-min: 5
+    consume-thread-max: 20
+    consume-message-batch-max-size: 1
+    consume-timeout: 15000
+    max-reconsume-times: 3
+
+# 消息配置
+message:
+  push:
+    topic: TOPIC_PUSH_TO_GATEWAY
+  timeout:
+    enabled: true
+    wheel-size: 512
+    tick-duration: 100
+    default-timeout: 5000
+    max-retry-count: 3
+    retry-backoff-base: 2
+    retry-backoff-max: 30000
+    ticker-thread-name: message-timeout-ticker
+
+# 会话级串行化处理配置
+conversation:
+  processor:
+    enabled: false
+    worker-pool-size: 16
+    queue-capacity: 1000
+    idle-timeout-ms: 300000
+    worker-thread-prefix: "conversation-worker-"
+    monitor-interval-ms: 30000
+    max-conversations: 10000
+    message-timeout-ms: 5000
+    verbose-logging: false
+    queue-full-policy: REJECT
+    shutdown-timeout-ms: 30000

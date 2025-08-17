@@ -117,9 +117,8 @@ public class ConversationSyncServiceImpl implements ConversationSyncService {
                 
                 // 调用用户服务获取对方用户信息
                 String otherUserName = userInfoService.getUsernameById(otherUserId);
-                String otherUserAvatar = userInfoService.getUserAvatarById(otherUserId);
                 overview.setConversationName(otherUserName);
-                overview.setConversationAvatar(otherUserAvatar);
+                overview.setConversationAvatar("/default/user_avatar.png"); // 使用默认头像
             }
         }
     }

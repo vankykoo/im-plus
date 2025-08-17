@@ -4,6 +4,9 @@ server:
 spring:
   application:
     name: im-sequence
+  cloud:
+    compatibility-verifier:
+      enabled: false
   
   # 数据库配置
   datasource:
@@ -15,15 +18,15 @@ spring:
   # Redis配置
   data:
     redis:
-      host: 192.168.200.137
+      host: 192.168.10.6
       port: 6379
       password: 123456
       database: 0
-      timeout: 10000ms
+      timeout: 10000
       lettuce:
         pool:
           max-active: 8
-          max-wait: -1ms
+          max-wait: -1
           max-idle: 8
           min-idle: 0
 
@@ -64,6 +67,32 @@ sequence:
     enabled: true
     message-service-url: "http://localhost:8100"
     timeout-ms: 5000
+
+# Feign客户端配置
+feign:
+  # 启用断路器（降级功能）
+  circuitbreaker:
+    enabled: true
+  client:
+    config:
+      default:
+        # 连接超时时间（毫秒）
+        connect-timeout: 5000
+        # 读取超时时间（毫秒）
+        read-timeout: 10000
+        # 日志级别
+        logger-level: basic
+      im-message-server:
+        # 针对消息服务的特定配置
+        connect-timeout: 5000
+        read-timeout: 10000
+        logger-level: basic
+  # 启用重试机制
+  retryer:
+    enabled: true
+    period: 1000
+    max-period: 3000
+    max-attempts: 3
 
 # 日志配置
 logging:

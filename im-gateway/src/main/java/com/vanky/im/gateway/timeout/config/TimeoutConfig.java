@@ -2,19 +2,22 @@ package com.vanky.im.gateway.timeout.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
 
 /**
  * 消息超时重发配置类
- * 
+ *
  * @author vanky
  * @create 2025/7/27
  * @description 管理消息超时重发相关的配置参数
+ * 支持Nacos配置动态刷新
  */
 @Data
 @Component
+@RefreshScope  // 支持配置动态刷新
 @ConfigurationProperties(prefix = "message.timeout")
 public class TimeoutConfig {
     

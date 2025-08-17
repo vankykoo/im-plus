@@ -2,17 +2,20 @@ package com.vanky.im.gateway.conversation;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.stereotype.Component;
 
 /**
  * 会话处理器配置类
- * 
+ *
  * @author vanky
  * @create 2025/8/7
  * @description 管理会话级串行化处理的相关配置参数
+ * 支持Nacos配置动态刷新
  */
 @Data
 @Component
+@RefreshScope  // 支持配置动态刷新
 @ConfigurationProperties(prefix = "conversation.processor")
 public class ConversationProcessorConfig {
     

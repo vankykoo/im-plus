@@ -1,0 +1,48 @@
+# IM Sequence Service Bootstrap Configuration
+# 此配置文件在application.yml之前加载，用于配置Nacos连接信息
+
+spring:
+  application:
+    name: im-sequence  # 服务名，将在Nacos中注册
+  profiles:
+    active: dev  # 默认环境
+  cloud:
+    nacos:
+      # Nacos服务发现配置
+      discovery:
+        server-addr: 192.168.10.2:8848  # Nacos服务器地址
+        namespace: public  # 命名空间，默认public
+        group: DEFAULT_GROUP  # 服务分组
+        cluster-name: DEFAULT  # 集群名称
+        metadata:
+          version: 1.0.0  # 服务版本
+          zone: default  # 可用区
+        # 序列号服务特有配置
+        instance-enabled: true  # 是否启用实例
+        ephemeral: true  # 是否为临时实例
+        weight: 1.0  # 实例权重
+      # Nacos配置中心配置
+      config:
+        server-addr: 192.168.10.2:8848  # 配置中心地址
+        namespace: public  # 配置命名空间
+        group: DEFAULT_GROUP  # 配置分组
+        file-extension: yml  # 配置文件格式
+        # 共享配置
+        shared-configs:
+          - data-id: common-database.yml  # 数据库公共配置
+            group: DEFAULT_GROUP
+            refresh: true
+          - data-id: common-redis.yml  # Redis公共配置
+            group: DEFAULT_GROUP
+            refresh: true
+        # 扩展配置
+        extension-configs:
+          - data-id: im-sequence-${spring.profiles.active}.yml
+            group: DEFAULT_GROUP
+            refresh: true
+
+# 日志配置
+logging:
+  level:
+    com.alibaba.nacos: INFO
+    org.springframework.cloud.bootstrap: DEBUG

@@ -45,6 +45,8 @@ public class Users {
     @TableField(value = "password")
     private String password;
 
+
+
     /**
      * 用户状态
      */

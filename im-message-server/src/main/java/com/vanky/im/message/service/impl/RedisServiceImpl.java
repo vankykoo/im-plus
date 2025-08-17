@@ -249,85 +249,30 @@ public class RedisServiceImpl implements RedisService {
     @Override
     public Long getUserMaxGlobalSeq(String userId) {
         // {{CHENGQI:
-        // Action: Modified; Timestamp: 2025-08-05 17:45:00 +08:00; Reason: 优化获取用户最大全局序列号，添加数据库降级策略和Redis缓存恢复;
+        // Action: Modified; Timestamp: 2025-08-15 16:15:00 +08:00; Reason: 移除Redis user:global:seq键相关逻辑，直接使用数据库查询，符合持久化第一原则;
         // }}
         // {{START MODIFICATIONS}}
-        String key = RedisKeyConstants.getUserGlobalSeqKey(userId);
-
         try {
-            // 1. 尝试从Redis获取
-            Object value = redisTemplate.opsForValue().get(key);
+            // 直接从数据库查询用户的最大seq
+            Long dbMaxSeq = userMsgListMapper.selectMaxSeqByUserId(userId);
 
-            if (value instanceof Long) {
-                Long maxSeq = (Long) value;
-                log.debug("从Redis获取用户最大全局序列号 - 用户ID: {}, 最大序列号: {}", userId, maxSeq);
-                return maxSeq;
-            } else if (value instanceof Integer) {
-                Long maxSeq = ((Integer) value).longValue();
-                log.debug("从Redis获取用户最大全局序列号 - 用户ID: {}, 最大序列号: {}", userId, maxSeq);
-                return maxSeq;
+            if (dbMaxSeq != null && dbMaxSeq > 0) {
+                log.debug("从数据库获取用户最大全局序列号 - 用户ID: {}, 最大序列号: {}", userId, dbMaxSeq);
+                return dbMaxSeq;
+            } else {
+                // 用户还没有任何消息
+                log.debug("用户无消息记录 - 用户ID: {}", userId);
+                return 0L;
             }
 
-            // 2. Redis中不存在，降级到数据库查询
-            log.info("Redis中不存在用户最大seq，降级到数据库查询 - 用户ID: {}", userId);
-            return getUserMaxGlobalSeqWithFallback(userId, key);
-
         } catch (Exception e) {
-            log.error("从Redis获取用户最大全局序列号失败，降级到数据库查询 - 用户ID: {}", userId, e);
-            // Redis操作失败，降级到数据库查询
-            return getUserMaxGlobalSeqWithFallback(userId, key);
+            log.error("从数据库获取用户最大全局序列号失败 - 用户ID: {}", userId, e);
+            return 0L;
         }
         // {{END MODIFICATIONS}}
     }
 
-    /**
-     * 数据库降级查询用户最大全局序列号，并恢复Redis缓存
-     *
-     * @param userId 用户ID
-     * @param redisKey Redis键
-     * @return 用户最大全局序列号
-     */
-    private Long getUserMaxGlobalSeqWithFallback(String userId, String redisKey) {
-        try {
-            // 1. 从数据库查询用户的最大seq
-            Long dbMaxSeq = userMsgListMapper.selectMaxSeqByUserId(userId);
 
-            if (dbMaxSeq != null && dbMaxSeq > 0) {
-                // 2. 数据库中存在记录，恢复Redis缓存
-                try {
-                    // 注意：这里存储的是当前最大seq，不是下一个seq
-                    // 因为getUserMaxGlobalSeq是查询当前最大值，不是生成新值
-                    redisTemplate.opsForValue().set(redisKey, dbMaxSeq);
-                    log.info("恢复Redis缓存成功 - 用户ID: {}, 最大seq: {}", userId, dbMaxSeq);
-                } catch (Exception redisException) {
-                    log.warn("恢复Redis缓存失败，但不影响返回结果 - 用户ID: {}, 最大seq: {}",
-                            userId, dbMaxSeq, redisException);
-                }
-
-                log.info("从数据库获取用户最大全局序列号 - 用户ID: {}, 最大序列号: {}", userId, dbMaxSeq);
-                return dbMaxSeq;
-            } else {
-                // 3. 数据库中无记录，用户还没有任何消息
-                Long defaultSeq = 0L;
-
-                try {
-                    // 将0写入Redis缓存，表示用户还没有消息
-                    redisTemplate.opsForValue().set(redisKey, defaultSeq);
-                    log.info("用户无消息记录，设置Redis缓存为0 - 用户ID: {}", userId);
-                } catch (Exception redisException) {
-                    log.warn("设置Redis缓存失败，但不影响返回结果 - 用户ID: {}", userId, redisException);
-                }
-
-                log.info("用户无消息记录，返回默认值0 - 用户ID: {}", userId);
-                return defaultSeq;
-            }
-
-        } catch (Exception e) {
-            log.error("数据库查询用户最大全局序列号也失败 - 用户ID: {}", userId, e);
-            // 完全降级：返回0，表示无法确定用户的seq状态
-            return 0L;
-        }
-    }
 
     // ========== 新增方法实现：消息已读功能支持 ==========
 

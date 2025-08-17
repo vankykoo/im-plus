@@ -6,16 +6,14 @@ import com.vanky.im.message.model.SyncMessagesRequest;
 import com.vanky.im.message.model.SyncMessagesResponse;
 
 /**
- * 离线消息同步服务接口
- * 实现离线消息拉取第二步：消息内容同步功能
- * 
+ * 消息同步服务接口
+ * 基于"持久化是第一原则"的设计理念，提供消息内容同步功能
+ * 直接从数据库查询用户未接收的消息，不依赖离线消息缓存
+ *
  * @author vanky
  * @create 2025/7/29
+ * @modified 2025/8/15 - 重构为基于数据库的消息同步服务
  */
-// {{CHENGQI:
-// Action: Added; Timestamp: 2025-07-29 14:15:29 +08:00; Reason: 创建离线消息同步服务接口，定义消息内容同步的核心方法;
-// }}
-// {{START MODIFICATIONS}}
 public interface OfflineMessageSyncService {
 
     /**
@@ -28,9 +26,9 @@ public interface OfflineMessageSyncService {
     SyncMessagesResponse checkSyncNeeded(SyncMessagesRequest request);
 
     /**
-     * 批量拉取用户的离线消息
-     * 根据起始序列号分页返回消息内容
-     * 
+     * 批量拉取用户的未接收消息
+     * 基于数据库查询用户未接收的消息，根据起始序列号分页返回消息内容
+     *
      * @param request 批量拉取请求
      * @return 批量拉取响应，包含消息列表和分页信息
      */

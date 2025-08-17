@@ -34,4 +34,20 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(String message) {
         return error(500, message);
     }
-} 
+
+    /**
+     * 判断响应是否成功
+     * @return true-成功，false-失败
+     */
+    public boolean isSuccess() {
+        return code == 200;
+    }
+
+    /**
+     * 获取错误消息
+     * @return 错误消息
+     */
+    public String getErrorMessage() {
+        return message;
+    }
+}

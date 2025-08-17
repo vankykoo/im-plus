@@ -1,20 +1,14 @@
 # IM Plus - 企业级即时通讯系统
-
 > 🚀 基于Spring Boot + Netty + Redis + RocketMQ的高性能分布式即时通讯解决方案
-
 [![Java](https://img.shields.io/badge/Java-17-orange.svg)](https://www.oracle.com/java/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.3-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Netty](https://img.shields.io/badge/Netty-4.1.119-blue.svg)](https://netty.io/)
 [![Redis](https://img.shields.io/badge/Redis-Latest-red.svg)](https://redis.io/)
 [![RocketMQ](https://img.shields.io/badge/RocketMQ-4.9.6-orange.svg)](https://rocketmq.apache.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
 IM Plus是一个现代化的即时通讯系统，采用微服务架构设计，支持私聊、群聊等核心功能。系统具备高并发、高可用、易扩展的特点，适用于企业内部通讯、社交应用、客服系统等多种场景。
-
 **🎯 项目状态：** 核心功能已实现，架构设计优秀，适合学习和二次开发
-
 ## ⭐ 核心亮点
-
 ### 🎯 架构创新
 - 🚀 **推拉结合传输模式**: 推送保证实时性，拉取保证最终一致性，序列号驱动同步
 - 🏗️ **统一消息表设计**: 私聊和群聊消息统一存储，简化架构，便于维护扩展
@@ -22,7 +16,6 @@ IM Plus是一个现代化的即时通讯系统，采用微服务架构设计，�
 - 🔄 **双重确认机制**: 发送回执 + 接收ACK，状态驱动的消息生命周期管理
 - 🎯 **会话级串行化处理**: 网关层会话工作队列模型，保证同一会话消息严格顺序性
 - 🔀 **消息分离架构**: ACK消息与业务消息分离处理，统一分发器模式，避免竞争条件
-
 ### 🎲 自研序列号服务
 - **高性能架构**: 基于Redis+Lua脚本的分段预分配策略，万级QPS序列号生成
 - **原子操作保证**: Lua脚本确保序列号生成的原子性，避免竞态条件
@@ -30,7 +23,6 @@ IM Plus是一个现代化的即时通讯系统，采用微服务架构设计，�
 - **异步持久化**: 独立线程池异步持久化，不阻塞主请求响应
 - **多层降级策略**: 服务不可用时自动切换到备用方案，保证系统可用性
 - **企业级监控**: 完整的健康检查、统计信息和性能监控体系
-
 ### 🛠️ 核心功能
 - ✅ **私聊消息**: 一对一实时消息收发，支持写扩散模式，包含权限校验和黑名单机制
 - ✅ **群聊消息**: 群组聊天，支持读扩散模式，适合大群场景，轻量级通知推送
@@ -44,7 +36,6 @@ IM Plus是一个现代化的即时通讯系统，采用微服务架构设计，�
 - ✅ **分布式架构**: 微服务架构，支持水平扩展，无状态设计
 - ✅ **高性能序列号**: 独立序列号生成服务，Redis+Lua脚本原子操作，分段预分配策略
 - ⚠️ **用户管理**: 基础架构已实现，服务间调用待完善（存在技术债务）
-
 ### 🔥 技术特性
 - ⚡ **高性能**: 基于Netty NIO，支持万级并发连接，消息推送延迟 < 100ms
 - 🛡️ **高可用**: Redis + RocketMQ消息队列保证服务可用性，设计目标99.9% SLA
@@ -54,11 +45,8 @@ IM Plus是一个现代化的即时通讯系统，采用微服务架构设计，�
 - 🚀 **缓存优化**: Redis缓存热点数据，智能过期策略，提升响应速度
 - ⚖️ **负载均衡**: 网关层负载均衡，支持多实例部署，自动故障转移
 - 🎯 **智能路由**: 基于RocketMQ的分布式消息路由，支持跨网关推送
-
 ## 🏗️ 系统架构
-
 ### 🎨 整体架构图
-
 ```mermaid
 graph TB
     subgraph "客户端层"
@@ -66,61 +54,50 @@ graph TB
         C2[TCP客户端]
         C3[UDP客户端]
     end
-
     subgraph "网关层"
         GW[im-gateway:8080]
         GW_TCP[TCP:8900]
         GW_WS[WebSocket:8902]
         GW_UDP[UDP:8901]
     end
-
     subgraph "业务服务层"
         USER[im-user:8090]
         MSG[im-message-server:8100]
         SEQ[im-sequence:8084]
     end
-
     subgraph "消息中间件"
         MQ[RocketMQ]
         MQ_TOPIC1[TOPIC_CONVERSATION_MESSAGE]
         MQ_TOPIC2[TOPIC_MESSAGE_ACK]
         MQ_TOPIC3[TOPIC_PUSH_TO_GATEWAY]
     end
-
     subgraph "存储层"
         REDIS[Redis集群]
         MYSQL[MySQL数据库]
     end
-
     C1 --> GW_WS
     C2 --> GW_TCP
     C3 --> GW_UDP
     GW_WS --> GW
     GW_TCP --> GW
     GW_UDP --> GW
-
     GW --> USER
     GW --> MSG
     MSG --> SEQ
-
     MSG --> MQ_TOPIC1
     MSG --> MQ_TOPIC2
     MSG --> MQ_TOPIC3
     MQ_TOPIC3 --> GW
-
     USER --> REDIS
     MSG --> REDIS
     SEQ --> REDIS
-
     USER --> MYSQL
     MSG --> MYSQL
     SEQ --> MYSQL
-
     style SEQ fill:#e1f5fe
     style REDIS fill:#fff3e0
     style MQ fill:#f3e5f5
 ```
-
 ### 📦 模块结构
 - **im-gateway**: 网关服务，负责客户端连接管理、消息路由转发、负载均衡、协议适配、会话级串行化处理
 - **im-user**: 用户服务，提供用户注册、登录、认证、好友关系管理、在线状态管理
@@ -128,14 +105,11 @@ graph TB
 - **im-sequence**: 序列号服务，基于Redis+Lua脚本的高性能序列号生成器，支持分段预分配和异步持久化
 - **im-common**: 通用模块，包含协议定义、工具类、常量、共享模型、Redis配置等
 - **im-client**: 客户端实现，支持WebSocket、TCP、UDP三种连接协议，Redis存储模拟
-
 ### 🛠️ 技术栈
-
 #### 核心框架
 - **后端框架**: Spring Boot 3.4.3 - 企业级微服务框架
 - **通信框架**: Netty 4.1.119.Final - 高性能异步网络通信
 - **开发语言**: Java 17 - 现代化Java开发
-
 #### 中间件
 - **消息队列**: RocketMQ 4.9.6 - 分布式消息中间件，支持事务消息和顺序消费
   - TOPIC_CONVERSATION_MESSAGE: 业务消息Topic，支持顺序消费
@@ -146,34 +120,26 @@ graph TB
   - 消息缓存: 离线消息、会话列表、用户状态缓存
 - **数据库**: MySQL 8.0 + MyBatis Plus 3.5.10.1 - 关系型数据库持久化
 - **序列号生成**: 自研高性能序列号服务 - Redis+Lua脚本，分段预分配，万级QPS
-
 #### 通信协议
 - **序列化**: Protobuf 3.25.2 - 高效二进制序列化
 - **连接协议**: WebSocket、TCP、UDP - 多协议支持
 - **消息协议**: 自定义ChatMessage协议 - 支持扩展字段
-
 #### 架构模式
 - **消息传输**: 推拉结合模式 - 实时性 + 最终一致性
 - **存储模式**: 私聊写扩散 + 群聊读扩散 - 性能最优化
 - **可靠性**: 双重确认 + 时间轮超时重发 + 幂等性保证
 - **会话管理**: 统一消息表 + 会话列表同步 + Redis缓存
 - **序列号生成**: 分段预分配 + Redis原子操作 + 异步持久化 - 高性能无锁设计
-
 ## 📡 消息协议 (ChatMessage.proto)
-
 ### 协议概述
 IM Plus采用基于Protobuf 3.25.2的自定义ChatMessage协议，支持私聊、群聊、系统消息等多种消息类型。协议设计充分考虑了推拉结合消息传输模式的需求，通过扩展字段支持序列号驱动的消息同步机制。
-
 ### Proto文件定义
 ```protobuf
 syntax = "proto3";
-
 package com.vanky.im.common.protocol;
-
 // 定义Java代码生成相关的选项
 option java_package = "com.vanky.im.common.protocol";
 option java_multiple_files = true;
-
 message ChatMessage {
   int32 type = 1;           // 协议类型
   string content = 2;       // 消息内容
@@ -196,9 +162,7 @@ message ChatMessage {
   ReadNotification readNotification = 16; // 已读通知信息
 }
 ```
-
 ### 字段详细说明
-
 #### 🔹 基础消息字段
 | 字段 | 类型 | 说明 | 使用场景 |
 |------|------|------|----------|
@@ -210,71 +174,56 @@ message ChatMessage {
 | `seq` | string | 客户端生成的消息序列号 | 客户端消息排序、重发队列管理 |
 | `timestamp` | int64 | 消息时间戳（毫秒） | 消息排序、过期检查、显示时间 |
 | `retry` | int32 | 重试次数计数器 | 超时重发机制、失败统计 |
-
 #### 🔹 身份认证字段
 | 字段 | 类型 | 说明 | 使用场景 |
 |------|------|------|----------|
 | `token` | string | JWT身份验证令牌 | 连接建立时的身份验证，防止非法连接 |
-
 #### 🔹 会话管理字段
 | 字段 | 类型 | 说明 | 使用场景 |
 |------|------|------|----------|
 | `conversationId` | string | 会话唯一标识 | 私聊格式：`private_小ID_大ID`<br>群聊格式：`group_群组ID` |
-
 #### 🔹 消息回执字段
 | 字段 | 类型 | 说明 | 使用场景 |
 |------|------|------|----------|
 | `clientSeq` | string | 客户端临时序列号，UUID格式 | 消息发送回执匹配、幂等性保证、重发队列管理 |
 | `readReceipt` | ReadReceipt | 已读回执信息 | 消息已读状态管理、已读回执通知 |
 | `readNotification` | ReadNotification | 已读通知信息 | 已读状态变更通知、消息状态同步 |
-
 #### 🔹 推拉结合模式字段（核心创新）
 | 字段 | 类型 | 说明 | 使用场景 |
 |------|------|------|----------|
 | `userSeq` | int64 | 用户级全局序列号 | **私聊消息**：标识用户接收到的消息顺序<br>空洞检测、离线消息拉取、消息去重 |
 | `conversationSeq` | int64 | 会话级序列号 | **群聊消息**：标识会话内消息顺序<br>群聊消息同步、会话状态管理 |
 | `expectedSeq` | int64 | 客户端期望的下一个序列号 | 消息空洞检测、拉取补偿触发条件 |
-
 ### 使用场景说明
-
 #### 私聊消息流程
 1. **发送阶段**：客户端设置`type=3001`、`fromId`、`toId`、`content`、`clientSeq`、`conversationId`
 2. **服务端处理**：生成`uid`、`userSeq`，分配消息序列号
 3. **推送阶段**：服务端推送时携带`userSeq`，客户端检查序列号连续性
 4. **确认阶段**：客户端发送ACK，服务端更新消息状态
-
 #### 群聊消息流程
 1. **发送阶段**：客户端设置`type=3002`、`fromId`、`toId`(群组ID)、`content`、`conversationId`
 2. **服务端处理**：生成`conversationSeq`，创建轻量级通知
 3. **通知推送**：推送`type=1007`通知，携带`conversationSeq`
 4. **主动拉取**：客户端基于`conversationSeq`主动拉取完整消息内容
-
 #### 推拉结合同步
 1. **实时推送**：在线用户接收推送消息，检查`userSeq`/`conversationSeq`连续性
 2. **空洞检测**：发现序列号空洞时，使用`expectedSeq`触发拉取补偿
 3. **离线拉取**：用户上线后，基于本地序列号与服务端对比，拉取缺失消息
 4. **顺序保证**：通过乱序缓冲区确保消息按序处理和显示
-
 ### 与系统架构的集成
-
 #### 消息队列集成
 - **RocketMQ Key**：使用`conversationId`作为消息Key，确保同一会话消息的顺序投递
 - **消息分离**：业务消息和ACK消息使用不同Topic，避免竞争条件
-
 #### 数据库存储
 - **统一消息表**：`uid`作为主键，`conversationId`用于会话关联
 - **序列号索引**：`userSeq`和`conversationSeq`用于高效的范围查询
-
 #### Redis缓存
 - **消息缓存**：以`uid`为Key缓存消息内容，TTL 1天
 - **序列号管理**：分别缓存用户级和会话级序列号，支持高并发生成
-
 #### 网关路由
 - **会话级串行化**：基于`conversationId`进行哈希分配，确保同一会话消息串行处理
 - **多协议支持**：WebSocket、TCP、UDP三种协议统一使用ChatMessage格式
-
 ## 🌐 服务端口配置
-
 ### 🚀 应用服务端口
 | 服务 | 端口 | 协议 | 说明 |
 |------|------|------|------|
@@ -285,9 +234,7 @@ message ChatMessage {
 | **im-user** | 8090 | HTTP | 用户服务API端口 |
 | **im-message-server** | 8100 | HTTP | 消息服务API端口 |
 | **im-sequence** | 8084 | HTTP | 序列号服务API端口 |
-
 ## 📋 已实现功能
-
 ### 1. 用户管理系统
 - **用户注册**: 支持用户ID唯一性校验，密码加密存储
 - **用户登录**: JWT Token认证，支持多端登录
@@ -295,20 +242,17 @@ message ChatMessage {
 - **在线状态**: Redis存储用户在线状态，实时更新
 - **好友关系**: 好友关系校验，黑名单机制
 - **用户状态**: 用户封禁、禁言状态检查
-
 **API接口**:
 ```
 POST /users/register  - 用户注册
 POST /users/login     - 用户登录
 GET  /users/logout/{userId} - 用户退出
 ```
-
 ### 2. 连接管理系统
 - **多协议支持**: WebSocket、TCP、UDP三种连接方式
 - **连接认证**: Token验证，防止非法连接
 - **会话管理**: Redis存储用户会话信息，支持分布式部署
 - **心跳保活**: 自动心跳检测，及时清理无效连接
-
 ### 3. 私聊消息系统 (写扩散模式)
 - **消息发送**: 实时消息推送，支持文本、图片等多种类型
 - **消息存储**: 为每个用户单独存储消息副本，读取性能优异
@@ -317,12 +261,10 @@ GET  /users/logout/{userId} - 用户退出
 - **历史消息**: 支持历史消息查询和分页
 - **权限校验**: 用户状态、好友关系、黑名单检查
 - **会话管理**: 维护会话列表，更新未读数和最新消息
-
 **数据库设计**:
 - `message`: 统一存储私聊和群聊消息内容
 - `user_msg_list`: 用户消息索引表，支持快速查询
 - `user_conversation_list`: 用户会话列表，包含未读数和最新消息ID
-
 ### 4. 群聊消息系统 (读扩散模式)
 - **群组管理**: 群组成员管理，权限控制
 - **消息广播**: 向群组所有在线成员推送消息
@@ -331,12 +273,10 @@ GET  /users/logout/{userId} - 用户退出
 - **消息确认**: ACK确认机制，确保消息可靠投递
 - **超时重发**: 基于时间轮算法的消息超时重发机制
 - **会话管理**: 维护群聊会话列表，更新未读数和最新消息
-
 **数据库设计**:
 - `message`: 统一存储私聊和群聊消息内容
 - `conversation_msg_list`: 会话消息索引表
 - `user_conversation_list`: 用户会话列表，包含未读数和最新消息ID
-
 ### 5. 消息队列系统
 - **RocketMQ集成**: 异步消息处理，提升系统性能
 - **消息推送**: 跨网关消息推送，支持分布式部署
@@ -344,7 +284,6 @@ GET  /users/logout/{userId} - 用户退出
 - **负载均衡**: 基于Topic的消息路由
 - **消息分类**: 私聊消息和群聊消息使用不同的Topic
 - **消息确认**: 消息ACK确认机制，确保消息可靠投递
-
 ### 6. 缓存系统
 - **Redis集成**: 热点数据缓存，提升响应速度
 - **会话缓存**: 用户会话信息缓存，支持快速查询
@@ -352,7 +291,6 @@ GET  /users/logout/{userId} - 用户退出
 - **在线用户**: 在线用户集合缓存，实时状态管理
 - **序列号生成**: 基于Redis的全局序列号和用户级序列号生成
 - **会话列表**: 会话列表缓存，支持快速渲染首屏
-
 ### 7. 数据存储系统
 - **MySQL持久化**: 消息、用户、群组等数据持久化存储
 - **MyBatis Plus**: 简化数据库操作，提供丰富的查询功能
@@ -360,16 +298,12 @@ GET  /users/logout/{userId} - 用户退出
 - **统一消息表**: 私聊和群聊消息统一存储在message表中
 - **会话管理**: 用户会话列表表，支持未读数和最新消息管理
 - **索引优化**: 用户消息索引表，支持高效的消息查询
-
 ## 🔄 消息处理流程
-
 ### 私聊消息完整流程（写扩散模式）
-
 #### 阶段1：客户端发送消息
 1. **消息构建**：客户端构建ChatMessage协议对象，包含发送方ID、接收方ID、消息内容、客户端序列号(clientSeq)等
 2. **会话ID生成**：客户端生成会话ID（格式：`private_小ID_大ID`），确保同一对用户的会话ID一致
 3. **协议封装**：将消息封装为Protobuf格式，通过WebSocket/TCP连接发送到网关
-
 #### 阶段2：网关层处理（im-gateway）
 4. **会话级串行化处理**：
    - ConversationDispatcher根据conversationId将消息路由到对应的会话工作队列
@@ -382,7 +316,6 @@ GET  /users/logout/{userId} - 用户退出
    - 将消息投递到TOPIC_CONVERSATION_MESSAGE主题，标签为"private"
    - 使用conversationId作为消息Key，确保同一会话消息的顺序投递
    - 异步发送并处理投递结果，支持消息发送回执机制
-
 #### 阶段3：消息服务层处理（im-message-server）
 8. **消息消费**：ConversationMessageConsumer使用MessageListenerOrderly接口从RocketMQ顺序消费私聊消息
 9. **幂等性检查**：基于clientSeq检查消息是否重复处理，重复消息直接返回之前的处理结果
@@ -420,7 +353,6 @@ GET  /users/logout/{userId} - 用户退出
     - **步骤9 - 事务提交**：
       - 通过Spring事务管理自动完成最终确认
       - 确保数据一致性
-
 #### 阶段4：消息推送和确认
 11. **网关推送**：GatewayPushMessageConsumer接收推送消息，通过targetUserId属性正确路由到目标用户
 12. **超时重发**：基于时间轮算法的消息超时重发机制，只有真正推送给客户端的消息才添加超时任务
@@ -428,24 +360,19 @@ GET  /users/logout/{userId} - 用户退出
 14. **ACK消息分离处理**：MessageAckConsumer使用并发模式处理ACK消息，通过统一分发器ImMessageHandler路由到MessageAckProcessor
 15. **消息状态更新**：ACK处理器更新消息状态为"推送成功"，取消超时重发任务
 16. **发送回执处理**：客户端通过clientSeq匹配重发队列中的消息，更新本地状态并移除重发任务
-
 **涉及的数据表操作**：
 - `message`表：插入1条消息记录
 - `user_msg_list`表：插入2条记录（发送方和接收方各1条，确保userSeq连续性）
 - `user_conversation_list`表：更新2条记录（发送方和接收方的会话信息）
 - `conversation`表：创建或更新1条会话记录
-
 **性能优化特性**：
 - 发送方回执机制：通过MessageSendReceiptService发送轻量级确认，减少50%网络传输
 - 推送优化：仅向接收方推送完整消息，发送方通过回执获得确认
-
 ### 群聊消息完整流程（读扩散模式）
-
 #### 阶段1：客户端发送群聊消息
 1. **群聊消息构建**：客户端构建ChatMessage，设置发送方ID、群组ID、消息内容、客户端序列号(clientSeq)
 2. **群聊会话ID**：客户端生成群聊会话ID（格式：`group_群组ID`）
 3. **消息发送**：通过网络连接发送到网关层
-
 #### 阶段2：网关层处理（im-gateway）
 4. **会话级串行化**：同私聊流程，确保同一群聊会话内消息的顺序性
 5. **群聊消息预处理**：
@@ -453,7 +380,6 @@ GET  /users/logout/{userId} - 用户退出
    - 直接使用客户端传入的conversationId
    - 设置conversationId字段到ChatMessage协议中
 6. **RocketMQ投递**：投递到TOPIC_CONVERSATION_MESSAGE主题，标签为"group"
-
 #### 阶段3：消息服务层处理（im-message-server）
 7. **群聊消息消费**：ConversationMessageConsumer使用MessageListenerOrderly接口从RocketMQ顺序消费群聊消息
 8. **幂等性检查**：基于clientSeq检查消息是否重复处理，重复消息直接忽略（统一推送理念：发送方通过消息拉取补偿获取消息）
@@ -478,7 +404,6 @@ GET  /users/logout/{userId} - 用户退出
    - **步骤10 - 记录幂等性结果**：基于clientSeq记录处理结果，TTL=300秒
    - **步骤11 - 事务提交**：通过Spring事务管理确保数据一致性
    - **步骤12 - 统一推送逻辑**：原有回执机制已被统一推送逻辑替代，无需单独发送回执
-
 #### 阶段4：群成员消息分发
 10. **轻量级通知机制**（读扩散核心）：
     - GroupNotificationService创建轻量级通知消息
@@ -488,7 +413,6 @@ GET  /users/logout/{userId} - 用户退出
 11. **离线成员处理**：
     - 离线成员不接收实时通知
     - 成员上线后通过会话同步机制发现新消息并主动拉取
-
 #### 阶段5：消息读取和确认
 12. **主动拉取**：客户端基于会话序列号主动拉取群聊消息
     - 调用`/api/group-messages/pull`接口，传入conversationId和序列号范围
@@ -498,58 +422,47 @@ GET  /users/logout/{userId} - 用户退出
     - ACK消息格式：conversationId:seq（如"group_123:5"）
     - MessageAckConsumer并发处理ACK消息，更新Redis中的用户会话同步点
 14. **已读状态更新**：客户端更新本地已读序列号，服务端同步更新Redis中的`user:conversation:seq:{userId}`
-
 **涉及的数据表操作**：
 - `message`表：插入1条消息记录
 - `conversation_msg_list`表：插入1条记录（消息ID与会话序列号映射）
 - `user_conversation_list`表：简化更新（只更新last_update_time，不计算unread_count）
 - `conversation`表：更新1条群聊会话记录
-
 ### 推拉结合消息传输模式（重大架构特性）
-
 #### 核心理念
 - **推送为主**：通过长连接主动推送新消息，保证实时性
 - **拉取为辅**：通过拉取补偿机制保证最终一致性
 - **序列号驱动**：以序列号作为推拉模式之间的同步标准
-
 #### 客户端核心组件
 1. **UnifiedMessageProcessor**：统一消息处理器
    - 检查消息序列号连续性（userSeq用于私聊，conversationSeq用于群聊）
    - 触发拉取补偿机制
    - 管理乱序缓冲区
    - 支持连续消息立即处理，乱序消息缓存等待
-
 2. **OutOfOrderBuffer**：乱序缓冲区
    - 存储提前到达的消息（最大容量1000条）
    - 按序释放可处理的消息
    - 内存管理和过期清理
    - 支持期望序列号更新和缓冲区清理
-
 3. **MessageGapDetector**：消息空洞检测器
    - 检测消息序列号中的空洞
    - 计算空洞范围（GapRange）
    - 判断消息状态（SEQUENTIAL/OUT_OF_ORDER/DUPLICATE_OR_EXPIRED/INVALID）
-
 4. **PullCompensationManager**：拉取补偿管理器
    - 执行消息拉取补偿（私聊和群聊分别处理）
    - 支持重试机制和错误处理（最大重试3次，指数退避策略）
    - 异步执行，避免阻塞实时消息处理
-
 #### 处理流程
 1. **接收消息** → 提取序列号 → 检查连续性
 2. **连续消息**：立即渲染 + 更新序列号 + 检查缓冲区释放
 3. **乱序消息**：检测空洞 + 触发拉取补偿 + 缓存消息到乱序缓冲区
 4. **拉取补偿**：获取缺失消息 → 按序处理 → 释放缓冲区 → 更新本地序列号
-
 #### 协议扩展
 ChatMessage.proto新增字段：
 - `userSeq`：用户级全局序列号（私聊使用）
 - `conversationSeq`：会话级序列号（群聊使用）
 - `expectedSeq`：客户端期望的下一个序列号
 - `clientSeq`：客户端序列号（用于幂等性和回执）
-
 ### 写扩散 vs 读扩散对比
-
 | 对比维度 | 私聊（写扩散） | 群聊（读扩散） |
 |---------|---------------|---------------|
 | **存储策略** | 为每个用户创建消息副本 | 消息只存储一份 |
@@ -564,80 +477,64 @@ ChatMessage.proto新增字段：
 | **离线处理** | 消息已存储，上线后通过userSeq空洞检测拉取 | 上线后通过会话同步发现新消息并拉取 |
 | **发送确认** | 推送包含clientSeq的完整消息给发送方 | 推送包含clientSeq的轻量级通知给发送方 |
 | **数据一致性** | 每用户一条user_msg_list记录 | 每消息一条conversation_msg_list记录 |
-
 ### 消息状态生命周期
 1. **0-已发送**：消息已保存到数据库，等待推送
 2. **1-推送成功**：客户端已确认接收消息
 3. **2-已读**：用户已读取消息内容
 4. **3-撤回**：消息被发送方撤回
 5. **4-推送失败**：多次重试后仍无法推送成功
-
 ### 高性能序列号生成系统（im-sequence）
-
 #### 核心架构
 - **技术栈**: Redis + Lua脚本 + 分段预分配策略
 - **性能指标**: 万级QPS，毫秒级响应，支持1000+并发
 - **数据模型**: 单表设计，使用 `section_key` 统一管理分段（u_123, c_456格式）
-
 #### 分段策略
 ```
 用户序列号分段: u_{userId % 1024}
 会话序列号分段: c_{hash(conversationId) % 1024}
 ```
-
 #### 工作原理
 1. **分段键生成**: 根据业务key生成对应的分段键
 2. **Redis原子操作**: 使用Lua脚本保证序列号生成的原子性
 3. **内存预分配**: 每个分段预分配10000个序列号，减少99%数据库写入
 4. **异步持久化**: 独立线程池异步持久化到MySQL，不阻塞主请求
 5. **降级策略**: 服务不可用时自动切换到原有Redis方案
-
 #### 技术优势
 - **高性能**: 基于Redis单线程模型，避免锁竞争
 - **高并发**: 1024个分段，支持无锁并发访问
 - **高可用**: 多层降级策略，完善的容错机制
 - **可扩展**: 支持新业务类型，前缀机制易于扩展
-
 ## 🔧 核心特性
-
 ### 消息可靠性保障
-
 #### 双重确认机制
 - **发送回执（MESSAGE_SEND_RECEIPT）**: 服务端处理完消息后向发送方返回回执，包含服务端生成的msgId和seq
 - **接收ACK确认**: 客户端接收消息后发送确认，确保消息送达
 - **批量ACK机制**: 支持离线消息的批量确认（BATCH_MESSAGE_ACK），提高确认效率
 - **群聊会话ACK**: 群聊消息支持会话级ACK确认（GROUP_CONVERSATION_ACK），格式为conversationId:seq
-
 #### 消息分离架构
 - **业务消息Topic**: TOPIC_CONVERSATION_MESSAGE，使用MessageListenerOrderly确保严格顺序处理
 - **ACK消息Topic**: TOPIC_MESSAGE_ACK，使用MessageListenerConcurrently并发处理，避免竞争条件
 - **统一分发器**: ImMessageHandler提供统一的消息路由、异常处理和监控功能
 - **处理器适配**: MessageAckProcessorAdapter等适配器统一处理不同类型的ACK消息
-
 #### 超时重发机制
 - **时间轮算法**: 基于512槽位时间轮，100ms tick间隔，O(1)任务添加/删除
 - **指数退避策略**: 最大重试3次，超时时间5s→10s→20s→30s
 - **智能重发**: 只有真正推送给客户端的消息才添加超时任务，用户离线时自动放弃
 - **任务管理**: 支持任务取消、统计监控、内存管理
-
 #### 幂等性保证
 - **客户端序列号**: 基于clientSeq实现消息幂等性，避免重复处理
 - **Redis存储**: 幂等性记录存储在Redis中，TTL=300秒
 - **重试机制**: 客户端超时重试时保持相同clientSeq，服务端检测重复后返回之前结果
-
 #### 消息状态跟踪
 - **完整生命周期**: 发送中 → 已送达 → 推送成功 → 已读 → 撤回/推送失败
 - **状态同步**: 客户端和服务端状态实时同步
 - **离线消息补偿**: 用户上线后自动拉取未读消息，支持断点续传
-
 ### 高性能架构
 - **写扩散模式**: 私聊消息采用写扩散，读取性能优异
 - **读扩散模式**: 群聊消息采用读扩散，存储空间节省
 - **统一消息存储**: 私聊和群聊消息统一存储，简化架构
 - **会话列表管理**: 维护用户会话列表，支持快速渲染首屏
-
 ### 消息顺序保障
-
 #### 会话级串行化处理（网关层）
 - **三层架构设计**：
   - **接收与分发层**：Netty EventLoop线程负责协议解析，解析完成后立即分发到会话队列
@@ -651,36 +548,25 @@ ChatMessage.proto新增字段：
   - 固定线程池大小(默认16个)，队列容量限制(默认1000条)
   - 最大会话数限制(默认10000个)，消息处理超时时间(默认5000ms)
   - 支持队列满时的多种处理策略(REJECT/BLOCK/DROP_OLDEST)
-
 #### RocketMQ顺序消费
 - **业务消息顺序**：ConversationMessageConsumer使用MessageListenerOrderly接口，确保同一会话内消息严格按顺序处理
 - **消息Key设计**：使用conversationId作为消息Key，确保同一会话消息路由到同一队列
 - **异常处理优化**：异常能正确触发重试机制，返回SUSPEND_CURRENT_QUEUE_A_MOMENT暂停当前队列
-
 #### 消息分离架构
 - **Topic分离**：ACK消息与业务消息分离到不同Topic，避免竞争条件影响顺序性
 - **统一分发器**：ImMessageHandler统一消息分发器，提供消息路由、异常处理和监控功能
 - **处理器注册**：支持动态注册不同类型的消息处理器
-
 #### 配置与监控
 - **优雅降级**：配置化启用/禁用(enabled: false默认)，未启用时自动回退到原有同步处理方式
 - **完整监控**：统计信息、处理延迟监控、详细日志记录
 - **性能调优**：支持线程池大小、队列容量、超时时间等参数配置
-
 ### 分布式支持
 - **多协议支持**: WebSocket、TCP、UDP多协议接入
 - **负载均衡**: 支持多网关实例，自动负载均衡
 - **消息路由**: 基于RocketMQ的分布式消息路由
 - **缓存一致性**: Redis缓存与数据库数据一致性保障
-
-
-
-
-
 ## 📁 项目结构
-
 ### 🔍 关键目录说明
-
 #### 网关服务 (im-gateway)
 - `netty/`: Netty服务器实现，支持TCP、UDP、WebSocket三种协议
 - `handler/`: 消息处理器，负责协议解析和消息路由
@@ -693,7 +579,6 @@ ChatMessage.proto新增字段：
   - ConversationMessage: 会话消息包装类
 - `timeout/`: 消息超时重发机制
   - MessageTimeoutManager: 基于时间轮算法的超时管理器
-
 #### 消息服务 (im-message-server)
 - `processor/`: 核心消息处理器
   - PrivateMessageProcessor: 私聊消息处理器，实现6步写扩散流程
@@ -709,7 +594,6 @@ ChatMessage.proto新增字段：
   - 离线消息服务、会话管理、消息状态管理、幂等性服务等
 - `controller/`: REST API
   - 消息拉取、会话同步、群聊消息同步等接口
-
 #### 客户端 (im-client)
 - `network/`: 网络通信层
   - RealWebSocketClient: WebSocket客户端实现
@@ -723,35 +607,26 @@ ChatMessage.proto新增字段：
   - OutOfOrderBuffer: 乱序缓冲区
   - MessageGapDetector: 消息空洞检测器
   - PullCompensationManager: 拉取补偿管理器
-
 ## 🔧 配置说明
-
 ### 关键配置项
 - **数据库配置**: `spring.datasource.*`
 - **Redis配置**: `spring.redis.*`
 - **RocketMQ配置**: `rocketmq.*`
 - **Netty配置**: `netty.server.*`
-
 ### 性能调优
 - **连接池配置**: 数据库连接池、Redis连接池
 - **线程池配置**: Netty EventLoop线程数
 - **缓存配置**: Redis缓存过期时间、最大缓存数量
 - **消息队列配置**: RocketMQ生产者、消费者参数
-
 ## 📈 性能特性
-
 - **高并发**: 支持万级并发连接
 - **低延迟**: 消息推送延迟 < 100ms
 - **高可用**: 99.9% 服务可用性
 - **可扩展**: 支持水平扩展，无状态设计
-
 ## 🗄️ 数据库结构
-
 ### 数据库设计概述
 IM Plus采用MySQL作为主要数据存储，数据库名为`im-plus`，字符集为`utf8mb4`。系统采用统一消息表设计，将私聊和群聊消息合并存储，通过索引表实现高效查询。
-
 ### 核心数据表
-
 #### 1. users - 用户信息表
 ```sql
 CREATE TABLE `users` (
@@ -770,7 +645,6 @@ CREATE TABLE `users` (
   KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户信息表';
 ```
-
 **字段说明：**
 - `id`: 数据库自增主键，内部使用
 - `user_id`: 用户自定义ID，用于登录和对外显示，全局唯一
@@ -779,7 +653,6 @@ CREATE TABLE `users` (
 - `status`: 用户状态，1-正常，2-禁用
 - `last_login_time`: 最后登录时间，用于统计和安全检查
 - `deleted`: 软删除标记，支持数据恢复
-
 #### 2. message - 统一消息表
 ```sql
 CREATE TABLE `message` (
@@ -801,7 +674,6 @@ CREATE TABLE `message` (
   KEY `idx_msg_type` (`msg_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一消息表';
 ```
-
 **字段说明：**
 - `msg_id`: 全局唯一消息ID，使用雪花算法生成，保证分布式环境下的唯一性
 - `conversation_id`: 会话ID，私聊格式为"private_小ID_大ID"，群聊格式为"group_群组ID"
@@ -810,7 +682,6 @@ CREATE TABLE `message` (
 - `content_type`: 内容类型，支持文本、图片、文件、语音、视频、位置、系统消息
 - `content`: 消息内容，文本消息直接存储，多媒体消息存储URL或路径
 - `status`: 消息状态，用于消息确认和已读回执机制
-
 #### 3. conversation - 会话表
 ```sql
 CREATE TABLE `conversation` (
@@ -829,13 +700,11 @@ CREATE TABLE `conversation` (
   KEY `idx_last_msg_time` (`last_msg_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话表';
 ```
-
 **字段说明：**
 - `conversation_id`: 会话唯一标识，与message表关联
 - `type`: 会话类型，0-私聊，1-群聊
 - `member_count`: 会话成员数量，群聊时使用
 - `last_msg_time`: 最后一条消息时间，用于会话列表排序
-
 #### 4. user_conversation_list - 用户会话列表表
 ```sql
 CREATE TABLE `user_conversation_list` (
@@ -855,7 +724,6 @@ CREATE TABLE `user_conversation_list` (
   KEY `idx_last_update_time` (`last_update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户会话列表表';
 ```
-
 **字段说明：**
 - `user_id`: 用户ID，关联users表
 - `conversation_id`: 会话ID，关联conversation表
@@ -863,7 +731,6 @@ CREATE TABLE `user_conversation_list` (
 - `unread_count`: 未读消息数，用于显示红点提醒
 - `last_msg_id`: 最新消息ID，用于显示会话列表中的最后一条消息摘要
 - `last_update_time`: 会话最后更新时间，用于会话列表排序
-
 #### 5. user_msg_list - 用户消息索引表
 ```sql
 CREATE TABLE `user_msg_list` (
@@ -880,13 +747,11 @@ CREATE TABLE `user_msg_list` (
   KEY `idx_seq` (`seq`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户消息索引表';
 ```
-
 **字段说明：**
 - `user_id`: 用户ID，支持私聊写扩散模式
 - `msg_id`: 消息ID，关联message表
 - `conversation_id`: 会话ID，用于按会话查询
 - `seq`: 用户级全局序列号，用于离线消息同步和顺序保证
-
 #### 6. conversation_msg_list - 会话消息索引表
 ```sql
 CREATE TABLE `conversation_msg_list` (
@@ -903,12 +768,10 @@ CREATE TABLE `conversation_msg_list` (
   KEY `idx_seq` (`seq`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话消息索引表';
 ```
-
 **字段说明：**
 - `conversation_id`: 会话ID，支持群聊读扩散模式
 - `msg_id`: 消息ID，关联message表
 - `seq`: 会话级序列号，用于群聊消息的顺序查询
-
 #### 7. sequence_section - 序列号分段表
 ```sql
 CREATE TABLE `sequence_section` (
@@ -923,172 +786,131 @@ CREATE TABLE `sequence_section` (
   UNIQUE KEY `uk_section_key` (`section_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='序列号分段持久化表';
 ```
-
 **字段说明：**
 - `section_key`: 分段业务唯一键，格式为 u_{section_id}（用户）或 c_{section_id}（会话）
 - `max_seq`: 该分段已分配的序列号上限，用于Redis数据恢复
 - `step`: 预分配步长，默认10000，支持不同业务配置不同步长
 - `version`: 乐观锁版本号，防止并发更新冲突
-
 **设计特点：**
 - **单表设计**: 通过 section_key 前缀区分不同业务类型，简化维护
 - **原子操作**: 使用 INSERT ... ON DUPLICATE KEY UPDATE 实现高效upsert
 - **分段管理**: 支持1024个分段，每个分段独立管理序列号范围
 - **异步持久化**: Redis为主，MySQL为辅，异步同步保证性能
-
 ### 表关系说明
-
 #### 核心关系
 - **users** ↔ **message**: 一对多关系，一个用户可以发送多条消息
 - **conversation** ↔ **message**: 一对多关系，一个会话包含多条消息
 - **users** ↔ **user_conversation_list**: 一对多关系，一个用户可以参与多个会话
 - **message** ↔ **user_msg_list**: 一对多关系，一条消息可以对应多个用户记录（写扩散）
 - **message** ↔ **conversation_msg_list**: 一对一关系，每条消息在会话中有唯一序列号
-
 #### 索引设计原则
 1. **查询优化**: 基于常用查询场景设计复合索引
 2. **唯一性约束**: 确保业务唯一性，如用户ID、消息ID等
 3. **排序优化**: 为时间字段和序列号字段建立索引
 4. **外键关联**: 为关联查询建立适当索引
-
 ### 数据一致性保证
 - **事务管理**: 使用Spring事务管理确保数据一致性
 - **乐观锁**: 通过version字段或时间戳实现乐观锁控制
 - **分布式锁**: 使用Redis分布式锁处理并发场景
 - **数据校验**: 在应用层和数据库层双重校验数据完整性
 - **序列号一致性**: Redis为主，MySQL为辅，冷启动时从数据库恢复状态
-
 ## 🔑 Redis键说明
-
 ### Redis架构概述
 IM Plus系统大量使用Redis作为缓存和数据存储，涵盖用户会话管理、消息缓存、序列号生成、离线消息处理等核心功能。Redis键采用统一的命名规范，通过前缀区分不同业务模块，支持TTL自动过期和内存优化。
-
 ### Redis键分类清单
-
 #### 1. 会话管理相关键
-
 | Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
 |------------|---------|-----|----------|------|
 | `session:{userId}` | Hash | 30天 | 存储用户会话信息，包括网关节点、连接状态等 | `session:12345` |
 | `online_users` | Set | 无 | 维护当前在线用户集合，用于快速在线状态查询 | `online_users` |
 | `user:status:{userId}` | String | 1小时 | 用户在线状态缓存，值为online/offline | `user:status:12345` |
 | `user:last_active:{userId}` | String | 7天 | 用户最后活跃时间戳 | `user:last_active:12345` |
-
 #### 2. 消息缓存相关键
-
 | Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
 |------------|---------|-----|----------|------|
 | `msg:{msgId}` | Hash | 1天 | 缓存消息完整内容，减少数据库查询 | `msg:1234567890` |
 | `user:msg_list:{userId}` | ZSet | 7天 | 用户消息列表，score为seq，value为msgId | `user:msg_list:12345` |
 | `conversation:latest_msg:{conversationId}` | Hash | 30天 | 会话最新消息信息，用于会话列表显示 | `conversation:latest_msg:private_123_456` |
 | `msg:cache:batch:{batchId}` | List | 1小时 | 批量消息缓存，用于批量操作优化 | `msg:cache:batch:batch_001` |
-
-#### 3. 序列号生成相关键
-
+#### 3. 服务端序列号生成相关键
 | Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
 |------------|---------|-----|----------|------|
 | `seq:user:{sectionKey}` | Hash | 无 | 用户序列号分段缓存，字段包括current、max等 | `seq:user:u_123` |
 | `seq:conversation:{sectionKey}` | Hash | 无 | 会话序列号分段缓存，支持群聊消息排序 | `seq:conversation:c_456` |
 | `seq:global:lock:{key}` | String | 10秒 | 序列号生成分布式锁，防止并发冲突 | `seq:global:lock:u_123` |
 | `seq:stats:{date}` | Hash | 30天 | 序列号生成统计信息，用于监控和分析 | `seq:stats:2024-01-15` |
-
 #### 4. 消息已读状态相关键
-
 | Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
 |------------|---------|-----|----------|------|
 | `user:read_seq:{userId}:{conversationId}` | String | 30天 | 用户在特定会话中的已读序列号 | `user:read_seq:123:private_123_456` |
 | `group:read_count:{msgId}` | String | 7天 | 群聊消息已读人数计数器 | `group:read_count:1234567890` |
 | `group:read_users:{msgId}` | Set | 7天 | 群聊消息已读用户列表（小群组使用） | `group:read_users:1234567890` |
 | `user:conversation:seq:{userId}` | Hash | 30天 | 用户各会话的同步序列号 | `user:conversation:seq:12345` |
-
 #### 5. 离线消息相关键
-
 | Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
 |------------|---------|-----|----------|------|
 | `offline:msg:{userId}` | List | 7天 | 用户离线消息队列，FIFO结构 | `offline:msg:12345` |
 | `user:unread_count:{userId}` | Hash | 30天 | 用户各会话未读消息计数 | `user:unread_count:12345` |
-| `user:max_seq:{userId}` | String | 30天 | 用户最大全局序列号，用于离线同步 | `user:max_seq:12345` |
 | `offline:sync:lock:{userId}` | String | 30秒 | 离线消息同步锁，防止重复同步 | `offline:sync:lock:12345` |
-
 #### 6. 群组成员管理相关键
-
 | Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
 |------------|---------|-----|----------|------|
 | `group:members:{groupId}` | Set | 1小时 | 群组成员列表缓存 | `group:members:group_789` |
 | `group:member_count:{groupId}` | String | 1小时 | 群组成员数量缓存 | `group:member_count:group_789` |
 | `user:groups:{userId}` | Set | 1小时 | 用户加入的群组列表 | `user:groups:12345` |
 | `group:online_members:{groupId}` | Set | 10分钟 | 群组在线成员列表 | `group:online_members:group_789` |
-
 #### 7. 消息幂等性相关键
-
 | Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
 |------------|---------|-----|----------|------|
 | `idempotent:{clientSeq}` | Hash | 5分钟 | 消息幂等性记录，防止重复处理 | `idempotent:client_123_001` |
 | `msg:processing:{msgId}` | String | 30秒 | 消息处理中标记，防止并发处理 | `msg:processing:1234567890` |
 | `retry:count:{clientSeq}` | String | 1小时 | 客户端重试次数统计 | `retry:count:client_123_001` |
-
 #### 8. 客户端存储相关键
-
-| Redis键模式 | 数据类型 | TTL | 用途说明 | 示例 |
-|------------|---------|-----|----------|------|
-| `client:sync_seq:{userId}` | String | 30天 | 客户端同步序列号 | `client:sync_seq:12345` |
-| `client:msg_store:{userId}:{conversationId}` | ZSet | 7天 | 客户端消息存储，替代本地数据库 | `client:msg_store:123:private_123_456` |
-| `client:stats:{userId}` | Hash | 7天 | 客户端统计信息，如消息数量、同步状态等 | `client:stats:12345` |
-| `client:config:{userId}` | Hash | 1天 | 客户端配置缓存 | `client:config:12345` |
-
+| Redis键模式                                                 | 数据类型 | TTL | 用途说明                | 示例                                                 |
+|----------------------------------------------------------|---------|-----|---------------------|----------------------------------------------------|
+| `client:sync:seq:{userId}`                               | String | 30天 | 客户端用户级全局序列号         | `client:sync:seq:12345`                            |
+| `client:sync:conversation_seq:{userId}:{conversationId}` | ZSet | 7天 | 客户会话级全局序列号          | `client:sync:conversation_seq:123:private_123_456` |
 ## 🔧 技术债务与改进建议
-
 ### 📊 当前技术债务
-
 #### 🚨 高优先级债务
 1. **服务间调用缺失**
    - **问题**：UserInfoServiceImpl、UserStatusServiceImpl、FriendshipServiceImpl均为占位符实现
    - **影响**：用户信息获取、状态检查、好友关系校验功能不完整
    - **解决方案**：实现HTTP客户端调用im-user服务，添加Feign客户端或RestTemplate配置
-
 #### 🔧 中优先级债务
 3. **硬编码配置值**
    - **问题**：魔法数字和配置值散布在代码中（如成功率阈值80%、重试次数1.5等）
    - **影响**：配置管理混乱，难以维护
    - **解决方案**：提取常量到配置类，使用配置中心统一管理
-
 4. **监控代码重复**
    - **问题**：统计信息收集代码重复，健康检查逻辑分散
    - **影响**：代码维护成本高，违反DRY原则
    - **解决方案**：创建通用的统计工具类，使用AOP进行统计
-
 #### ⚠️ 低优先级债务
 5. **配置管理分散**
    - **问题**：各模块配置文件分散，配置结构复杂
    - **影响**：配置维护困难
    - **解决方案**：引入配置中心，统一配置管理
-
 ### 🎯 性能优化建议
-
 #### 数据库层面
 - **连接池优化**：当前最大20个连接，建议增加到50-100个
 - **索引优化**：检查查询索引效率，优化慢查询
 - **读写分离**：考虑引入读写分离，提升查询性能
-
 #### 缓存层面
 - **Redis连接池**：增加连接池大小，当前20个可能不够
 - **缓存预热**：实现缓存预热机制，减少冷启动影响
 - **缓存监控**：添加缓存命中率监控
-
 ### 📈 架构演进建议
-
 #### 短期目标（1-3个月）
 1. 完善服务间调用机制
 2. 建立完整的测试体系
 3. 优化配置管理
 4. 完善监控体系
-
 #### 中期目标（3-6个月）
 1. 性能测试和容量规划
 2. 引入配置中心
 3. 实现读写分离
 4. 完善监控可视化
-
 #### 长期目标（6-12个月）
 1. 微服务治理完善
 2. 分布式追踪系统

@@ -14,7 +14,7 @@ import com.vanky.im.common.constant.RedisKeyConstants;
 public class RedisConfig {
 
     // Redis服务器配置（与服务端保持一致）
-    private static final String REDIS_HOST = "192.168.200.137";
+    private static final String REDIS_HOST = "192.168.10.6";
     private static final int REDIS_PORT = 6379;
     private static final int REDIS_DATABASE = 0;
     private static final String REDIS_PASSWORD = "123456";
@@ -99,23 +99,23 @@ public class RedisConfig {
     }
     
     /**
-     * 获取客户端数据过期时间（秒）
+     * 获取客户端用户级序列号过期时间（秒）
      */
-    public static long getClientDataExpire() {
-        String envExpire = System.getenv("REDIS_CLIENT_DATA_EXPIRE");
-        return envExpire != null ? Long.parseLong(envExpire) : RedisKeyConstants.CLIENT_DATA_EXPIRE_SECONDS;
+    public static long getClientUserSeqExpire() {
+        String envExpire = System.getenv("REDIS_CLIENT_USER_SEQ_EXPIRE");
+        return envExpire != null ? Long.parseLong(envExpire) : RedisKeyConstants.CLIENT_USER_SEQ_TTL_SECONDS;
     }
 
     /**
-     * 获取客户端消息最大存储数量
+     * 获取客户端会话级序列号过期时间（秒）
      */
-    public static int getMaxMessageCount() {
-        String envMaxCount = System.getenv("REDIS_MESSAGES_MAX_COUNT");
-        return envMaxCount != null ? Integer.parseInt(envMaxCount) : RedisKeyConstants.CLIENT_MESSAGES_MAX_COUNT;
+    public static long getClientConversationSeqExpire() {
+        String envExpire = System.getenv("REDIS_CLIENT_CONVERSATION_SEQ_EXPIRE");
+        return envExpire != null ? Long.parseLong(envExpire) : RedisKeyConstants.CLIENT_CONVERSATION_SEQ_TTL_SECONDS;
     }
 
     /**
-     * 获取同步序列号Key前缀
+     * 获取客户端用户级序列号Key前缀
      */
     public static String getSyncSeqPrefix() {
         return System.getenv("REDIS_SYNC_SEQ_PREFIX") != null ?
@@ -123,26 +123,10 @@ public class RedisConfig {
     }
 
     /**
-     * 获取群聊同步点Key前缀
+     * 获取客户端会话级序列号Key前缀
      */
     public static String getConversationSeqPrefix() {
         return System.getenv("REDIS_CONVERSATION_SEQ_PREFIX") != null ?
                System.getenv("REDIS_CONVERSATION_SEQ_PREFIX") : RedisKeyConstants.CLIENT_CONVERSATION_SEQ_PREFIX;
-    }
-
-    /**
-     * 获取消息Key前缀
-     */
-    public static String getMessagesPrefix() {
-        return System.getenv("REDIS_MESSAGES_PREFIX") != null ?
-               System.getenv("REDIS_MESSAGES_PREFIX") : RedisKeyConstants.CLIENT_MESSAGES_PREFIX;
-    }
-
-    /**
-     * 获取统计Key前缀
-     */
-    public static String getStatsPrefix() {
-        return System.getenv("REDIS_STATS_PREFIX") != null ?
-               System.getenv("REDIS_STATS_PREFIX") : RedisKeyConstants.CLIENT_STATS_PREFIX;
     }
 }

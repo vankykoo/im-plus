@@ -21,12 +21,6 @@ public interface UserInfoService {
      */
     String getUsernameById(Long userId);
     
-    /**
-     * 根据用户ID获取用户头像
-     * 
-     * @param userId 用户ID
-     * @return 用户头像URL，如果用户不存在则返回默认头像
-     */
-    String getUserAvatarById(Long userId);
+
 }
 // {{END MODIFICATIONS}}

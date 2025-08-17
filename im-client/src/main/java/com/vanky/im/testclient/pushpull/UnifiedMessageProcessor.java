@@ -1,5 +1,6 @@
 package com.vanky.im.testclient.pushpull;
 
+import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.testclient.client.HttpClient;
 import com.vanky.im.testclient.storage.LocalMessageStorage;

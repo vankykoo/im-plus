@@ -1,63 +1,51 @@
 package com.vanky.im.message.service.impl;
 
+import com.vanky.im.common.model.ApiResponse;
+import com.vanky.im.message.client.UserClient;
 import com.vanky.im.message.service.UserInfoService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
  * 用户信息服务实现类
- * 
+ * 使用 Feign 客户端调用 im-user 服务，体现 DIP 和 KISS 原则
+ *
  * @author vanky
  * @since 2025-07-28
+ * @updated 2025-08-14 - 重构为使用 Feign 客户端
  */
-// {{CHENGQI:
-// Action: Added; Timestamp: 2025-07-28 22:55:09 +08:00; Reason: 创建用户信息服务实现类，暂时使用占位符实现;
-// }}
-// {{START MODIFICATIONS}}
 @Slf4j
 @Service
 public class UserInfoServiceImpl implements UserInfoService {
+
+    @Autowired
+    private UserClient userClient;
     
     @Override
     public String getUsernameById(Long userId) {
-        // TODO: 实现跨模块调用im-user服务获取用户昵称
-        // 暂时返回占位符
         if (userId == null) {
             return "未知用户";
         }
-        
+
         try {
-            // 这里应该调用im-user模块的用户服务
-            // 可以通过以下方式实现：
-            // 1. RestTemplate调用HTTP接口
-            // 2. Feign客户端调用
-            // 3. 直接注入用户服务（如果在同一个应用中）
-            
-            log.debug("获取用户昵称 - 用户ID: {}", userId);
-            return "用户" + userId; // 占位符实现
-            
+            log.debug("通过Feign客户端获取用户昵称 - 用户ID: {}", userId);
+
+            // 使用 Feign 客户端调用 im-user 服务，体现 KISS 原则
+            ApiResponse<String> response = userClient.getUsername(String.valueOf(userId));
+
+            if (response != null && response.isSuccess() && response.getData() != null) {
+                log.debug("成功获取用户昵称 - 用户ID: {}, 昵称: {}", userId, response.getData());
+                return response.getData();
+            } else {
+                log.warn("获取用户昵称失败 - 用户ID: {}, 响应: {}", userId, response);
+                return "用户" + userId; // 降级处理
+            }
+
         } catch (Exception e) {
-            log.warn("获取用户昵称失败 - 用户ID: {}", userId, e);
-            return "用户" + userId;
+            log.error("调用用户服务失败 - 用户ID: {}", userId, e);
+            return "用户" + userId; // 异常降级处理
         }
     }
-    
-    @Override
-    public String getUserAvatarById(Long userId) {
-        // TODO: 实现跨模块调用im-user服务获取用户头像
-        // 暂时返回默认头像
-        if (userId == null) {
-            return "/default/user_avatar.png";
-        }
-        
-        try {
-            log.debug("获取用户头像 - 用户ID: {}", userId);
-            return "/default/user_avatar.png"; // 占位符实现
-            
-        } catch (Exception e) {
-            log.warn("获取用户头像失败 - 用户ID: {}", userId, e);
-            return "/default/user_avatar.png";
-        }
-    }
+
 }
-// {{END MODIFICATIONS}}

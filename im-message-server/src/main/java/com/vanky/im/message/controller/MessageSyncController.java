@@ -77,26 +77,27 @@ public class MessageSyncController {
     }
 
     /**
-     * 批量拉取用户的离线消息内容
+     * 批量拉取用户的未接收消息内容
+     * 基于"持久化是第一原则"，直接从数据库查询用户未接收的消息
      * 客户端在确认需要同步后，分页调用此接口拉取消息
-     * 
+     *
      * @param request 批量拉取请求
      * @return 批量拉取响应
      */
     @PostMapping("/pull-batch")
     public ResponseEntity<PullMessagesResponse> pullMessagesBatch(@RequestBody PullMessagesRequest request) {
         try {
-            log.info("收到批量拉取离线消息请求 - 用户ID: {}, 起始序列号: {}, 限制数量: {}", 
+            log.info("收到批量拉取消息请求 - 用户ID: {}, 起始序列号: {}, 限制数量: {}",
                     request.getUserId(), request.getFromSeq(), request.getLimit());
 
             // 批量拉取消息
             PullMessagesResponse response = offlineMessageSyncService.pullMessagesBatch(request);
 
             if (response.isSuccess()) {
-                log.info("批量拉取离线消息完成 - 用户ID: {}, 返回消息数量: {}, 是否还有更多: {}", 
+                log.info("批量拉取消息完成 - 用户ID: {}, 返回消息数量: {}, 是否还有更多: {}",
                         request.getUserId(), response.getCount(), response.isHasMore());
             } else {
-                log.warn("批量拉取离线消息失败 - 用户ID: {}, 错误: {}", 
+                log.warn("批量拉取消息失败 - 用户ID: {}, 错误: {}",
                         request.getUserId(), response.getErrorMessage());
             }
 
@@ -146,8 +147,9 @@ public class MessageSyncController {
     }
 
     /**
-     * GET方式的批量拉取离线消息接口
-     * 
+     * GET方式的批量拉取消息接口
+     * 基于"持久化是第一原则"，直接从数据库查询用户未接收的消息
+     *
      * @param userId 用户ID
      * @param fromSeq 起始序列号
      * @param limit 限制数量（可选）
@@ -160,7 +162,7 @@ public class MessageSyncController {
             @RequestParam(required = false, defaultValue = "200") Integer limit) {
         
         try {
-            log.info("收到GET批量拉取离线消息请求 - 用户ID: {}, 起始序列号: {}, 限制数量: {}", 
+            log.info("收到GET批量拉取消息请求 - 用户ID: {}, 起始序列号: {}, 限制数量: {}",
                     userId, fromSeq, limit);
 
             // 构建请求对象

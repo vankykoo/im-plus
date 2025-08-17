@@ -31,8 +31,7 @@ public class RedisKeyConstants {
     /** 会话序列号前缀 */
     public static final String CONVERSATION_SEQ_PREFIX = "conversation:seq:";
     
-    /** 用户级全局序列号前缀 */
-    public static final String USER_GLOBAL_SEQ_PREFIX = "user:global:seq:";
+
     
     /** 用户消息链缓存前缀 */
     public static final String USER_MSG_LIST_PREFIX = "user:msg:list:";
@@ -65,10 +64,7 @@ public class RedisKeyConstants {
     /** 好友关系缓存前缀 */
     public static final String FRIENDSHIP_CACHE_PREFIX = "friendship:";
     
-    // ========== 离线消息相关 Redis Key ==========
-    
-    /** 离线消息队列前缀 */
-    public static final String OFFLINE_MSG_PREFIX = "user:offline_msg:";
+
     
     /** 未读数缓存前缀 */
     public static final String UNREAD_COUNT_PREFIX = "user:conversation:unread:";
@@ -79,18 +75,12 @@ public class RedisKeyConstants {
     public static final String GROUP_MEMBERS_PREFIX = "group:members:";
     
     // ========== 客户端存储相关 Redis Key ==========
-    
+
     /** 客户端同步序列号前缀 */
     public static final String CLIENT_SYNC_SEQ_PREFIX = "client:sync:seq:";
-    
-    /** 客户端群聊同步点前缀 */
-    public static final String CLIENT_CONVERSATION_SEQ_PREFIX = "im:client:conversation:seq:";
-    
-    /** 客户端消息存储前缀 */
-    public static final String CLIENT_MESSAGES_PREFIX = "im:client:messages:";
-    
-    /** 客户端统计信息前缀 */
-    public static final String CLIENT_STATS_PREFIX = "im:client:stats:";
+
+    /** 客户端会话级序列号前缀 */
+    public static final String CLIENT_CONVERSATION_SEQ_PREFIX = "client:sync:conversation_seq:";
     
     // ========== TTL配置（秒） ==========
     
@@ -106,14 +96,14 @@ public class RedisKeyConstants {
     /** 消息缓存TTL（1天） */
     public static final long MESSAGE_CACHE_TTL_SECONDS = 24 * 60 * 60;
     
-    /** 离线消息TTL（7天） */
-    public static final long OFFLINE_MSG_TTL_SECONDS = 7 * 24 * 60 * 60;
+
     
     /** 会话相关缓存TTL（30天） */
     public static final long CONVERSATION_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
     
-    /** 客户端数据过期时间（7天） */
-    public static final long CLIENT_DATA_EXPIRE_SECONDS = 7 * 24 * 60 * 60;
+    /** 客户端数据过期时间（30天用户级序列号，7天会话级序列号） */
+    public static final long CLIENT_USER_SEQ_TTL_SECONDS = 30 * 24 * 60 * 60;
+    public static final long CLIENT_CONVERSATION_SEQ_TTL_SECONDS = 7 * 24 * 60 * 60;
 
     /** 群组成员缓存过期时间（24小时） */
     public static final int CACHE_EXPIRE_HOURS = 24;
@@ -132,14 +122,12 @@ public class RedisKeyConstants {
     /** 用户消息链缓存最大保留条数 */
     public static final int MAX_USER_MSG_CACHE_SIZE = 1000;
     
-    /** 离线消息队列最大长度 */
-    public static final int MAX_OFFLINE_MSG_SIZE = 10000;
+
     
     /** 消息内容摘要最大长度 */
     public static final int MAX_MSG_CONTENT_SUMMARY_LENGTH = 50;
     
-    /** 客户端消息最大保留条数 */
-    public static final int CLIENT_MESSAGES_MAX_COUNT = 1000;
+
 
     /** 小群阈值（小于此数量的群支持已读用户列表） */
     public static final int SMALL_GROUP_THRESHOLD = 50;
@@ -194,15 +182,7 @@ public class RedisKeyConstants {
         return CONVERSATION_SEQ_PREFIX + conversationId;
     }
     
-    /**
-     * 获取用户全局序列号键
-     * @param userId 用户ID
-     * @return Redis键
-     */
-    public static String getUserGlobalSeqKey(String userId) {
-        return USER_GLOBAL_SEQ_PREFIX + userId;
-    }
-    
+
     /**
      * 获取用户消息链键
      * @param userId 用户ID
@@ -212,14 +192,7 @@ public class RedisKeyConstants {
         return USER_MSG_LIST_PREFIX + userId;
     }
     
-    /**
-     * 获取离线消息队列键
-     * @param userId 用户ID
-     * @return Redis键
-     */
-    public static String getOfflineMsgKey(String userId) {
-        return OFFLINE_MSG_PREFIX + userId;
-    }
+
     
     /**
      * 获取未读数缓存键
@@ -259,20 +232,12 @@ public class RedisKeyConstants {
     }
     
     /**
-     * 获取客户端消息存储键
+     * 获取客户端会话级序列号键
      * @param userId 用户ID
+     * @param conversationId 会话ID
      * @return Redis键
      */
-    public static String getClientMessagesKey(String userId) {
-        return CLIENT_MESSAGES_PREFIX + userId;
-    }
-    
-    /**
-     * 获取客户端统计信息键
-     * @param userId 用户ID
-     * @return Redis键
-     */
-    public static String getClientStatsKey(String userId) {
-        return CLIENT_STATS_PREFIX + userId;
+    public static String getClientConversationSeqKey(String userId, String conversationId) {
+        return CLIENT_CONVERSATION_SEQ_PREFIX + userId + ":" + conversationId;
     }
 }

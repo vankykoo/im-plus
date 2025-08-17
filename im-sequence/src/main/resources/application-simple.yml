@@ -1,10 +1,10 @@
-# IM Message Server 配置
+# IM Sequence Service 配置
 # 主要配置已迁移到Nacos配置中心
 # 本地只保留必要的基础配置
 
 spring:
   application:
-    name: im-message-server
+    name: im-sequence
   cloud:
     compatibility-verifier:
       enabled: false
@@ -13,8 +13,7 @@ spring:
 # 其他配置已迁移到Nacos配置中心：
 # - 数据库配置 -> common-database.yml
 # - Redis配置 -> common-redis.yml  
-# - RocketMQ配置 -> common-rocketmq.yml
-# - 服务特有配置 -> im-message-server-dev.yml
+# - 服务特有配置 -> im-sequence-dev.yml
 
 # 日志配置
 logging:

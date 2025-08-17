@@ -23,6 +23,8 @@ spring:
         weight: 1.0  # 实例权重
       # Nacos配置中心配置
       config:
+        import-check:
+          enabled: false
         server-addr: 192.168.10.2:8848  # 配置中心地址
         namespace: public  # 配置命名空间
         group: DEFAULT_GROUP  # 配置分组

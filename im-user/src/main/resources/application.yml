@@ -2,6 +2,9 @@ server:
   port: 8090
 
 spring:
+  cloud:
+    bootstrap:
+      enabled: true
   application:
     name: im-user
   datasource:

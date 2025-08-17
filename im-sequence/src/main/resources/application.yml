@@ -1,3 +1,7 @@
+# IM Sequence Service 配置
+# 主要配置已迁移到Nacos配置中心
+# 本地只保留必要的基础配置
+
 server:
   port: 8084
 
@@ -7,15 +11,17 @@ spring:
   cloud:
     compatibility-verifier:
       enabled: false
-  
-  # 数据库配置
+    bootstrap:
+      enabled: true
+
+  # 临时数据库配置（等待nacos配置中心编码问题解决）
   datasource:
     url: jdbc:mysql://localhost:3306/im-plus?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
     username: root
     password: vanky
     driver-class-name: com.mysql.cj.jdbc.Driver
-    
-  # Redis配置
+
+  # 临时Redis配置（等待nacos配置中心编码问题解决）
   data:
     redis:
       host: 192.168.10.6
@@ -43,12 +49,12 @@ sequence:
   section:
     count: 1024          # 分段数量
     step-size: 10000     # 每个分段的步长
-  
+
   # Redis配置
   redis:
     key-prefix: "seq:section:"
     expire-seconds: 604800  # 7天过期
-  
+
   # 异步持久化配置
   persistence:
     enabled: true
@@ -56,7 +62,7 @@ sequence:
     max-pool-size: 4
     queue-capacity: 1000
     thread-name-prefix: "sequence-persist-"
-    
+
   # 性能监控配置
   monitor:
     enabled: true
@@ -94,9 +100,17 @@ feign:
     max-period: 3000
     max-attempts: 3
 
+# 本地保留的基础配置
+# 其他配置已迁移到Nacos配置中心：
+# - 数据库配置 -> common-database.yml (存在编码问题，临时使用本地配置)
+# - Redis配置 -> common-redis.yml (存在编码问题，临时使用本地配置)
+# - 序列号服务特有配置 -> im-sequence-dev.yml (存在编码问题，临时使用本地配置)
+
 # 日志配置
 logging:
   level:
+    com.alibaba.nacos: INFO
+    org.springframework.cloud: DEBUG
     com.vanky.im.sequence: DEBUG
     org.springframework.data.redis: DEBUG
   pattern:

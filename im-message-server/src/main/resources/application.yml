@@ -6,8 +6,8 @@ spring:
   application:
     name: im-message-server
   cloud:
-    compatibility-verifier:
-      enabled: false
+    bootstrap:
+      enabled: true
 
 # 本地保留的基础配置
 # 其他配置已迁移到Nacos配置中心：

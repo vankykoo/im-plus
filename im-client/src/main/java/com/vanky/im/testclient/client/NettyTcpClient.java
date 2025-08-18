@@ -38,8 +38,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class NettyTcpClient {
     
-    private static final String GATEWAY_HOST = "localhost";
-    private static final int GATEWAY_PORT = 8900;
+    private static final String GATEWAY_HOST = ClientConfig.getProperty("server.base.ip", "localhost");
+    private static final int GATEWAY_PORT = Integer.parseInt(ClientConfig.getProperty("tcp.port", "8900"));
     
     private final String userId;
     private final String token;

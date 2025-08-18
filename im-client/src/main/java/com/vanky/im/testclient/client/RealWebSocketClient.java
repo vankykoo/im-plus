@@ -27,7 +27,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class RealWebSocketClient implements WebSocket.Listener {
     
-    private static final String GATEWAY_WS_URL = "ws://localhost:8902/websocket";
+    private static final String SERVER_IP = ClientConfig.getProperty("server.base.ip", "localhost");
+    private static final String WEBSOCKET_PORT = ClientConfig.getProperty("websocket.port", "80");
+    private static final String GATEWAY_WS_URL = "ws://" + SERVER_IP + ":" + WEBSOCKET_PORT + "/websocket";
     
     private final String userId;
     private final String token;

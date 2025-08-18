@@ -16,8 +16,11 @@ import java.util.List;
  */
 public class HttpClient {
 
-    private static final String USER_SERVICE_BASE_URL = "http://localhost:8090";
-    private static final String MESSAGE_SERVICE_BASE_URL = "http://localhost:8100";
+    private static final String SERVER_IP = ClientConfig.getProperty("server.base.ip", "localhost");
+    private static final String HTTP_PORT = ClientConfig.getProperty("http.port", "80");
+    private static final String USER_SERVICE_BASE_URL = "http://" + SERVER_IP + ":" + HTTP_PORT;
+    private static final String MESSAGE_SERVICE_BASE_URL = "http://" + SERVER_IP + ":" + HTTP_PORT;
+
 
     private final java.net.http.HttpClient client;
     

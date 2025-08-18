@@ -68,13 +68,18 @@
             <artifactId>mysql-connector-java</artifactId>
         </dependency>
 
+        <!-- Druid连接池 -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>druid-spring-boot-starter</artifactId>
+            <version>1.2.20</version>
+        </dependency>
+
         <!-- Spring Boot Starter Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-
-
 
         <!-- Lombok -->
         <dependency>

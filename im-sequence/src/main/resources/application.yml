@@ -1,117 +1,12 @@
-# IM Sequence Service 配置
-# 主要配置已迁移到Nacos配置中心
-# 本地只保留必要的基础配置
-
-server:
-  port: 8084
-
 spring:
   application:
     name: im-sequence
   cloud:
-    compatibility-verifier:
-      enabled: false
     bootstrap:
       enabled: true
-
-  # 临时数据库配置（等待nacos配置中心编码问题解决）
-  datasource:
-    url: jdbc:mysql://localhost:3306/im-plus?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
-    username: root
-    password: vanky
-    driver-class-name: com.mysql.cj.jdbc.Driver
-
-  # 临时Redis配置（等待nacos配置中心编码问题解决）
-  data:
-    redis:
-      host: 192.168.10.6
-      port: 6379
-      password: 123456
-      database: 0
-      timeout: 10000
-      lettuce:
-        pool:
-          max-active: 8
-          max-wait: -1
-          max-idle: 8
-          min-idle: 0
-
-# MyBatis Plus配置
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-  mapper-locations: classpath*:mapper/*.xml
-
-# 序列号服务配置
-sequence:
-  # 分段配置
-  section:
-    count: 1024          # 分段数量
-    step-size: 10000     # 每个分段的步长
-
-  # Redis配置
-  redis:
-    key-prefix: "seq:section:"
-    expire-seconds: 604800  # 7天过期
-
-  # 异步持久化配置
-  persistence:
-    enabled: true
-    core-pool-size: 2
-    max-pool-size: 4
-    queue-capacity: 1000
-    thread-name-prefix: "sequence-persist-"
-
-  # 性能监控配置
-  monitor:
-    enabled: true
-    stats-interval-seconds: 60
-
-  # 序列号恢复配置
-  recovery:
-    enabled: true
-    message-service-url: "http://localhost:8100"
-    timeout-ms: 5000
-
-# Feign客户端配置
-feign:
-  # 启用断路器（降级功能）
-  circuitbreaker:
-    enabled: true
-  client:
-    config:
-      default:
-        # 连接超时时间（毫秒）
-        connect-timeout: 5000
-        # 读取超时时间（毫秒）
-        read-timeout: 10000
-        # 日志级别
-        logger-level: basic
-      im-message-server:
-        # 针对消息服务的特定配置
-        connect-timeout: 5000
-        read-timeout: 10000
-        logger-level: basic
-  # 启用重试机制
-  retryer:
-    enabled: true
-    period: 1000
-    max-period: 3000
-    max-attempts: 3
-
-# 本地保留的基础配置
-# 其他配置已迁移到Nacos配置中心：
-# - 数据库配置 -> common-database.yml (存在编码问题，临时使用本地配置)
-# - Redis配置 -> common-redis.yml (存在编码问题，临时使用本地配置)
-# - 序列号服务特有配置 -> im-sequence-dev.yml (存在编码问题，临时使用本地配置)
 
 # 日志配置
 logging:
   level:
     com.alibaba.nacos: INFO
     org.springframework.cloud: DEBUG
-    com.vanky.im.sequence: DEBUG
-    org.springframework.data.redis: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"

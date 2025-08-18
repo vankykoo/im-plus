@@ -1,6 +1,3 @@
-# IM Sequence Service Bootstrap Configuration
-# 此配置文件在application.yml之前加载，用于配置Nacos连接信息
-
 spring:
   application:
     name: im-sequence  # 服务名，将在Nacos中注册

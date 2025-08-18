@@ -916,3 +916,118 @@ IM Plus系统大量使用Redis作为缓存和数据存储，涵盖用户会话�
 2. 分布式追踪系统
 3. 自动化运维体系
 4. 多机房部署支持
+---
+
+## 🚀 分布式部署测试环境
+
+本文档记录了项目进行分布式部署测试时的环境配置和服务器角色。
+
+### 1. 环境概览
+
+| 设备类型 | 操作系统 | IP 地址 | 备注 |
+| :--- | :--- | :--- | :--- |
+| 台式机 | Windows | `192.168.10.2` | 部署核心服务和部分实例 |
+| 笔记本 | Windows | `192.168.10.5` | 部署冗余实例用于测试 |
+| Linux 虚拟机 | Linux | `192.168.10.6` | 运行基础设施服务 |
+
+### 2. 服务部署详情
+
+#### 基础架构服务 (Linux 虚拟机 - `192.168.10.6`)
+
+| 服务 | 实例数 | 备注 |
+| :--- | :--- | :--- |
+| RocketMQ | 1 | 消息队列中间件 |
+| Redis | 1 | 缓存与数据存储 |
+| Nginx | 1 | 反向代理与负载均衡 |
+
+#### 应用服务部署
+
+| 服务名称 | 部署位置 | 实例数 | 端口 |
+| :--- | :--- | :--- | :--- |
+| **im-gateway** | 台式机 (`192.168.10.2`) | 1 | 8080 |
+| | 笔记本 (`192.168.10.5`) | 1 | 8080 |
+| **im-message-server** | 台式机 (`192.168.10.2`) | 1 | 8100 |
+| | 笔记本 (`192.168.10.5`) | 1 | 8100 |
+| **im-user** | 台式机 (`192.168.10.2`) | 1 | 8090 |
+| **im-sequence** | 台式机 (`192.168.10.2`) | 1 | 8084 |
+
+### 3.nginx配置文件
+```text
+user  nginx;
+worker_processes  auto;
+
+error_log  /var/log/nginx/error.log warn;
+pid        /var/run/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+# TCP/UDP 流量代理模块
+stream {
+    # 定义 im-gateway TCP 服务的上游服务器集群
+    upstream gateway_tcp_servers {
+        hash $remote_addr consistent;
+        server 192.168.10.2:8900;
+        server 192.168.10.5:8900;
+    }
+
+    # 监听 8900 端口用于TCP流量
+    server {
+        listen     8900;
+        proxy_pass gateway_tcp_servers;
+        proxy_connect_timeout 5s;
+    }
+}
+
+# HTTP 流量代理模块
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    access_log  /var/log/nginx/access.log;
+    sendfile        on;
+    keepalive_timeout  65;
+
+    # 定义 im-gateway WebSocket 服务的上游服务器集群
+    upstream gateway_ws_servers {
+        ip_hash;
+        server 192.168.10.2:8902;
+        server 192.168.10.5:8902;
+    }
+
+    # 定义 im-message-server 服务的上游服务器集群
+    upstream message_servers {
+        server 192.168.10.2:8100;
+        server 192.168.10.5:8100;
+    }
+
+    # HTTP服务配置
+    server {
+        listen       80;
+        server_name  localhost;
+
+        location /websocket/ {
+            proxy_pass http://gateway_ws_servers;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "Upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400s;
+        }
+
+        location /users/ {
+            proxy_pass http://192.168.10.2:8090;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location /api/ {
+            proxy_pass http://message_servers;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+}
+```

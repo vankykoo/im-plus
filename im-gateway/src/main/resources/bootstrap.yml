@@ -11,6 +11,7 @@ spring:
       # Nacos服务发现配置
       discovery:
         server-addr: 192.168.10.5:8848  # Nacos服务器地址
+        ip: 192.168.10.5  # 服务实例IP
         username: nacos
         password: nacos
         namespace: public  # 命名空间，默认public

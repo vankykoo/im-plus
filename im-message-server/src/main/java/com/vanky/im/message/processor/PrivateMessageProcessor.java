@@ -76,8 +76,16 @@ public class PrivateMessageProcessor {
                 fromUserId, toUserId, clientSeq);
 
         // 幂等性检查
-        if (isIdempotentMessage(clientSeq)) {
-            return;
+        if (clientSeq != null && !clientSeq.trim().isEmpty()) {
+            MessageIdempotentService.IdempotentResult idempotentResult =
+                    messageIdempotentService.checkIdempotent(clientSeq);
+            if (idempotentResult != null) {
+                log.info("检测到重复私聊消息，重新发送ACK - 客户端序列号: {}, 消息ID: {}",
+                        clientSeq, idempotentResult.getMsgId());
+                // 重新发送ACK给客户端
+                resendReceiptForDuplicateMessage(chatMessage, idempotentResult);
+                return;
+            }
         }
 
         try {
@@ -129,22 +137,6 @@ public class PrivateMessageProcessor {
                     fromUserId, toUserId, chatMessage.getUid(), e);
             throw e;
         }
-    }
-
-    /**
-     * 检查消息是否为重复消息
-     */
-    private boolean isIdempotentMessage(String clientSeq) {
-        if (clientSeq != null && !clientSeq.trim().isEmpty()) {
-            MessageIdempotentService.IdempotentResult idempotentResult =
-                    messageIdempotentService.checkIdempotent(clientSeq);
-            if (idempotentResult != null) {
-                log.info("检测到重复私聊消息，忽略 - 客户端序列号: {}, 消息ID: {}",
-                        clientSeq, idempotentResult.getMsgId());
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -257,6 +249,26 @@ public class PrivateMessageProcessor {
         } catch (Exception e) {
             log.error("异步发送私聊消息回执失败 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}",
                      originalMessage.getFromId(), originalMessage.getClientSeq(), serverMsgId, e);
+        }
+    }
+
+    /**
+     * 为重复消息重新发送确认回执
+     */
+    private void resendReceiptForDuplicateMessage(ChatMessage originalMessage,
+                                                  MessageIdempotentService.IdempotentResult idempotentResult) {
+        try {
+            // 从幂等性结果中获取服务端消息ID和序列号
+            String serverMsgId = idempotentResult.getMsgId();
+            Long senderUserSeq = idempotentResult.getSeq();
+            long serverTimestamp = idempotentResult.getProcessTime(); // 使用原始处理时间
+
+            // 异步发送消息确认回执
+            messageSendReceiptService.sendReceiptToSender(originalMessage, serverMsgId,
+                                                        senderUserSeq, serverTimestamp);
+        } catch (Exception e) {
+            log.error("为重复私聊消息重新发送回执失败 - 发送方: {}, 客户端序列号: {}, 消息ID: {}",
+                    originalMessage.getFromId(), originalMessage.getClientSeq(), idempotentResult.getMsgId(), e);
         }
     }
 }

@@ -107,11 +107,10 @@ public class GroupMessageProcessor {
                         messageIdempotentService.checkIdempotent(clientSeq);
 
                 if (idempotentResult != null) {
-                    // 重复消息，直接忽略（统一推送理念：发送方通过消息拉取补偿获取消息，不主动推送）
-                    log.info("检测到重复群聊消息，直接忽略 - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
+                    log.info("检测到重复群聊消息，重新发送ACK - 客户端序列号: {}, 消息ID: {}, 序列号: {}",
                             clientSeq, idempotentResult.getMsgId(), idempotentResult.getSeq());
-
-                    // 不做任何推送，发送方如果需要确认，通过消息拉取补偿机制获取
+                    // 重新发送ACK给客户端
+                    resendReceiptForDuplicateMessage(chatMessage, idempotentResult);
                     return;
                 }
             }
@@ -447,6 +446,26 @@ public class GroupMessageProcessor {
             // 回执发送失败不应影响主消息处理流程，只记录错误日志
             log.error("异步发送群聊消息回执失败 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}",
                      originalMessage.getFromId(), originalMessage.getClientSeq(), serverMsgId, e);
+        }
+    }
+
+    /**
+     * 为重复的群聊消息重新发送确认回执
+     */
+    private void resendReceiptForDuplicateMessage(ChatMessage originalMessage,
+                                                  MessageIdempotentService.IdempotentResult idempotentResult) {
+        try {
+            // 从幂等性结果中获取服务端消息ID和会话级序列号
+            String serverMsgId = idempotentResult.getMsgId();
+            Long conversationSeq = idempotentResult.getSeq();
+            long serverTimestamp = idempotentResult.getProcessTime(); // 使用原始处理时间
+
+            // 异步发送群聊消息确认回执
+            messageSendReceiptService.sendGroupReceiptToSender(originalMessage, serverMsgId,
+                                                             conversationSeq, serverTimestamp);
+        } catch (Exception e) {
+            log.error("为重复群聊消息重新发送回执失败 - 发送方: {}, 客户端序列号: {}, 消息ID: {}",
+                    originalMessage.getFromId(), originalMessage.getClientSeq(), idempotentResult.getMsgId(), e);
         }
     }
 }

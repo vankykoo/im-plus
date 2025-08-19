@@ -1,5 +1,6 @@
 package com.vanky.im.testclient.sync;
 
+import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.testclient.client.HttpClient;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 
@@ -28,6 +29,7 @@ public class OfflineMessageSyncManager {
     private final LocalMessageStorage localStorage;
     private final ExecutorService executorService;
     private final com.vanky.im.testclient.ui.UserWindow userWindow; // 添加UserWindow引用
+    private com.vanky.im.testclient.processor.RealtimeMessageProcessor realtimeMessageProcessor;
     
     // 同步状态管理
     private final AtomicBoolean isSyncing = new AtomicBoolean(false);
@@ -48,6 +50,10 @@ public class OfflineMessageSyncManager {
             thread.setDaemon(true);
             return thread;
         });
+    }
+
+    public void setRealtimeMessageProcessor(com.vanky.im.testclient.processor.RealtimeMessageProcessor processor) {
+        this.realtimeMessageProcessor = processor;
     }
 
     /**
@@ -877,5 +883,67 @@ public class OfflineMessageSyncManager {
             System.err.println("[ERROR] 发送群聊会话ACK失败: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+    /**
+     * 拉取指定范围内的空洞消息
+     * @param conversationId 会话ID
+     * @param startSeq 起始序列号
+     * @param endSeq 结束序列号
+     */
+    public void pullGapMessages(String conversationId, long startSeq, long endSeq) {
+        executorService.submit(() -> {
+            try {
+                System.out.println(String.format("开始拉取空洞消息 - 会话: %s, 范围: [%d, %d]",
+                        conversationId, startSeq, endSeq));
+
+                // 复用现有的分页拉取逻辑来模拟空洞消息拉取
+                List<Object> pulledObjects = new ArrayList<>();
+                long currentPullSeq = startSeq;
+                while (currentPullSeq <= endSeq) {
+                    PullResult result = pullMessagesBatch(currentPullSeq);
+                    if (result.isSuccess() && result.getCount() > 0) {
+                        pulledObjects.addAll(result.getMessages());
+                        currentPullSeq = result.getMaxSeq() + 1;
+                        if (!result.isHasMore()) break;
+                    } else {
+                        break;
+                    }
+                }
+
+                System.out.println(String.format("空洞消息拉取完成 - 会话: %s, 范围: [%d, %d], 实际拉取: %d条",
+                        conversationId, startSeq, endSeq, pulledObjects.size()));
+
+                if (!pulledObjects.isEmpty() && realtimeMessageProcessor != null) {
+                    List<ChatMessage> chatMessages = convertToChatMessages(pulledObjects);
+                    realtimeMessageProcessor.processGapMessages(chatMessages);
+                }
+
+            } catch (Exception e) {
+                System.err.println("拉取空洞消息失败: " + e.getMessage());
+            }
+        });
+    }
+
+    private List<ChatMessage> convertToChatMessages(List<Object> messageObjects) {
+        List<ChatMessage> chatMessages = new ArrayList<>();
+        for (Object obj : messageObjects) {
+            if (obj instanceof Map) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> map = (Map<String, Object>) obj;
+                    ChatMessage.Builder builder = ChatMessage.newBuilder();
+                    builder.setConversationId((String) map.getOrDefault("conversationId", ""));
+                    builder.setConversationSeq(Long.parseLong(map.getOrDefault("conversationSeq", "0").toString()));
+                    builder.setContent((String) map.getOrDefault("content", ""));
+                    builder.setFromId((String) map.getOrDefault("fromUserId", ""));
+                    builder.setToId((String) map.getOrDefault("toUserId", ""));
+                    builder.setType(((Number) map.getOrDefault("msgType", 0)).intValue());
+                    chatMessages.add(builder.build());
+                } catch (Exception e) {
+                    System.err.println("消息转换失败: " + obj + ", 错误: " + e.getMessage());
+                }
+            }
+        }
+        return chatMessages;
     }
 }

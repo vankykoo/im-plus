@@ -6,6 +6,7 @@ import com.vanky.im.testclient.client.HttpClient;
 
 import com.vanky.im.testclient.client.RealWebSocketClient;
 import com.vanky.im.testclient.client.NettyTcpClient;
+import com.vanky.im.testclient.processor.RealtimeMessageProcessor;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 import com.vanky.im.testclient.sync.OfflineMessageSyncManager;
 
@@ -53,6 +54,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
     private LocalMessageStorage localStorage;
     private OfflineMessageSyncManager syncManager;
     private JLabel syncStatusLabel;
+    private RealtimeMessageProcessor realtimeMessageProcessor;
     
     public UserWindow(String userId) {
         this.userId = userId;
@@ -61,6 +63,8 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
         // 初始化离线消息同步组件
         this.localStorage = new LocalMessageStorage();
         this.syncManager = new OfflineMessageSyncManager(httpClient, localStorage, this);
+        this.realtimeMessageProcessor = new RealtimeMessageProcessor(this, localStorage, syncManager);
+        this.syncManager.setRealtimeMessageProcessor(this.realtimeMessageProcessor);
 
         initUI();
     }
@@ -434,50 +438,74 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
      */
     @Override
     public void handleMessage(ChatMessage message) {
+        // 根据消息类型进行分发
+        switch (message.getType()) {
+            case MessageTypeConstants.PRIVATE_CHAT_MESSAGE:
+            case MessageTypeConstants.GROUP_CHAT_MESSAGE:
+            case MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION:
+                // 将实时聊天消息交由RealtimeMessageProcessor处理
+                realtimeMessageProcessor.processMessage(message);
+                break;
+            case MessageTypeConstants.MESSAGE_READ_NOTIFICATION:
+                // 已读通知直接显示
+                displayReadNotification(message);
+                break;
+            // 忽略系统消息和其他类型消息
+            default:
+                // 其他类型的消息不处理
+                break;
+        }
+    }
+
+    /**
+     * 格式化并显示一条聊天消息
+     * @param message 聊天消息
+     */
+    public void formatAndDisplayMessage(ChatMessage message) {
         String messageText = null;
-        
         switch (message.getType()) {
             case MessageTypeConstants.PRIVATE_CHAT_MESSAGE:
                 messageText = String.format("[私聊] %s: %s", message.getFromId(), message.getContent());
                 break;
             case MessageTypeConstants.GROUP_CHAT_MESSAGE:
-                messageText = String.format("[群聊] %s@%s: %s", message.getFromId(), message.getToId(), message.getContent());
-                break;
             case MessageTypeConstants.GROUP_MESSAGE_NOTIFICATION:
                 messageText = String.format("[群聊] %s@%s: %s", message.getFromId(), message.getConversationId(), message.getContent());
                 break;
-            case MessageTypeConstants.MESSAGE_READ_NOTIFICATION:
-                // 处理已读通知
-                if (message.hasReadNotification()) {
-                    var readNotification = message.getReadNotification();
-                    String conversationId = readNotification.getConversationId();
-                    String msgId = readNotification.getMsgId();
-                    int readCount = readNotification.getReadCount();
-                    long lastReadSeq = readNotification.getLastReadSeq();
-
-                    if (conversationId.startsWith("private_")) {
-                        // 私聊已读通知
-                        messageText = String.format("[已读通知] 私聊会话 %s 的消息已被读取，已读序列号: %d",
-                                conversationId, lastReadSeq);
-                    } else if (conversationId.startsWith("group_")) {
-                        // 群聊已读通知
-                        messageText = String.format("[已读通知] 群聊消息 %s 已被读取，当前已读数: %d",
-                                msgId, readCount);
-                    } else {
-                        messageText = String.format("[已读通知] 消息 %s 已被读取", msgId);
-                    }
-                } else {
-                    messageText = "[已读通知] 收到已读通知（格式异常）";
-                }
-                break;
-            // 忽略系统消息和其他类型消息
             default:
-                return; // 不显示其他类型的消息
+                // 其他类型不在此处显示
+                return;
         }
-        
         if (messageText != null) {
             appendMessage(messageText);
         }
+    }
+
+    /**
+     * 处理并显示已读通知
+     * @param message 包含已读通知的ChatMessage
+     */
+    private void displayReadNotification(ChatMessage message) {
+        String messageText;
+        if (message.hasReadNotification()) {
+            var readNotification = message.getReadNotification();
+            String conversationId = readNotification.getConversationId();
+            String msgId = readNotification.getMsgId();
+            int readCount = readNotification.getReadCount();
+            long lastReadSeq = readNotification.getLastReadSeq();
+
+            if (conversationId.startsWith("private_")) {
+                messageText = String.format("[已读通知] 私聊会话 %s 的消息已被读取，已读序列号: %d",
+                        conversationId, lastReadSeq);
+            } else if (conversationId.startsWith("group_")) {
+                messageText = String.format("[已读通知] 群聊消息 %s 已被读取，当前已读数: %d",
+                        msgId, readCount);
+            } else {
+                messageText = String.format("[已读通知] 消息 %s 已被读取", msgId);
+            }
+        } else {
+            messageText = "[已读通知] 收到已读通知（格式异常）";
+        }
+        appendMessage(messageText);
     }
     
     /**

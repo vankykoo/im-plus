@@ -115,7 +115,7 @@ public class RealtimeMessageProcessor {
         userWindow.formatAndDisplayMessage(message);
 
         // 2. 更新本地存储中的会话序列号
-        localStorage.updateConversationSeq(userWindow.getUserId(), message.getConversationId(), message.getConversationSeq());
+        // localStorage.updateConversationSeq(userWindow.getUserId(), message.getConversationId(), message.getConversationSeq());
     }
 
     /**

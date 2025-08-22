@@ -933,7 +933,7 @@ public class OfflineMessageSyncManager {
                     Map<String, Object> map = (Map<String, Object>) obj;
                     ChatMessage.Builder builder = ChatMessage.newBuilder();
                     builder.setConversationId((String) map.getOrDefault("conversationId", ""));
-                    builder.setConversationSeq(Long.parseLong(map.getOrDefault("conversationSeq", "0").toString()));
+                    builder.setConversationSeq(Long.parseLong(map.getOrDefault("seq", "0").toString()));
                     builder.setContent((String) map.getOrDefault("content", ""));
                     builder.setFromId((String) map.getOrDefault("fromUserId", ""));
                     builder.setToId((String) map.getOrDefault("toUserId", ""));

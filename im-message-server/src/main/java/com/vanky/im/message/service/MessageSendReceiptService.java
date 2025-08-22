@@ -71,8 +71,7 @@ public class MessageSendReceiptService {
                                                             senderUserSeq, serverTimestamp);
             
             // 推送回执到发送方所在的网关
-            gatewayMessagePushService.pushMessageToGateway(receiptMessage, senderUserSeq, 
-                                                         senderSession.getNodeId(), senderId);
+            gatewayMessagePushService.pushMessageToGateway(receiptMessage, senderUserSeq, senderId);
             
             log.info("消息发送回执推送成功 - 发送方: {}, 客户端序列号: {}, 网关: {}", 
                     senderId, clientSeq, senderSession.getNodeId());
@@ -155,8 +154,7 @@ public class MessageSendReceiptService {
                                                             conversationSeq, serverTimestamp);
             
             // 推送回执到发送方所在的网关
-            gatewayMessagePushService.pushMessageToGateway(receiptMessage, conversationSeq, 
-                                                         senderSession.getNodeId(), senderId);
+            gatewayMessagePushService.pushMessageToGateway(receiptMessage, conversationSeq, senderId);
             
             log.info("群聊消息发送回执推送成功 - 发送方: {}, 客户端序列号: {}, 网关: {}", 
                     senderId, clientSeq, senderSession.getNodeId());

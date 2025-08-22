@@ -75,7 +75,7 @@ public class ReadNotificationServiceImpl implements ReadNotificationService {
                     .build();
 
             // 推送通知到网关
-            gatewayMessagePushService.pushMessageToGateway(notificationMessage, 0L, senderSession.getNodeId(), senderId);
+            gatewayMessagePushService.pushNotificationToGateway(notificationMessage, 0L, senderSession.getNodeId());
             
             log.info("私聊已读通知发送成功 - 会话: {}, 发送方: {}, 已读seq: {}", conversationId, senderId, lastReadSeq);
 
@@ -177,7 +177,7 @@ public class ReadNotificationServiceImpl implements ReadNotificationService {
                         .build();
 
                 // 推送通知到网关
-                gatewayMessagePushService.pushMessageToGateway(notificationMessage, 0L, nodeId, senderId);
+                gatewayMessagePushService.pushNotificationToGateway(notificationMessage, 0L, nodeId);
 
                 log.debug("群聊已读通知发送成功 - 消息: {}, 发送方: {}, 已读数: {}", msgId, senderId, readCount);
 
@@ -217,7 +217,7 @@ public class ReadNotificationServiceImpl implements ReadNotificationService {
                         .build();
 
                 // 推送通知到网关
-                gatewayMessagePushService.pushMessageToGateway(notificationMessage, 0L, nodeId, senderId);
+                gatewayMessagePushService.pushNotificationToGateway(notificationMessage, 0L, nodeId);
 
                 log.debug("回退单条群聊已读通知发送成功 - 消息: {}, 发送方: {}, 已读数: {}", msgId, senderId, readCount);
 

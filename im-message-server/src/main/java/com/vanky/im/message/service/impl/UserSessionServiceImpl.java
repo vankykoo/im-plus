@@ -18,8 +18,10 @@ public class UserSessionServiceImpl implements UserSessionService {
     @Override
     public UserSession getUserSession(String userId) {
         String sessionKey = SessionConstants.getUserSessionKey(userId);
+        log.info("DIAGNOSE: Attempting to get session from Redis with key: [{}]", sessionKey);
         try {
             Object sessionObject = redisTemplate.opsForValue().get(sessionKey);
+            log.info("DIAGNOSE: Got object from Redis for key [{}]: [{}]", sessionKey, sessionObject);
             if (sessionObject instanceof UserSession) {
                 return (UserSession) sessionObject;
             } else if (sessionObject != null) {

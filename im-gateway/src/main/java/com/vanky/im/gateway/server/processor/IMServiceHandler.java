@@ -201,6 +201,7 @@ public class IMServiceHandler {
 
                     // 将用户会话存入Redis
                     String sessionKey = SessionConstants.getUserSessionKey(userId);
+                    log.info("DIAGNOSE: Storing session in Redis. Key: [{}], Session: [{}]", sessionKey, userSession.toString());
                     redisTemplate.opsForValue().set(sessionKey, userSession,
                             RedisKeyConstants.SESSION_EXPIRE_TIME, TimeUnit.SECONDS);
 

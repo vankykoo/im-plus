@@ -32,6 +32,7 @@ public class OnlineStatusServiceImpl implements OnlineStatusService {
     public boolean isUserOnline(String userId) {
         try {
             String sessionKey = SessionConstants.getUserSessionKey(userId);
+            log.info("DIAGNOSE: Checking online status with key: [{}]", sessionKey);
             Boolean exists = redisTemplate.hasKey(sessionKey);
             boolean online = Boolean.TRUE.equals(exists);
             

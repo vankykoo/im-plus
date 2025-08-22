@@ -42,7 +42,7 @@ public class GatewayMessagePushService {
      */
     public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String targetUserId) {
         String toId = targetUserId != null ? targetUserId : chatMessage.getToId();
-        UserSession userSession = (UserSession) redisTemplate.opsForValue().get("user-session:" + toId);
+        UserSession userSession = (UserSession) redisTemplate.opsForValue().get(com.vanky.im.common.constant.SessionConstants.getUserSessionKey(toId));
 
         if (userSession == null) {
             log.warn("用户 {} 不在线，消息将转为离线消息处理", toId);

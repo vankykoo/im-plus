@@ -199,7 +199,7 @@ public class PrivateMessageProcessor {
         UserSession session = onlineStatusService.getUserOnlineStatus(toUserId);
         if (session != null && session.getNodeId() != null) {
             ChatMessage message = buildEnrichedMessage(chatMessage, msgId, userSeq);
-            gatewayMessagePushService.pushMessageToGateway(message, userSeq, session.getNodeId());
+            gatewayMessagePushService.pushMessageToGateway(message, userSeq, session.getNodeId(), toUserId);
         }
     }
 

@@ -30,6 +30,9 @@ public class GatewayMessagePushService {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
+    @Value("${rocketmq.topic.push-to-gateway:TOPIC_PUSH_TO_GATEWAY}")
+    private String pushToGatewayTopic;
+
     /**
      * 推送消息到网关
      *
@@ -37,7 +40,7 @@ public class GatewayMessagePushService {
      * @param seq 序列号
      */
     public void pushMessageToGateway(ChatMessage chatMessage, Long seq) {
-        pushMessageToGateway(chatMessage, seq, null);
+        pushMessageToGateway(chatMessage, seq, null, null);
     }
 
     /**
@@ -47,18 +50,18 @@ public class GatewayMessagePushService {
      * @param seq 序列号
      * @param targetUserId 目标用户ID（群聊时使用，私聊时为null）
      */
-    public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String targetUserId) {
+    public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String gatewayId, String targetUserId) {
         String toId = targetUserId != null ? targetUserId : chatMessage.getToId();
         UserSession userSession = (UserSession) redisTemplate.opsForValue().get("user-session:" + toId);
 
-        if (userSession == null) {
-            log.warn("用户 {} 不在线，消息将转为离线消息处理", toId);
+        if (userSession == null && gatewayId == null) {
+            log.warn("用户 {} 不在线且未指定网关，消息将转为离线消息处理", toId);
             // TODO: 添加离线消息处理逻辑
             return;
         }
 
-        String gatewayId = userSession.getNodeId();
-        String topic = TopicConstants.TOPIC_PUSH_TO_GATEWAY_PREFIX + gatewayId;
+        String finalGatewayId = gatewayId != null ? gatewayId : userSession.getNodeId();
+        String topic = com.vanky.im.common.constant.TopicConstants.TOPIC_PUSH_TO_GATEWAY_PREFIX + finalGatewayId;
 
         try {
             Message message = new Message();
@@ -83,19 +86,19 @@ public class GatewayMessagePushService {
                 @Override
                 public void onSuccess(SendResult sendResult) {
                     log.info("消息推送成功 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}, 网关: {}, 消息结果: {}",
-                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, gatewayId, sendResult);
+                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, finalGatewayId, sendResult);
                 }
 
                 @Override
                 public void onException(Throwable e) {
                     log.error("消息推送失败 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}, 网关: {}",
-                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, gatewayId, e);
+                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, finalGatewayId, e);
                 }
             });
 
         } catch (Exception e) {
             log.error("推送消息到网关异常 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}, 网关: {}",
-                    chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, gatewayId, e);
+                    chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, finalGatewayId, e);
         }
     }
 

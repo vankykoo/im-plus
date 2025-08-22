@@ -34,71 +34,53 @@ public class GatewayMessagePushService {
     private String pushToGatewayTopic;
 
     /**
-     * 推送消息到网关
-     *
-     * @param chatMessage 聊天消息
-     * @param seq 序列号
-     */
-    public void pushMessageToGateway(ChatMessage chatMessage, Long seq) {
-        pushMessageToGateway(chatMessage, seq, null, null);
-    }
-
-    /**
      * 推送消息到网关（支持指定目标用户ID）
      *
      * @param chatMessage 聊天消息
      * @param seq 序列号
      * @param targetUserId 目标用户ID（群聊时使用，私聊时为null）
      */
-    public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String gatewayId, String targetUserId) {
+    public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String targetUserId) {
         String toId = targetUserId != null ? targetUserId : chatMessage.getToId();
         UserSession userSession = (UserSession) redisTemplate.opsForValue().get("user-session:" + toId);
 
-        if (userSession == null && gatewayId == null) {
-            log.warn("用户 {} 不在线且未指定网关，消息将转为离线消息处理", toId);
+        if (userSession == null) {
+            log.warn("用户 {} 不在线，消息将转为离线消息处理", toId);
             // TODO: 添加离线消息处理逻辑
             return;
         }
 
-        String finalGatewayId = gatewayId != null ? gatewayId : userSession.getNodeId();
-        String topic = com.vanky.im.common.constant.TopicConstants.TOPIC_PUSH_TO_GATEWAY_PREFIX + finalGatewayId;
-
         try {
             Message message = new Message();
-            message.setTopic(topic);
+            message.setTopic(TopicConstants.TOPIC_PUSH_TO_GATEWAY);
             message.setBody(chatMessage.toByteArray());
 
             // 设置序列号作为消息键，方便追踪
             message.setKeys(String.valueOf(seq));
 
-            // {{CHENGQI:
-            // Action: Added; Timestamp: 2025-08-01 23:00:19 +08:00; Reason: 添加目标用户ID到消息属性，用于群聊消息推送时网关识别真正的接收用户;
-            // }}
-            // {{START MODIFICATIONS}}
             // 如果指定了目标用户ID，将其添加到消息属性中
             if (targetUserId != null) {
                 message.putUserProperty("targetUserId", targetUserId);
             }
-            // {{END MODIFICATIONS}}
 
             // 异步发送消息
             producer.send(message, new SendCallback() {
                 @Override
                 public void onSuccess(SendResult sendResult) {
-                    log.info("消息推送成功 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}, 网关: {}, 消息结果: {}",
-                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, finalGatewayId, sendResult);
+                    log.info("消息推送到共享Topic成功 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}, 消息结果: {}",
+                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, sendResult);
                 }
 
                 @Override
                 public void onException(Throwable e) {
-                    log.error("消息推送失败 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}, 网关: {}",
-                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, finalGatewayId, e);
+                    log.error("消息推送到共享Topic失败 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}",
+                            chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, e);
                 }
             });
 
         } catch (Exception e) {
-            log.error("推送消息到网关异常 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}, 网关: {}",
-                    chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, finalGatewayId, e);
+            log.error("推送消息到共享Topic异常 - 接收方: {}, 目标用户: {}, 消息ID: {}, 序列号: {}",
+                    chatMessage.getToId(), targetUserId, chatMessage.getUid(), seq, e);
         }
     }
 

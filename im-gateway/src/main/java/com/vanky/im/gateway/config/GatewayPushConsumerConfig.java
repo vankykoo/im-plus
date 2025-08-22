@@ -50,28 +50,22 @@ public class GatewayPushConsumerConfig {
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(consumerGroup);
         consumer.setNamesrvAddr(nameServer);
         consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_LAST_OFFSET);
-        consumer.setMessageModel(MessageModel.CLUSTERING);
-        
+        consumer.setMessageModel(MessageModel.BROADCASTING);
+
         // 设置消费线程数
         consumer.setConsumeThreadMin(consumeThreadMin);
         consumer.setConsumeThreadMax(consumeThreadMax);
-        
+
         try {
-            // 获取动态网关实例ID
-            String currentGatewayId = gatewayInstanceManager.getGatewayInstanceId();
-
-            // 构建动态的、唯一的 Topic
-            String dynamicTopic = com.vanky.im.common.constant.TopicConstants.TOPIC_PUSH_TO_GATEWAY_PREFIX + currentGatewayId;
-
-            // 订阅这个唯一的 Topic，并消费所有消息
-            consumer.subscribe(dynamicTopic, "*");
+            // 订阅固定的推送Topic
+            consumer.subscribe(com.vanky.im.common.constant.TopicConstants.TOPIC_PUSH_TO_GATEWAY, "*");
 
             // 注册消息监听器
             consumer.registerMessageListener(messageConsumer);
 
             // 启动消费者
             consumer.start();
-            log.info("Gateway推送消费者启动成功，节点ID: {}, 订阅主题: {}", currentGatewayId, pushToGatewayTopic);
+            log.info("Gateway推送消费者启动成功，订阅主题: {}", com.vanky.im.common.constant.TopicConstants.TOPIC_PUSH_TO_GATEWAY);
 
         } catch (MQClientException e) {
             log.error("Gateway推送消费者启动失败", e);

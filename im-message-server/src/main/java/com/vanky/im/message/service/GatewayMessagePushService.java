@@ -1,7 +1,8 @@
 package com.vanky.im.message.service;
 
+import com.vanky.im.common.constant.TopicConstants;
+import com.vanky.im.common.model.UserSession;
 import com.vanky.im.common.protocol.ChatMessage;
-import com.vanky.im.message.model.GroupMessageNotification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -11,8 +12,8 @@ import org.apache.rocketmq.common.message.Message;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-
 /**
  * 网关消息推送服务
  * 负责将消息推送到指定的网关进行用户投递
@@ -22,38 +23,46 @@ public class GatewayMessagePushService {
 
     private static final Logger log = LoggerFactory.getLogger(GatewayMessagePushService.class);
     
-    @Value("${message.push.topic}")
-    private String pushToGatewayTopic;
-    
     @Autowired
     @Qualifier("gatewayPushProducer")
     private DefaultMQProducer producer;
-    
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
     /**
-     * 推送消息到指定网关
+     * 推送消息到网关
      *
      * @param chatMessage 聊天消息
      * @param seq 序列号
-     * @param gatewayId 网关ID
      */
-    public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String gatewayId) {
-        pushMessageToGateway(chatMessage, seq, gatewayId, null);
+    public void pushMessageToGateway(ChatMessage chatMessage, Long seq) {
+        pushMessageToGateway(chatMessage, seq, null);
     }
 
     /**
-     * 推送消息到指定网关（支持指定目标用户ID）
+     * 推送消息到网关（支持指定目标用户ID）
      *
      * @param chatMessage 聊天消息
      * @param seq 序列号
-     * @param gatewayId 网关ID
-     * @param targetUserId 目标用户ID（群聊时使用，私聊时可为null）
+     * @param targetUserId 目标用户ID（群聊时使用，私聊时为null）
      */
-    public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String gatewayId, String targetUserId) {
+    public void pushMessageToGateway(ChatMessage chatMessage, Long seq, String targetUserId) {
+        String toId = targetUserId != null ? targetUserId : chatMessage.getToId();
+        UserSession userSession = (UserSession) redisTemplate.opsForValue().get("user-session:" + toId);
+
+        if (userSession == null) {
+            log.warn("用户 {} 不在线，消息将转为离线消息处理", toId);
+            // TODO: 添加离线消息处理逻辑
+            return;
+        }
+
+        String gatewayId = userSession.getNodeId();
+        String topic = TopicConstants.TOPIC_PUSH_TO_GATEWAY_PREFIX + gatewayId;
+
         try {
-            // 创建消息并设置Tag为网关ID
             Message message = new Message();
-            message.setTopic(pushToGatewayTopic);
-            message.setTags(gatewayId);
+            message.setTopic(topic);
             message.setBody(chatMessage.toByteArray());
 
             // 设置序列号作为消息键，方便追踪

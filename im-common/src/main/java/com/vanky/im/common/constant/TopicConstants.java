@@ -32,6 +32,11 @@ public class TopicConstants {
      */
     public static final String TOPIC_PUSH_TO_GATEWAY = "TOPIC_PUSH_TO_GATEWAY";
 
+   /**
+    * 网关推送消息主题前缀
+    */
+   public static final String TOPIC_PUSH_TO_GATEWAY_PREFIX = "TOPIC_PUSH_TO_GATEWAY_";
+
     /**
      * IM消息主题（包含聊天消息和ACK确认消息）
      */

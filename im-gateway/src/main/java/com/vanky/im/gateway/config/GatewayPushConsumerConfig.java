@@ -60,9 +60,11 @@ public class GatewayPushConsumerConfig {
             // 获取动态网关实例ID
             String currentGatewayId = gatewayInstanceManager.getGatewayInstanceId();
 
-            // 订阅主题，并且指定Tag为当前网关节点ID，实现消息的精准路由
-            // Tag过滤表达式格式：TagA || TagB || TagC
-            consumer.subscribe(pushToGatewayTopic, currentGatewayId);
+            // 构建动态的、唯一的 Topic
+            String dynamicTopic = com.vanky.im.common.constant.TopicConstants.TOPIC_PUSH_TO_GATEWAY_PREFIX + currentGatewayId;
+
+            // 订阅这个唯一的 Topic，并消费所有消息
+            consumer.subscribe(dynamicTopic, "*");
 
             // 注册消息监听器
             consumer.registerMessageListener(messageConsumer);

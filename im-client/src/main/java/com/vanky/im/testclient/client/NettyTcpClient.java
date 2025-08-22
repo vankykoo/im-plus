@@ -823,16 +823,16 @@ public class NettyTcpClient {
      */
     private void handleMessageSendReceipt(ChatMessage receiptMessage) {
         String clientSeq = receiptMessage.getClientSeq();
-        String serverMsgId = receiptMessage.getUid();
-        Long userSeq = receiptMessage.getUserSeq();
+        String serverMsgId = receiptMessage.getUid(); // 服务端消息ID，保留用于记录
+        String conversationSeq = String.valueOf(receiptMessage.getConversationSeq()); // 获取会话序列号
 
         System.out.println("收到消息发送回执 - 客户端序列号: " + clientSeq +
                          ", 服务端消息ID: " + serverMsgId +
-                         ", 用户序列号: " + userSeq);
+                         ", 会话序列号: " + conversationSeq);
 
         try {
-            // 使用PendingMessageManager处理回执
-            boolean success = pendingMessageManager.handleSendReceipt(clientSeq, serverMsgId, String.valueOf(userSeq));
+            // 关键修复：确保使用 clientSeq 来查找待确认消息
+            boolean success = pendingMessageManager.handleSendReceipt(clientSeq, serverMsgId, conversationSeq);
 
             if (success) {
                 System.out.println("消息发送回执处理成功 - 客户端序列号: " + clientSeq);

@@ -63,22 +63,6 @@ public interface RedisService {
      */
     void delete(String key);
 
-    // ========== 新增方法：用户在线状态管理 ==========
-
-    /**
-     * 获取用户在线状态
-     * @param userId 用户ID
-     * @return 用户会话信息，如果用户离线则返回null
-     */
-    UserSession getUserSession(String userId);
-
-    /**
-     * 检查用户是否在线
-     * @param userId 用户ID
-     * @return true-在线，false-离线
-     */
-    boolean isUserOnline(String userId);
-
     // ========== 新增方法：会话列表管理 ==========
 
     /**
@@ -154,4 +138,11 @@ public interface RedisService {
      * @return 已读用户ID列表
      */
     List<String> getGroupReadUsers(String msgId);
+
+   /**
+    * 获取用户会话
+    * @param userId 用户ID
+    * @return 用户会话
+    */
+   UserSession getUserSession(String userId);
 }

@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Redis服务实现类
@@ -158,45 +159,6 @@ public class RedisServiceImpl implements RedisService {
             log.debug("删除缓存成功, key: {}", key);
         } catch (Exception e) {
             log.error("删除缓存失败, key: {}", key, e);
-        }
-    }
-
-    // ========== 新增方法实现：用户在线状态管理 ==========
-
-    @Override
-    public UserSession getUserSession(String userId) {
-        try {
-            String sessionKey = SessionConstants.getUserSessionKey(userId);
-            Object sessionObj = redisTemplate.opsForValue().get(sessionKey);
-
-            if (sessionObj instanceof UserSession) {
-                UserSession userSession = (UserSession) sessionObj;
-                log.debug("获取用户会话信息 - 用户ID: {}, 网关ID: {}", userId, userSession.getNodeId());
-                return userSession;
-            }
-
-            log.debug("用户会话不存在 - 用户ID: {}", userId);
-            return null;
-
-        } catch (Exception e) {
-            log.error("获取用户会话信息失败 - 用户ID: {}", userId, e);
-            return null;
-        }
-    }
-
-    @Override
-    public boolean isUserOnline(String userId) {
-        try {
-            String sessionKey = SessionConstants.getUserSessionKey(userId);
-            Boolean exists = redisTemplate.hasKey(sessionKey);
-            boolean online = Boolean.TRUE.equals(exists);
-
-            log.debug("检查用户在线状态 - 用户ID: {}, 在线: {}", userId, online);
-            return online;
-
-        } catch (Exception e) {
-            log.error("检查用户在线状态失败 - 用户ID: {}", userId, e);
-            return false;
         }
     }
 
@@ -396,6 +358,26 @@ public class RedisServiceImpl implements RedisService {
         } catch (Exception e) {
             log.error("获取群聊消息已读用户列表失败 - 消息: {}", msgId, e);
             return List.of();
+        }
+    }
+
+    @Override
+    public UserSession getUserSession(String userId) {
+        String key = RedisKeyConstants.getUserSessionKey(userId);
+        try {
+            Map<Object, Object> sessionMap = redisTemplate.opsForHash().entries(key);
+            if (sessionMap == null || sessionMap.isEmpty()) {
+                return null;
+            }
+            UserSession session = new UserSession();
+            session.setUserId((String) sessionMap.get("userId"));
+            session.setNodeId((String) sessionMap.get("nodeId"));
+            session.setClientType((Integer) sessionMap.get("clientType"));
+            session.setVersion((Integer) sessionMap.get("version"));
+            return session;
+        } catch (Exception e) {
+            log.error("获取用户会话失败, userId: {}", userId, e);
+            return null;
         }
     }
 }

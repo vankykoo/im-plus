@@ -1,5 +1,7 @@
 package com.vanky.im.gateway.server.processor;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vanky.im.common.constant.MsgContentConstant;
 import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
@@ -63,6 +65,9 @@ public class IMServiceHandler {
 
     @Value("${server.node-id:}")
     private String gatewayNodeId;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /**
      * 处理消息，根据消息类型分发到对应的处理器

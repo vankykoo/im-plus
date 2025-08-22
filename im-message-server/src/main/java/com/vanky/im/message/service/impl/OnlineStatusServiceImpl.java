@@ -3,6 +3,7 @@ package com.vanky.im.message.service.impl;
 import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.model.UserSession;
 import com.vanky.im.message.service.OnlineStatusService;
+import com.vanky.im.message.service.UserSessionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -19,26 +20,12 @@ public class OnlineStatusServiceImpl implements OnlineStatusService {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
+    @Autowired
+    private UserSessionService userSessionService;
+
     @Override
     public UserSession getUserOnlineStatus(String userId) {
-        try {
-            String sessionKey = SessionConstants.getUserSessionKey(userId);
-            Object sessionObj = redisTemplate.opsForValue().get(sessionKey);
-            
-            if (sessionObj instanceof UserSession) {
-                UserSession userSession = (UserSession) sessionObj;
-                log.debug("获取用户在线状态 - 用户ID: {}, 网关ID: {}",
-                        userId, userSession.getNodeId());
-                return userSession;
-            }
-            
-            log.debug("用户离线 - 用户ID: {}", userId);
-            return null;
-            
-        } catch (Exception e) {
-            log.error("获取用户在线状态失败 - 用户ID: {}", userId, e);
-            return null;
-        }
+        return userSessionService.getUserSession(userId);
     }
 
     @Override

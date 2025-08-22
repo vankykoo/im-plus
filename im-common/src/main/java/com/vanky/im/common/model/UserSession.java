@@ -20,6 +20,8 @@ public class UserSession implements Serializable {
     private String host;
     private int port;
     private String nodeId; // 服务节点标识（gateway_instance_id）
+    private Integer clientType;
+    private Integer version;
     
     // Channel不能序列化，因此不会存储在Redis中
     // 只在gateway模块中使用，其他模块忽略此字段
@@ -99,6 +101,22 @@ public class UserSession implements Serializable {
     @JsonIgnore
     public void setChannel(Channel channel) {
         this.channel = channel;
+    }
+
+    public Integer getClientType() {
+        return clientType;
+    }
+
+    public void setClientType(Integer clientType) {
+        this.clientType = clientType;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 
     @Override

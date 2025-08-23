@@ -31,8 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class AbstractClient implements IMClient {
 
     protected final String userId;
-    protected final String token;
-    protected final MessageHandler messageHandler;
+    protected String token;
+    protected MessageHandler messageHandler;
     protected final AtomicBoolean connected = new AtomicBoolean(false);
     protected final AtomicBoolean isLoggedIn = new AtomicBoolean(false);
     protected CountDownLatch connectLatch;
@@ -90,6 +90,10 @@ public abstract class AbstractClient implements IMClient {
         this.unifiedMessageProcessor.setMessageDeliveryCallback((clientSeq, uid, serverSeq, conversationSeq) ->
                 pendingMessageManager.handleSendReceipt(clientSeq, uid, serverSeq, conversationSeq)
         );
+    }
+
+    public void setMessageHandler(MessageHandler messageHandler) {
+        this.messageHandler = messageHandler;
     }
 
     @Override

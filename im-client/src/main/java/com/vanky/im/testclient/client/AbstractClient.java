@@ -155,6 +155,11 @@ public abstract class AbstractClient implements IMClient {
     }
 
     @Override
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    @Override
     public void sendPrivateMessage(String toUserId, String content) {
         if (!isLoggedIn.get()) {
             System.err.println("用户 " + userId + " 未登录，无法发送消息");

@@ -47,6 +47,13 @@ public interface IMClient {
     boolean waitForConnection(long timeout, TimeUnit unit);
 
     /**
+     * 设置用户认证令牌。
+     *
+     * @param token 认证令牌
+     */
+    void setToken(String token);
+
+    /**
      * 发送私聊消息。
      *
      * @param toUserId 接收方用户ID

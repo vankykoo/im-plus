@@ -224,25 +224,59 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
      * 连接到服务器
      */
     private void connect() {
-        imClient.connect();
+        // 1. 弹出密码输入框
+        String password = JOptionPane.showInputDialog(this, "请输入密码:", "登录认证", JOptionPane.PLAIN_MESSAGE);
+        if (password == null) {
+            appendMessage("[系统] 用户取消登录");
+            return; // 用户取消输入
+        }
 
-        // 这里可以添加一个回调或者事件监听来更新UI，而不是阻塞等待
-        // 为了简单起见，我们假设连接会成功并立即更新UI
-        // 在真实的异步场景中，应该由 AbstractClient 在连接成功后回调来更新UI
-        SwingUtilities.invokeLater(() -> {
-            statusLabel.setText("状态: 连接中...");
-            statusLabel.setForeground(Color.ORANGE);
-            connectButton.setEnabled(false);
-            disconnectButton.setEnabled(true);
-            sendPrivateButton.setEnabled(true);
-            sendGroupButton.setEnabled(true);
-            protocolComboBox.setEnabled(false); // 连接后禁用协议选择
-        });
+        appendMessage("[系统] 正在获取认证Token...");
 
-        // 启动消息同步
-        startMessageSync();
+        // 2. 在后台线程中执行网络操作
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                // 调用HTTP客户端获取Token
+                return httpClient.login(userId, password);
+            }
 
-        // 心跳和重连逻辑已经移到 AbstractClient 中，这里不再需要手动管理
+            @Override
+            protected void done() {
+                try {
+                    String token = get();
+                    if (token != null && !token.isEmpty()) {
+                        appendMessage("[系统] Token获取成功");
+
+                        // 3. 设置Token并连接
+                        imClient.setToken(token);
+                        imClient.connect();
+
+                        // 更新UI
+                        SwingUtilities.invokeLater(() -> {
+                            statusLabel.setText("状态: 连接中...");
+                            statusLabel.setForeground(Color.ORANGE);
+                            connectButton.setEnabled(false);
+                            disconnectButton.setEnabled(true);
+                            sendPrivateButton.setEnabled(true);
+                            sendGroupButton.setEnabled(true);
+                            protocolComboBox.setEnabled(false);
+                        });
+
+                        // 启动消息同步
+                        startMessageSync();
+
+                    } else {
+                        appendMessage("[系统] Token获取失败，请检查密码或用户服务状态");
+                        JOptionPane.showMessageDialog(UserWindow.this, "登录失败，无法获取Token！\n请检查密码或确保用户服务正在运行。", "认证失败", JOptionPane.ERROR_MESSAGE);
+                    }
+                } catch (Exception e) {
+                    appendMessage("[系统] 登录异常: " + e.getMessage());
+                    JOptionPane.showMessageDialog(UserWindow.this, "登录过程中发生异常: " + e.getMessage(), "异常", JOptionPane.ERROR_MESSAGE);
+                    e.printStackTrace();
+                }
+            }
+        }.execute();
     }
     
     /**

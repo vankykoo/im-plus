@@ -122,7 +122,7 @@ public class MsgGenerator {
     public static ChatMessage generateLoginSuccessMsg(String userId) {
         return ChatMessage.newBuilder()
                 .setType(MessageTypeConstants.LOGIN_RESPONSE)
-                .setContent("登录成功")
+                .setContent(MsgContentConstant.LOGIN_SUCCESS)
                 .setFromId(ReceiveUserId.SYSTEM_ID)
                 .setToId(userId)
                 .setUid(UUID.randomUUID().toString())

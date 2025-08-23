@@ -17,6 +17,7 @@ import com.vanky.im.gateway.server.processor.client.PrivateMsgProcessor;
 import com.vanky.im.gateway.server.processor.client.GroupMsgProcessor;
 import com.vanky.im.gateway.timeout.TimeoutManager;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.socket.DatagramChannel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -185,7 +186,13 @@ public class IMServiceHandler {
 
             // 2. 立即发送登录成功消息（不等待Redis操作完成）
             ChatMessage loginSuccessMsg = MsgGenerator.generateLoginSuccessMsg(userId);
-            channel.writeAndFlush(loginSuccessMsg);
+            channel.writeAndFlush(loginSuccessMsg).addListener((ChannelFutureListener) future -> {
+                if (future.isSuccess()) {
+                    log.info("登录成功响应已发送 - 用户: {}, Channel: {}", userId, channel.id().asShortText());
+                } else {
+                    log.error("登录成功响应发送失败 - 用户: {}, Channel: {}", userId, channel.id().asShortText(), future.cause());
+                }
+            });
 
             log.info("用户登录成功 - 用户: {}, 网关: {}", userId, gatewayNodeId);
 

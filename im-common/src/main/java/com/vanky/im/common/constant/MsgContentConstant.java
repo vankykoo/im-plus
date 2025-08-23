@@ -11,6 +11,8 @@ public interface MsgContentConstant {
 
     String LOGOUT_MSG = "logout";
 
+    String LOGIN_SUCCESS = "登录成功";
+
     String HEARTBEAT_PING = "ping";
 
     String HEARTBEAT_PONG = "pong";

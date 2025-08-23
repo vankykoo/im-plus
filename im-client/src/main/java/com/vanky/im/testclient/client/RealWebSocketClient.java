@@ -3,6 +3,7 @@ package com.vanky.im.testclient.client;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.protocol.ReadReceipt;
 import com.vanky.im.common.constant.MessageTypeConstants;
+import com.vanky.im.common.constant.MsgContentConstant;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 import com.vanky.im.testclient.manager.PendingMessageManager;
 
@@ -29,7 +30,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
     
     private static final String SERVER_IP = ClientConfig.getProperty("server.base.ip", "localhost");
     private static final String WEBSOCKET_PORT = ClientConfig.getProperty("websocket.port", "80");
-    private static final String GATEWAY_WS_URL = "ws://" + SERVER_IP + ":" + WEBSOCKET_PORT + "/websocket/";
+    private static final String GATEWAY_WS_URL = "ws://" + SERVER_IP + ":" + WEBSOCKET_PORT + "/websocket";
     
     private final String userId;
     private final String token;
@@ -178,7 +179,7 @@ public class RealWebSocketClient implements WebSocket.Listener {
             
             // 处理登录响应
             if (chatMessage.getType() == 1001) { // LOGIN_RESPONSE
-                if ("登录成功".equals(chatMessage.getContent()) || chatMessage.getContent().contains("成功")) {
+                if (MsgContentConstant.LOGIN_SUCCESS.equals(chatMessage.getContent())) {
                     isLoggedIn.set(true);
                     System.out.println("用户 " + userId + " 登录成功");
                 } else {

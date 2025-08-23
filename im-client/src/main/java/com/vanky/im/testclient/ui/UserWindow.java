@@ -56,6 +56,7 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
     public UserWindow(String userId, IMClient imClient) {
         this.userId = userId;
         this.imClient = imClient;
+        this.imClient.setHandler(this); // 设置消息处理器
         this.httpClient = new HttpClient();
 
         // 初始化离线消息同步组件
@@ -232,11 +233,13 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         }
 
         appendMessage("[系统] 正在获取认证Token...");
+        statusLabel.setText("状态: 正在获取Token...");
+        statusLabel.setForeground(Color.BLUE);
 
         // 2. 在后台线程中执行网络操作
-        new SwingWorker<String, Void>() {
+        new SwingWorker<HttpClient.LoginResponse, Void>() {
             @Override
-            protected String doInBackground() throws Exception {
+            protected HttpClient.LoginResponse doInBackground() throws Exception {
                 // 调用HTTP客户端获取Token
                 return httpClient.login(userId, password);
             }
@@ -244,36 +247,37 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
             @Override
             protected void done() {
                 try {
-                    String token = get();
-                    if (token != null && !token.isEmpty()) {
+                    HttpClient.LoginResponse loginResponse = get();
+                    if (loginResponse != null && loginResponse.getToken() != null && !loginResponse.getToken().isEmpty()) {
                         appendMessage("[系统] Token获取成功");
 
-                        // 3. 设置Token并连接
-                        imClient.setToken(token);
-                        imClient.connect();
-
-                        // 更新UI
+                        // 3. 设置Token, 建立物理连接, 然后发送登录请求
+                        imClient.setToken(loginResponse.getToken());
+                        
+                        // 更新UI到连接中状态
                         SwingUtilities.invokeLater(() -> {
-                            statusLabel.setText("状态: 连接中...");
+                            statusLabel.setText("状态: 连接中 (等待认证)...");
                             statusLabel.setForeground(Color.ORANGE);
                             connectButton.setEnabled(false);
                             disconnectButton.setEnabled(true);
-                            sendPrivateButton.setEnabled(true);
-                            sendGroupButton.setEnabled(true);
                             protocolComboBox.setEnabled(false);
                         });
 
-                        // 启动消息同步
-                        startMessageSync();
+                        // 建立连接并登录
+                        imClient.connect();
+                        imClient.login();
 
                     } else {
-                        appendMessage("[系统] Token获取失败，请检查密码或用户服务状态");
-                        JOptionPane.showMessageDialog(UserWindow.this, "登录失败，无法获取Token！\n请检查密码或确保用户服务正在运行。", "认证失败", JOptionPane.ERROR_MESSAGE);
+                        String errorMsg = (loginResponse != null) ? loginResponse.getMessage() : "无法获取Token，请检查密码或用户服务状态";
+                        appendMessage("[系统] Token获取失败: " + errorMsg);
+                        JOptionPane.showMessageDialog(UserWindow.this, "登录失败: " + errorMsg, "认证失败", JOptionPane.ERROR_MESSAGE);
+                        resetUIState();
                     }
                 } catch (Exception e) {
                     appendMessage("[系统] 登录异常: " + e.getMessage());
                     JOptionPane.showMessageDialog(UserWindow.this, "登录过程中发生异常: " + e.getMessage(), "异常", JOptionPane.ERROR_MESSAGE);
                     e.printStackTrace();
+                    resetUIState();
                 }
             }
         }.execute();
@@ -286,13 +290,14 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         if (imClient != null) {
             imClient.disconnect();
         }
+        resetUIState();
+        appendMessage("已断开连接");
+    }
 
-        // 心跳和重连逻辑已经移到 AbstractClient 中，这里不再需要手动管理
-        if (heartbeatExecutor != null && !heartbeatExecutor.isShutdown()) {
-            heartbeatExecutor.shutdown();
-            heartbeatExecutor = null;
-        }
-
+    /**
+     * 重置UI到未连接状态
+     */
+    private void resetUIState() {
         SwingUtilities.invokeLater(() -> {
             statusLabel.setText("状态: 未连接");
             statusLabel.setForeground(Color.RED);
@@ -300,10 +305,8 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
             disconnectButton.setEnabled(false);
             sendPrivateButton.setEnabled(false);
             sendGroupButton.setEnabled(false);
-            protocolComboBox.setEnabled(true); // 断开后重新启用协议选择
+            protocolComboBox.setEnabled(true);
         });
-
-        appendMessage("已断开连接");
     }
     
     /**
@@ -348,16 +351,6 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         }
     }
     
-    /**
-     * 启动心跳
-     */
-    private void startHeartbeat() {
-        // 心跳逻辑已移至 AbstractClient
-    }
-    
-    /**
-     * 处理接收到的消息
-     */
     @Override
     public void handleMessage(ChatMessage message) {
         // 根据消息类型进行分发
@@ -377,6 +370,35 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
                 // 其他类型的消息不处理
                 break;
         }
+    }
+
+    @Override
+    public void onLoginSuccess() {
+        SwingUtilities.invokeLater(() -> {
+            statusLabel.setText("状态: 已连接");
+            statusLabel.setForeground(new Color(0, 128, 0)); // Dark Green
+            sendPrivateButton.setEnabled(true);
+            sendGroupButton.setEnabled(true);
+            appendMessage("[系统] 登录成功，连接已建立！");
+
+            // 启动消息同步
+            startMessageSync();
+        });
+    }
+
+    @Override
+    public void onLoginFailure(String reason) {
+        SwingUtilities.invokeLater(() -> {
+            appendMessage("[系统] " + reason);
+            JOptionPane.showMessageDialog(UserWindow.this, reason, "认证失败", JOptionPane.ERROR_MESSAGE);
+            disconnect(); // 认证失败后断开连接并重置UI
+        });
+    }
+
+    @Override
+    public void onDisconnected() {
+        appendMessage("[系统] 连接已断开");
+        resetUIState();
     }
 
     /**
@@ -562,7 +584,7 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
                             appendMessage("同步进度: " + message);
                             break;
                         case COMPLETED:
-                            updateSyncStatus("同步完成", Color.GREEN);
+                            updateSyncStatus("同步完成", new Color(0, 128, 0));
                             appendMessage("消息同步完成: " + message);
                             break;
                         case ERROR:

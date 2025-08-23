@@ -92,8 +92,9 @@ public abstract class AbstractClient implements IMClient {
         );
     }
 
-    public void setMessageHandler(MessageHandler messageHandler) {
-        this.messageHandler = messageHandler;
+    @Override
+    public void setHandler(MessageHandler handler) {
+        this.messageHandler = handler;
     }
 
     @Override
@@ -157,6 +158,15 @@ public abstract class AbstractClient implements IMClient {
     @Override
     public void setToken(String token) {
         this.token = token;
+    }
+
+    @Override
+    public void login() {
+        if (!connected.get()) {
+            System.err.println("连接尚未建立，无法发送登录请求");
+            return;
+        }
+        sendLoginMessage();
     }
 
     @Override
@@ -343,9 +353,10 @@ public abstract class AbstractClient implements IMClient {
      */
     protected void onConnected() {
         System.out.println("客户端连接成功 - 用户: " + userId);
+        System.out.println("客户端物理连接成功 - 用户: " + userId);
         connected.set(true);
         connectLatch.countDown();
-        sendLoginMessage();
+        // 不再自动发送登录消息，由UI在获取Token后手动调用login()
         startHeartbeat();
     }
 
@@ -356,6 +367,10 @@ public abstract class AbstractClient implements IMClient {
         System.out.println("客户端连接断开 - 用户: " + userId);
         connected.set(false);
         isLoggedIn.set(false);
+
+        if (messageHandler != null) {
+            messageHandler.onDisconnected();
+        }
         
         // 尝试重连
         scheduleReconnect();
@@ -394,8 +409,15 @@ public abstract class AbstractClient implements IMClient {
         if ("登录成功".equals(chatMessage.getContent()) || chatMessage.getContent().contains("成功")) {
             isLoggedIn.set(true);
             System.out.println("用户 " + userId + " 登录成功");
+            if (messageHandler != null) {
+                messageHandler.onLoginSuccess();
+            }
         } else {
-            System.err.println("用户 " + userId + " 登录失败: " + chatMessage.getContent());
+            String reason = "登录失败: " + chatMessage.getContent();
+            System.err.println("用户 " + userId + " " + reason);
+            if (messageHandler != null) {
+                messageHandler.onLoginFailure(reason);
+            }
             disconnect(); // 登录失败则断开连接
         }
     }

@@ -195,7 +195,7 @@ public class TestClientMain extends JFrame {
 
         // 将UserWindow自身设置为消息处理器
         if (client instanceof com.vanky.im.testclient.client.AbstractClient) {
-            ((com.vanky.im.testclient.client.AbstractClient) client).setMessageHandler(userWindow);
+            ((com.vanky.im.testclient.client.AbstractClient) client).setHandler(userWindow);
         }
 
         userWindows.add(userWindow);

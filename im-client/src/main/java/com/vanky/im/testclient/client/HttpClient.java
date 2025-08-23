@@ -50,13 +50,14 @@ public class HttpClient {
             
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             
-            if (response.statusCode() != 200) {
-                System.err.println("登录失败，HTTP状态码: " + response.statusCode());
-                return null;
-            }
-            
             String responseBody = response.body();
             System.out.println("登录响应: " + responseBody);
+
+            if (response.statusCode() != 200) {
+                String message = "登录失败，HTTP状态码: " + response.statusCode();
+                System.err.println(message);
+                return new LoginResponse(message);
+            }
             
             // 简单解析JSON响应
             if (parseJsonField(responseBody, "code").equals("200")) {
@@ -67,12 +68,13 @@ public class HttpClient {
             } else {
                 String message = parseJsonField(responseBody, "message");
                 System.err.println("登录失败: " + message);
-                return null;
+                return new LoginResponse(message);
             }
         } catch (Exception e) {
-            System.err.println("登录请求异常: " + e.getMessage());
+            String message = "登录请求异常: " + e.getMessage();
+            System.err.println(message);
             e.printStackTrace();
-            return null;
+            return new LoginResponse(message);
         }
     }
     
@@ -689,6 +691,7 @@ public class HttpClient {
         private String userId;
         private String username;
         private String token;
+        private String message; // 用于存储错误信息
 
         public LoginResponse(String userId, String username, String token) {
             this.userId = userId;
@@ -696,9 +699,14 @@ public class HttpClient {
             this.token = token;
         }
 
+        public LoginResponse(String message) {
+            this.message = message;
+        }
+
         public String getUserId() { return userId; }
         public String getUsername() { return username; }
         public String getToken() { return token; }
+        public String getMessage() { return message; }
     }
 
     /**

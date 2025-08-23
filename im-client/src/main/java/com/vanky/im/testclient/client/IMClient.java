@@ -54,6 +54,18 @@ public interface IMClient {
     void setToken(String token);
 
     /**
+     * 使用已设置的Token发送登录请求。
+     */
+    void login();
+
+    /**
+     * 设置消息处理器，用于回调UI或业务逻辑。
+     *
+     * @param handler 消息处理器
+     */
+    void setHandler(MessageHandler handler);
+
+    /**
      * 发送私聊消息。
      *
      * @param toUserId 接收方用户ID
@@ -103,5 +115,11 @@ public interface IMClient {
      */
     interface MessageHandler {
         void handleMessage(ChatMessage message);
+
+        void onLoginSuccess();
+
+        void onLoginFailure(String reason);
+
+        void onDisconnected();
     }
 }

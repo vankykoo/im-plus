@@ -39,6 +39,7 @@ public class RealWebSocketClient extends AbstractClient implements WebSocket.Lis
             URI uri = URI.create(GATEWAY_WS_URL);
             CompletableFuture<WebSocket> webSocketFuture = httpClient.newWebSocketBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
+                    .subprotocols("chat") // 指定聊天子协议
                     .buildAsync(uri, this);
 
             this.webSocket = webSocketFuture.get(10, TimeUnit.SECONDS);

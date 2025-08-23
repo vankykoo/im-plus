@@ -41,7 +41,7 @@ public class NettyServerWebSocket extends NettyServer {
 
     private static final Logger logger = LoggerFactory.getLogger(NettyServerWebSocket.class);
     
-    @Value("${netty.server.websocket.path:/websocket}")
+    @Value("${netty.server.websocket.path:/}")
     private String websocketPath;
     
     @Autowired

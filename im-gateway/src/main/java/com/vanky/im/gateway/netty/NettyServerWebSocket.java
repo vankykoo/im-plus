@@ -3,6 +3,7 @@ package com.vanky.im.gateway.netty;
 import com.vanky.im.common.protocol.codec.ProtobufMessageDecoder;
 import com.vanky.im.common.protocol.codec.ProtobufMessageEncoder;
 import com.vanky.im.gateway.netty.handler.CommonHeartbeatHandler;
+import com.vanky.im.gateway.netty.websocket.WebSocketFrameEncoder;
 import com.vanky.im.gateway.netty.websocket.WebSocketServerHandler;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
@@ -46,6 +47,9 @@ public class NettyServerWebSocket extends NettyServer {
     
     @Autowired
     private WebSocketServerHandler webSocketServerHandler;
+
+    @Autowired
+    private WebSocketFrameEncoder webSocketFrameEncoder;
 
     public NettyServerWebSocket() {
         // Constructor is now empty as websocketPath is injected via @Value
@@ -122,6 +126,8 @@ public class NettyServerWebSocket extends NettyServer {
                 ch.pipeline().addLast(new IdleStateHandler(SERVER_READ_IDLE_TIMEOUT, IDLE_TIME_DISABLE, IDLE_TIME_DISABLE, TimeUnit.SECONDS));
                 // 添加通用心跳处理器
                 ch.pipeline().addLast(new CommonHeartbeatHandler(WEBSOCKET_PROTOCOL));
+                // 添加自定义的编码器，用于将ChatMessage编码为BinaryWebSocketFrame
+                ch.pipeline().addLast(webSocketFrameEncoder);
                 // WebSocket处理器直接处理BinaryWebSocketFrame，不再需要通用Protobuf编解码器 - 使用Spring管理的实例
                 ch.pipeline().addLast(webSocketServerHandler);
             }

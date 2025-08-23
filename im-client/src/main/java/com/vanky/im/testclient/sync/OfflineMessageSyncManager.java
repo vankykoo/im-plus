@@ -889,24 +889,49 @@ public class OfflineMessageSyncManager {
      * @param conversationId 会话ID
      * @param startSeq 起始序列号
      * @param endSeq 结束序列号
+     * @param isPrivate 是否为私聊消息
      */
-    public void pullGapMessages(String conversationId, long startSeq, long endSeq) {
+    public void pullGapMessages(String conversationId, long startSeq, long endSeq, boolean isPrivate) {
         executorService.submit(() -> {
             try {
-                System.out.println(String.format("开始拉取空洞消息 - 会话: %s, 范围: [%d, %d]",
-                        conversationId, startSeq, endSeq));
+                System.out.println(String.format("开始拉取空洞消息 - 会话: %s, 范围: [%d, %d], 类型: %s",
+                        conversationId, startSeq, endSeq, isPrivate ? "私聊" : "群聊"));
 
-                // 复用现有的分页拉取逻辑来模拟空洞消息拉取
                 List<Object> pulledObjects = new ArrayList<>();
-                long currentPullSeq = startSeq;
-                while (currentPullSeq <= endSeq) {
-                    PullResult result = pullMessagesBatch(currentPullSeq);
-                    if (result.isSuccess() && result.getCount() > 0) {
-                        pulledObjects.addAll(result.getMessages());
-                        currentPullSeq = result.getMaxSeq() + 1;
-                        if (!result.isHasMore()) break;
+
+                if (isPrivate) {
+                    // 私聊空洞消息拉取逻辑
+                    long currentPullSeq = startSeq;
+                    while (currentPullSeq <= endSeq) {
+                        // 注意：pullMessagesBatch 是根据 userSeq 拉取的
+                        PullResult result = pullMessagesBatch(currentPullSeq);
+                        if (result.isSuccess() && result.getCount() > 0) {
+                            pulledObjects.addAll(result.getMessages());
+                            currentPullSeq = result.getMaxSeq() + 1;
+                            if (!result.isHasMore()) break;
+                        } else {
+                            System.err.println("私聊空洞消息拉取中断或失败: " + result.getErrorMessage());
+                            break;
+                        }
+                    }
+                } else {
+                    // 群聊空洞消息拉取逻辑
+                    Map<String, Long> conversationSeqMap = new HashMap<>();
+                    conversationSeqMap.put(conversationId, startSeq - 1);
+
+                    // 假设一次能拉取完所有空洞消息
+                    int limit = (int) (endSeq - startSeq + 1);
+                    HttpClient.PullGroupMessagesResponse pullResponse = httpClient.pullGroupMessages(
+                            currentUserId, conversationSeqMap, limit);
+
+                    if (pullResponse.isSuccess()) {
+                        pulledObjects.addAll(pullResponse.getMessages(httpClient));
+                        Map<String, Long> latestSeqMap = pullResponse.getLatestSeqMap();
+                        if (latestSeqMap != null && !latestSeqMap.isEmpty()) {
+                            localStorage.updateConversationSeqMap(currentUserId, latestSeqMap);
+                        }
                     } else {
-                        break;
+                        System.err.println("群聊空洞消息拉取失败: " + pullResponse.getErrorMessage());
                     }
                 }
 
@@ -914,17 +939,18 @@ public class OfflineMessageSyncManager {
                         conversationId, startSeq, endSeq, pulledObjects.size()));
 
                 if (!pulledObjects.isEmpty() && realtimeMessageProcessor != null) {
-                    List<ChatMessage> chatMessages = convertToChatMessages(pulledObjects);
+                    List<ChatMessage> chatMessages = convertToChatMessages(pulledObjects, isPrivate);
                     realtimeMessageProcessor.processGapMessages(chatMessages);
                 }
 
             } catch (Exception e) {
                 System.err.println("拉取空洞消息失败: " + e.getMessage());
+                e.printStackTrace();
             }
         });
     }
 
-    private List<ChatMessage> convertToChatMessages(List<Object> messageObjects) {
+    private List<ChatMessage> convertToChatMessages(List<Object> messageObjects, boolean isPrivate) {
         List<ChatMessage> chatMessages = new ArrayList<>();
         for (Object obj : messageObjects) {
             if (obj instanceof Map) {
@@ -932,8 +958,18 @@ public class OfflineMessageSyncManager {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> map = (Map<String, Object>) obj;
                     ChatMessage.Builder builder = ChatMessage.newBuilder();
+
+                    long seq = Long.parseLong(map.getOrDefault("seq", "0").toString());
+                    if (isPrivate) {
+                        builder.setUserSeq(seq);
+                    } else {
+                        builder.setConversationSeq(seq);
+                        if (map.containsKey("userSeq")) {
+                            builder.setUserSeq(Long.parseLong(map.get("userSeq").toString()));
+                        }
+                    }
+
                     builder.setConversationId((String) map.getOrDefault("conversationId", ""));
-                    builder.setConversationSeq(Long.parseLong(map.getOrDefault("seq", "0").toString()));
                     builder.setContent((String) map.getOrDefault("content", ""));
                     builder.setFromId((String) map.getOrDefault("fromUserId", ""));
                     builder.setToId((String) map.getOrDefault("toUserId", ""));

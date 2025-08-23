@@ -46,12 +46,19 @@ public class RealtimeMessageProcessor {
      * @param message 聊天消息
      */
     public synchronized void processMessage(ChatMessage message) {
-        String conversationId = message.getConversationId();
-        long receivedSeq = message.getConversationSeq();
+        boolean isPrivate = isPrivateChatMessage(message);
+        String conversationId = isPrivate ? generatePrivateChatConversationId(message.getFromId(), message.getToId()) : message.getConversationId();
+        long receivedSeq = isPrivate ? message.getUserSeq() : message.getConversationSeq();
 
         // 从本地存储加载或初始化期望的序列号
         long expectedSeq = expectedSeqMap.computeIfAbsent(conversationId,
-                cid -> localStorage.getConversationLastSeq(userWindow.getUserId(), cid) + 1);
+                cid -> {
+                    if (isPrivate) {
+                        return localStorage.getLastSyncSeq(userWindow.getUserId()) + 1;
+                    } else {
+                        return localStorage.getConversationLastSeq(userWindow.getUserId(), cid) + 1;
+                    }
+                });
 
         if (receivedSeq == expectedSeq) {
             // 序列号连续，直接处理
@@ -59,14 +66,14 @@ public class RealtimeMessageProcessor {
             expectedSeqMap.put(conversationId, expectedSeq + 1);
 
             // 检查并处理暂存的后续消息
-            processPendingMessages(conversationId);
+            processPendingMessages(conversationId, isPrivate);
         } else if (receivedSeq > expectedSeq) {
             // 发现空洞，暂存当前消息，并触发空洞消息拉取
             System.out.println(String.format("发现消息空洞 - 会话: %s, 期望: %d, 收到: %d",
                     conversationId, expectedSeq, receivedSeq));
-            addPendingMessage(message);
+            addPendingMessage(message, isPrivate);
             // 触发空洞消息拉取
-            syncManager.pullGapMessages(conversationId, expectedSeq, receivedSeq - 1);
+            syncManager.pullGapMessages(conversationId, expectedSeq, receivedSeq - 1, isPrivate);
         } else {
             // 收到重复的旧消息，直接丢弃
             System.out.println(String.format("收到重复消息，直接丢弃 - 会话: %s, 期望: %d, 收到: %d",
@@ -77,16 +84,17 @@ public class RealtimeMessageProcessor {
     /**
      * 将消息添加到暂存队列
      */
-    private void addPendingMessage(ChatMessage message) {
-        pendingMessages.computeIfAbsent(message.getConversationId(),
-                k -> new PriorityQueue<>(Comparator.comparingLong(ChatMessage::getConversationSeq)))
+    private void addPendingMessage(ChatMessage message, boolean isPrivate) {
+        String conversationId = isPrivate ? generatePrivateChatConversationId(message.getFromId(), message.getToId()) : message.getConversationId();
+        pendingMessages.computeIfAbsent(conversationId,
+                k -> new PriorityQueue<>(Comparator.comparingLong(msg -> isPrivate ? msg.getUserSeq() : msg.getConversationSeq())))
                 .add(message);
     }
 
     /**
      * 尝试处理指定会话的暂存消息
      */
-    private void processPendingMessages(String conversationId) {
+    private void processPendingMessages(String conversationId, boolean isPrivate) {
         PriorityQueue<ChatMessage> queue = pendingMessages.get(conversationId);
         if (queue == null || queue.isEmpty()) {
             return;
@@ -94,7 +102,7 @@ public class RealtimeMessageProcessor {
 
         long expectedSeq = expectedSeqMap.get(conversationId);
 
-        while (!queue.isEmpty() && queue.peek().getConversationSeq() == expectedSeq) {
+        while (!queue.isEmpty() && (isPrivate ? queue.peek().getUserSeq() : queue.peek().getConversationSeq()) == expectedSeq) {
             ChatMessage message = queue.poll();
             displayAndProcess(message);
             expectedSeq++;
@@ -131,21 +139,26 @@ public class RealtimeMessageProcessor {
         java.util.Set<String> affectedConversationIds = new java.util.HashSet<>();
 
         // 对空洞消息按序列号排序
-        gapMessages.sort(Comparator.comparingLong(ChatMessage::getConversationSeq));
+        gapMessages.sort(Comparator.comparingLong(msg -> isPrivateChatMessage(msg) ? msg.getUserSeq() : msg.getConversationSeq()));
 
         for (ChatMessage message : gapMessages) {
-            String conversationId = message.getConversationId();
+            boolean isPrivate = isPrivateChatMessage(message);
+            String conversationId = isPrivate ? generatePrivateChatConversationId(message.getFromId(), message.getToId()) : message.getConversationId();
             affectedConversationIds.add(conversationId);
             
             long expectedSeq = expectedSeqMap.getOrDefault(conversationId, 0L);
             if (expectedSeq == 0) {
                 // 如果是首次处理该会话，从本地存储加载最新的seq
-                expectedSeq = localStorage.getConversationLastSeq(userWindow.getUserId(), conversationId) + 1;
+                if (isPrivate) {
+                    expectedSeq = localStorage.getLastSyncSeq(userWindow.getUserId()) + 1;
+                } else {
+                    expectedSeq = localStorage.getConversationLastSeq(userWindow.getUserId(), conversationId) + 1;
+                }
             }
 
 
             // 只处理期望的消息，避免重复显示
-            if (message.getConversationSeq() == expectedSeq) {
+            if ((isPrivate ? message.getUserSeq() : message.getConversationSeq()) == expectedSeq) {
                 displayAndProcess(message);
                 expectedSeqMap.put(conversationId, expectedSeq + 1);
             }
@@ -153,7 +166,21 @@ public class RealtimeMessageProcessor {
 
         // 尝试处理所有受影响会话的暂存消息
         for (String conversationId : affectedConversationIds) {
-            processPendingMessages(conversationId);
+            // 需要判断会话类型来调用正确的 processPendingMessages
+            // 暂时简化处理，实际场景可能需要更复杂的逻辑来获取会话类型
+            processPendingMessages(conversationId, conversationId.startsWith("private_"));
+        }
+    }
+
+    private boolean isPrivateChatMessage(ChatMessage message) {
+        return message.getConversationId() == null || message.getConversationId().isEmpty() || message.getConversationId().startsWith("private_");
+    }
+
+    private String generatePrivateChatConversationId(String fromId, String toId) {
+        if (fromId.compareTo(toId) < 0) {
+            return "private_" + fromId + "_" + toId;
+        } else {
+            return "private_" + toId + "_" + fromId;
         }
     }
 }

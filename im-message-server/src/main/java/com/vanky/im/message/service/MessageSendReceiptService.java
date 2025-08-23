@@ -150,8 +150,8 @@ public class MessageSendReceiptService {
             }
             
             // 构建群聊回执消息（使用会话级序列号）
-            ChatMessage receiptMessage = buildReceiptMessage(originalMessage, serverMsgId, 
-                                                            conversationSeq, serverTimestamp);
+            ChatMessage receiptMessage = buildGroupReceiptMessage(originalMessage, serverMsgId,
+                                                                conversationSeq, serverTimestamp);
             
             // 推送回执到发送方所在的网关
             gatewayMessagePushService.pushMessageToGateway(receiptMessage, conversationSeq, senderId);
@@ -164,5 +164,39 @@ public class MessageSendReceiptService {
             log.error("群聊消息发送回执推送失败 - 发送方: {}, 客户端序列号: {}, 服务端消息ID: {}", 
                      senderId, clientSeq, serverMsgId, e);
         }
+    }
+    /**
+     * 构建群聊消息发送回执
+     * <p>
+     * 专门为群聊场景创建，确保同时设置userSeq和conversationSeq
+     *
+     * @param originalMessage 原始消息请求
+     * @param serverMsgId     服务端生成的消息ID
+     * @param conversationSeq 会话级序列号
+     * @param serverTimestamp 服务端时间戳
+     * @return 构建好的回执消息
+     */
+    private ChatMessage buildGroupReceiptMessage(ChatMessage originalMessage, String serverMsgId,
+                                                 Long conversationSeq, long serverTimestamp) {
+
+        return ChatMessage.newBuilder()
+                // 核心标识
+                .setType(MessageTypeConstants.MESSAGE_SEND_RECEIPT)
+                // 客户端匹配关键
+                .setClientSeq(originalMessage.getClientSeq())
+                // 服务端官方ID
+                .setUid(serverMsgId)
+                // 群聊场景，userSeq可以不设置或设置为0，关键是conversationSeq
+                .setUserSeq(originalMessage.getUserSeq()) // 保留原始的userSeq或设置为0
+                // 【关键修复】设置会话级序列号
+                .setConversationSeq(conversationSeq)
+                // 服务端权威时间戳
+                .setTimestamp(serverTimestamp)
+                // 附带上下文信息
+                .setFromId(originalMessage.getFromId())
+                .setToId(originalMessage.getToId())
+                .setContent(originalMessage.getContent())
+                .setConversationId(originalMessage.getConversationId())
+                .build();
     }
 }

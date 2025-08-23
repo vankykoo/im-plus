@@ -225,12 +225,9 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
      * 连接到服务器
      */
     private void connect() {
-        // 1. 弹出密码输入框
-        String password = JOptionPane.showInputDialog(this, "请输入密码:", "登录认证", JOptionPane.PLAIN_MESSAGE);
-        if (password == null) {
-            appendMessage("[系统] 用户取消登录");
-            return; // 用户取消输入
-        }
+        // 1. 使用默认密码
+        String password = "123456";
+        appendMessage("[系统] 使用默认密码进行登录...");
 
         appendMessage("[系统] 正在获取认证Token...");
         statusLabel.setText("状态: 正在获取Token...");

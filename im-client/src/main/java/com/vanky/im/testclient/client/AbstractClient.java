@@ -42,7 +42,7 @@ public abstract class AbstractClient implements IMClient {
     protected final PendingMessageManager pendingMessageManager;
     protected final UnifiedMessageProcessor unifiedMessageProcessor;
 
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private ScheduledExecutorService scheduler;
     private static final int RECONNECT_DELAY_SECONDS = 5;
     private static final int HEARTBEAT_INTERVAL_SECONDS = 30;
 
@@ -103,6 +103,11 @@ public abstract class AbstractClient implements IMClient {
         connected.set(false);
         isLoggedIn.set(false);
         connectLatch = new CountDownLatch(1);
+
+        // 检查并按需创建调度器
+        if (scheduler == null || scheduler.isShutdown()) {
+            scheduler = Executors.newSingleThreadScheduledExecutor();
+        }
         
         // 启动待确认消息管理器
         pendingMessageManager.start();

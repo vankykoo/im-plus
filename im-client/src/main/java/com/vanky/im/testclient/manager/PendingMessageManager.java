@@ -48,11 +48,7 @@ public class PendingMessageManager {
     private final ConcurrentHashMap<String, PendingMessage> pendingMessages = new ConcurrentHashMap<>();
     
     /** 定时任务调度器 */
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-        Thread t = new Thread(r, "pending-message-scanner");
-        t.setDaemon(true);
-        return t;
-    });
+    private ScheduledExecutorService scheduler;
     
     /** 超时回调接口 */
     private TimeoutCallback timeoutCallback;
@@ -81,9 +77,18 @@ public class PendingMessageManager {
             System.out.println("PendingMessageManager已经启动");
             return;
         }
+
+        // 检查并按需创建调度器
+        if (scheduler == null || scheduler.isShutdown()) {
+            scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "pending-message-scanner");
+                t.setDaemon(true);
+                return t;
+            });
+        }
         
         // 启动定时扫描任务
-        scheduler.scheduleAtFixedRate(this::scanTimeoutMessages, 
+        scheduler.scheduleAtFixedRate(this::scanTimeoutMessages,
                 SCAN_INTERVAL_SECONDS, SCAN_INTERVAL_SECONDS, TimeUnit.SECONDS);
         
         started = true;

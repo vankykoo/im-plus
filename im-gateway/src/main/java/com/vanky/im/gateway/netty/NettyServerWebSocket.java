@@ -4,6 +4,7 @@ import com.vanky.im.common.protocol.codec.ProtobufMessageDecoder;
 import com.vanky.im.common.protocol.codec.ProtobufMessageEncoder;
 import com.vanky.im.gateway.netty.handler.CommonHeartbeatHandler;
 import com.vanky.im.gateway.netty.websocket.WebSocketFrameEncoder;
+import com.vanky.im.gateway.netty.handler.HttpAuthHandler;
 import com.vanky.im.gateway.netty.websocket.WebSocketServerHandler;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
@@ -50,6 +51,9 @@ public class NettyServerWebSocket extends NettyServer {
 
     @Autowired
     private WebSocketFrameEncoder webSocketFrameEncoder;
+
+    @Autowired
+    private HttpAuthHandler httpAuthHandler;
 
     public NettyServerWebSocket() {
         // Constructor is now empty as websocketPath is injected via @Value
@@ -120,6 +124,8 @@ public class NettyServerWebSocket extends NettyServer {
                 ch.pipeline().addLast(new ChunkedWriteHandler());
                 // Netty 是基于分段请求的，HttpObjectAggregator 的作用是将请求分段再聚合, 参数是聚合字节的最大长度
                 ch.pipeline().addLast(new HttpObjectAggregator(MAX_CONTENT_LENGTH));
+                // 添加 HTTP 认证处理器
+                ch.pipeline().addLast(httpAuthHandler);
                 // WebSocket 服务器处理的协议，用于指定给客户端连接访问的路由
                 ch.pipeline().addLast(new WebSocketServerProtocolHandler(websocketPath, "chat", true));
                 // 添加空闲状态处理器，设置读空闲超时时间

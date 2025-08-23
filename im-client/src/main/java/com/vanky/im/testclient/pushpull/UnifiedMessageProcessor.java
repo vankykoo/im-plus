@@ -468,17 +468,17 @@ public class UnifiedMessageProcessor {
             String clientSeq = message.getClientSeq();
             String uid = message.getUid();
             long conversationSeq = message.getConversationSeq();
+            String serverSeq = message.getSeq();
 
             if (clientSeq != null && !clientSeq.trim().isEmpty() &&
-                uid != null && !uid.trim().isEmpty() &&
-                conversationSeq > 0) {
+                uid != null && !uid.trim().isEmpty()) {
 
                 // 通知待确认消息管理器更新消息状态
                 if (messageDeliveryCallback != null) {
-                    boolean success = messageDeliveryCallback.onMessageDelivered(clientSeq, uid, String.valueOf(conversationSeq));
+                    boolean success = messageDeliveryCallback.onMessageDelivered(clientSeq, uid, serverSeq, String.valueOf(conversationSeq));
                     if (success) {
                         log.info("消息状态更新成功 - 客户端序列号: " + clientSeq +
-                                ", 服务端消息ID: " + uid + ", 会话序列号: " + conversationSeq);
+                                ", 服务端消息ID: " + uid + ", 服务端序列号: " + serverSeq + ", 会话序列号: " + conversationSeq);
                     } else {
                         log.warning("消息状态更新失败 - 客户端序列号: " + clientSeq);
                     }
@@ -515,10 +515,11 @@ public class UnifiedMessageProcessor {
          *
          * @param clientSeq 客户端序列号
          * @param uid 服务端生成的全局唯一消息ID
-         * @param serverSeq 服务端序列号
+         * @param serverSeq 服务端用户级序列号
+         * @param conversationSeq 服务端会话级序列号
          * @return 是否处理成功
          */
-        boolean onMessageDelivered(String clientSeq, String uid, String serverSeq);
+        boolean onMessageDelivered(String clientSeq, String uid, String serverSeq, String conversationSeq);
     }
 
     /**

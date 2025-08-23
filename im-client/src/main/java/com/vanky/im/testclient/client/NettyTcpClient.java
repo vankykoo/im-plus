@@ -111,9 +111,9 @@ public class NettyTcpClient {
         // 设置消息投递回调（统一推送逻辑：发送方接收到自己的消息时更新状态）
         this.unifiedMessageProcessor.setMessageDeliveryCallback(new UnifiedMessageProcessor.MessageDeliveryCallback() {
             @Override
-            public boolean onMessageDelivered(String clientSeq, String uid, String serverSeq) {
+            public boolean onMessageDelivered(String clientSeq, String uid, String serverSeq, String conversationSeq) {
                 // 委托给待确认消息管理器处理
-                return pendingMessageManager.handleSendReceipt(clientSeq, uid, serverSeq);
+                return pendingMessageManager.handleSendReceipt(clientSeq, uid, serverSeq, conversationSeq);
             }
         });
     }
@@ -823,16 +823,18 @@ public class NettyTcpClient {
      */
     private void handleMessageSendReceipt(ChatMessage receiptMessage) {
         String clientSeq = receiptMessage.getClientSeq();
-        String serverMsgId = receiptMessage.getUid(); // 服务端消息ID，保留用于记录
-        String conversationSeq = String.valueOf(receiptMessage.getConversationSeq()); // 获取会话序列号
+        String serverMsgId = receiptMessage.getUid(); // 服务端消息ID
+        String serverSeq = String.valueOf(receiptMessage.getUserSeq()); // 服务端用户级序列号
+        String conversationSeq = String.valueOf(receiptMessage.getConversationSeq()); // 服务端会话级序列号
 
-        System.out.println("收到消息发送回执 - 客户端序列号: " + clientSeq +
-                         ", 服务端消息ID: " + serverMsgId +
-                         ", 会话序列号: " + conversationSeq);
+        System.out.println("收到消息发送回执 - clientSeq: " + clientSeq +
+                         ", serverMsgId: " + serverMsgId +
+                         ", serverSeq: " + serverSeq +
+                         ", conversationSeq: " + conversationSeq);
 
         try {
             // 关键修复：确保使用 clientSeq 来查找待确认消息
-            boolean success = pendingMessageManager.handleSendReceipt(clientSeq, serverMsgId, conversationSeq);
+            boolean success = pendingMessageManager.handleSendReceipt(clientSeq, serverMsgId, serverSeq, conversationSeq);
 
             if (success) {
                 System.out.println("消息发送回执处理成功 - 客户端序列号: " + clientSeq);

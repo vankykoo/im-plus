@@ -143,13 +143,14 @@ public class PendingMessageManager {
     }
     
     /**
-     * 处理发送回执（磐石计划：使用conversationSeq替代serverSeq）
+     * 处理发送回执
      * @param clientSeq 客户端序列号
      * @param uid 服务端生成的全局唯一消息ID
-     * @param conversationSeq 会话序列号
+     * @param serverSeq 服务端用户级序列号
+     * @param conversationSeq 服务端会话级序列号
      * @return 是否处理成功
      */
-    public boolean handleSendReceipt(String clientSeq, String uid, String conversationSeq) {
+    public boolean handleSendReceipt(String clientSeq, String uid, String serverSeq, String conversationSeq) {
         if (clientSeq == null) {
             System.err.println("客户端序列号为空");
             return false;
@@ -164,14 +165,18 @@ public class PendingMessageManager {
         // 更新消息状态
         message.setStatus(MessageStatus.DELIVERED);
         message.setUid(uid);
-        message.setConversationSeq(conversationSeq); // 磐石计划：使用conversationSeq
-
-        // 根据消息类型更新本地同步点
-        updateLocalSyncPoint(message, conversationSeq);
-
-        System.out.println("收到发送回执: " + clientSeq +
-                         " -> 服务端消息ID: " + uid +
-                         ", 会话序列号: " + conversationSeq);
+        
+        // 根据消息类型决定使用哪个seq进行更新
+        if (message.getMessageType() == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
+            message.setConversationSeq(serverSeq); // 私聊消息使用serverSeq
+            updateLocalSyncPoint(message, serverSeq);
+            System.out.println("收到私聊消息发送回执: " + clientSeq + " -> uid: " + uid + ", serverSeq: " + serverSeq);
+        } else if (message.getMessageType() == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
+            message.setConversationSeq(conversationSeq); // 群聊消息使用conversationSeq
+            updateLocalSyncPoint(message, conversationSeq);
+            System.out.println("收到群聊消息发送回执: " + clientSeq + " -> uid: " + uid + ", conversationSeq: " + conversationSeq);
+        }
+        
         return true;
     }
     
@@ -288,35 +293,35 @@ public class PendingMessageManager {
     }
     
     /**
-     * 根据消息类型更新本地同步点（磐石计划：使用conversationSeq替代serverSeq）
+     * 根据消息类型更新本地同步点
      * @param message 待确认消息
-     * @param conversationSeq 会话序列号
+     * @param seq 用于更新的序列号
      */
-    private void updateLocalSyncPoint(PendingMessage message, String conversationSeq) {
+    private void updateLocalSyncPoint(PendingMessage message, String seq) {
         if (localStorage == null || userId == null) {
             System.out.println("LocalStorage或UserId未设置，跳过同步点更新");
             return;
         }
 
-        if (conversationSeq == null || conversationSeq.trim().isEmpty()) {
-            System.err.println("会话序列号为空，无法更新同步点");
+        if (seq == null || seq.trim().isEmpty()) {
+            System.err.println("序列号为空，无法更新同步点");
             return;
         }
 
         try {
-            Long seq = Long.parseLong(conversationSeq);
+            Long longSeq = Long.parseLong(seq);
 
             // 根据消息类型更新不同的同步点
             if (message.getMessageType() == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
                 // 私聊消息：更新用户级全局同步点
-                updatePrivateMessageSyncPoint(seq);
+                updatePrivateMessageSyncPoint(longSeq);
             } else if (message.getMessageType() == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
                 // 群聊消息：更新会话级同步点
-                updateGroupMessageSyncPoint(message, seq);
+                updateGroupMessageSyncPoint(message, longSeq);
             }
 
         } catch (NumberFormatException e) {
-            System.err.println("会话序列号格式错误: " + conversationSeq);
+            System.err.println("序列号格式错误: " + seq);
         } catch (Exception e) {
             System.err.println("更新本地同步点失败: " + e.getMessage());
         }

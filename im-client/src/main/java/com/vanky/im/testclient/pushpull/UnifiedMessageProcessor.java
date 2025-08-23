@@ -351,10 +351,17 @@ public class UnifiedMessageProcessor {
      * @return 是否私聊
      */
     private boolean isPrivateChatMessage(ChatMessage message) {
-        // 根据消息类型或会话ID格式判断
-        // 这里使用简单的判断逻辑：如果conversationId为空或者以"private_"开头，则认为是私聊
+        // 优先根据消息类型判断
+        if (message.getType() == MessageTypeConstants.PRIVATE_CHAT_MESSAGE) {
+            return true;
+        }
+        if (message.getType() == MessageTypeConstants.GROUP_CHAT_MESSAGE) {
+            return false;
+        }
+
+        // 如果消息类型不明确，则根据会话ID格式判断作为兜底
         String conversationId = message.getConversationId();
-        return conversationId == null || conversationId.isEmpty() || conversationId.startsWith("private_");
+        return conversationId != null && conversationId.startsWith("private_");
     }
     
     /**

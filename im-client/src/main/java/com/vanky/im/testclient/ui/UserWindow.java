@@ -3,9 +3,7 @@ package com.vanky.im.testclient.ui;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.constant.MessageTypeConstants;
 import com.vanky.im.testclient.client.HttpClient;
-
-import com.vanky.im.testclient.client.RealWebSocketClient;
-import com.vanky.im.testclient.client.NettyTcpClient;
+import com.vanky.im.testclient.client.IMClient;
 import com.vanky.im.testclient.processor.RealtimeMessageProcessor;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 import com.vanky.im.testclient.sync.OfflineMessageSyncManager;
@@ -27,8 +25,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * 用户窗口界面 - Swing版本
  */
-public class UserWindow extends JFrame implements RealWebSocketClient.MessageHandler, NettyTcpClient.MessageHandler {
-    
+public class UserWindow extends JFrame implements IMClient.MessageHandler {
+
     private final String userId;
     private JTextArea messageArea;
     private JTextField targetUserInput;
@@ -46,8 +44,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
     private JComboBox<String> protocolComboBox;
     
     private HttpClient httpClient;
-    private RealWebSocketClient realWebSocketClient;
-    private NettyTcpClient tcpClient;
+    private IMClient imClient;
     private ScheduledExecutorService heartbeatExecutor;
 
     // 离线消息同步相关
@@ -56,8 +53,9 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
     private JLabel syncStatusLabel;
     private RealtimeMessageProcessor realtimeMessageProcessor;
     
-    public UserWindow(String userId) {
+    public UserWindow(String userId, IMClient imClient) {
         this.userId = userId;
+        this.imClient = imClient;
         this.httpClient = new HttpClient();
 
         // 初始化离线消息同步组件
@@ -226,106 +224,41 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
      * 连接到服务器
      */
     private void connect() {
-        // 先登录获取token
-        HttpClient.LoginResponse loginResponse = httpClient.login(userId, "123456"); // 默认密码
-        
-        if (loginResponse == null) {
-            return;
-        }
-        
-        // 根据选择的协议建立连接
-        String selectedProtocol = (String) protocolComboBox.getSelectedItem();
-        boolean connectionSuccess = false;
-        
-        if ("WebSocket".equals(selectedProtocol)) {
-            realWebSocketClient = new RealWebSocketClient(userId, loginResponse.getToken(), this);
-            realWebSocketClient.connect();
+        imClient.connect();
 
-            // 等待连接建立
-            if (realWebSocketClient.waitForConnection(10, TimeUnit.SECONDS)) {
-                // 等待登录完成
-                int retryCount = 0;
-                while (retryCount < 50 && !realWebSocketClient.isLoggedIn()) { // 等待5秒
-                    try {
-                        Thread.sleep(100);
-                        retryCount++;
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
+        // 这里可以添加一个回调或者事件监听来更新UI，而不是阻塞等待
+        // 为了简单起见，我们假设连接会成功并立即更新UI
+        // 在真实的异步场景中，应该由 AbstractClient 在连接成功后回调来更新UI
+        SwingUtilities.invokeLater(() -> {
+            statusLabel.setText("状态: 连接中...");
+            statusLabel.setForeground(Color.ORANGE);
+            connectButton.setEnabled(false);
+            disconnectButton.setEnabled(true);
+            sendPrivateButton.setEnabled(true);
+            sendGroupButton.setEnabled(true);
+            protocolComboBox.setEnabled(false); // 连接后禁用协议选择
+        });
 
-                if (realWebSocketClient.isLoggedIn()) {
-                    connectionSuccess = true;
-                }
-            }
-        } else if ("TCP".equals(selectedProtocol)) {
-            tcpClient = new NettyTcpClient(userId, loginResponse.getToken(), this);
-            tcpClient.connect();
+        // 启动消息同步
+        startMessageSync();
 
-            // 等待连接建立
-            if (tcpClient.waitForConnection(10, TimeUnit.SECONDS)) {
-                // 等待登录完成
-                int retryCount = 0;
-                while (retryCount < 50 && !tcpClient.isLoggedIn()) { // 等待5秒
-                    try {
-                        Thread.sleep(100);
-                        retryCount++;
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                }
-
-                if (tcpClient.isLoggedIn()) {
-                    connectionSuccess = true;
-                }
-            }
-        }
-        
-        if (connectionSuccess) {
-            SwingUtilities.invokeLater(() -> {
-                statusLabel.setText("状态: 已连接 (" + selectedProtocol + ")");
-                statusLabel.setForeground(Color.GREEN);
-                connectButton.setEnabled(false);
-                disconnectButton.setEnabled(true);
-                sendPrivateButton.setEnabled(true);
-                sendGroupButton.setEnabled(true);
-                protocolComboBox.setEnabled(false); // 连接后禁用协议选择
-            });
-
-            // 启动心跳
-            startHeartbeat();
-
-            // 启动消息同步
-            startMessageSync();
-        }
+        // 心跳和重连逻辑已经移到 AbstractClient 中，这里不再需要手动管理
     }
     
     /**
      * 断开连接
      */
     private void disconnect() {
-        // 断开WebSocket连接
-        if (realWebSocketClient != null) {
-            realWebSocketClient.disconnect();
-            realWebSocketClient = null;
+        if (imClient != null) {
+            imClient.disconnect();
         }
-        
-        // 断开TCP连接
-        if (tcpClient != null) {
-            tcpClient.disconnect();
-            tcpClient = null;
-        }
-        
 
-        
-        // 停止心跳
+        // 心跳和重连逻辑已经移到 AbstractClient 中，这里不再需要手动管理
         if (heartbeatExecutor != null && !heartbeatExecutor.isShutdown()) {
             heartbeatExecutor.shutdown();
             heartbeatExecutor = null;
         }
-        
+
         SwingUtilities.invokeLater(() -> {
             statusLabel.setText("状态: 未连接");
             statusLabel.setForeground(Color.RED);
@@ -335,7 +268,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
             sendGroupButton.setEnabled(false);
             protocolComboBox.setEnabled(true); // 断开后重新启用协议选择
         });
-        
+
         appendMessage("已断开连接");
     }
     
@@ -351,21 +284,8 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
             return;
         }
         
-        boolean sent = false;
-        
-        // 使用WebSocket客户端发送
-        if (realWebSocketClient != null && realWebSocketClient.isConnected()) {
-            realWebSocketClient.sendPrivateMessage(toUserId, content);
-            sent = true;
-        }
-        // 使用TCP客户端发送
-        else if (tcpClient != null && tcpClient.isConnected()) {
-            tcpClient.sendPrivateMessage(toUserId, content);
-            sent = true;
-        }
-
-        
-        if (sent) {
+        if (imClient != null && imClient.isConnected()) {
+            imClient.sendPrivateMessage(toUserId, content);
             appendMessage(String.format("[私聊] 发送给 %s: %s", toUserId, content));
             privateMessageInput.setText("");
         } else {
@@ -385,21 +305,8 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
             return;
         }
         
-        boolean sent = false;
-        
-        // 使用WebSocket客户端发送
-        if (realWebSocketClient != null && realWebSocketClient.isConnected()) {
-            realWebSocketClient.sendGroupMessage(groupId, content);
-            sent = true;
-        }
-        // 使用TCP客户端发送
-        else if (tcpClient != null && tcpClient.isConnected()) {
-            tcpClient.sendGroupMessage(groupId, content);
-            sent = true;
-        }
-
-        
-        if (sent) {
+        if (imClient != null && imClient.isConnected()) {
+            imClient.sendGroupMessage(groupId, content);
             appendMessage(String.format("[群聊] 发送到群 %s: %s", groupId, content));
             groupMessageInput.setText("");
         } else {
@@ -411,26 +318,7 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
      * 启动心跳
      */
     private void startHeartbeat() {
-        heartbeatExecutor = Executors.newSingleThreadScheduledExecutor();
-        heartbeatExecutor.scheduleAtFixedRate(() -> {
-            boolean heartbeatSent = false;
-            
-            // 使用WebSocket客户端发送心跳
-            if (realWebSocketClient != null && realWebSocketClient.isConnected()) {
-                realWebSocketClient.sendHeartbeat();
-                heartbeatSent = true;
-            }
-            // 使用TCP客户端发送心跳
-            else if (tcpClient != null && tcpClient.isConnected()) {
-                tcpClient.sendHeartbeat();
-                heartbeatSent = true;
-            }
-
-            
-            if (heartbeatSent) {
-                SwingUtilities.invokeLater(() -> appendMessage("[心跳] 发送心跳包"));
-            }
-        }, 30, 30, TimeUnit.SECONDS); // 每30秒发送一次心跳
+        // 心跳逻辑已移至 AbstractClient
     }
     
     /**
@@ -982,17 +870,10 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
 
             boolean sent = false;
 
-            // 使用WebSocket客户端发送
-            if (realWebSocketClient != null && realWebSocketClient.isConnected()) {
-                realWebSocketClient.sendGroupConversationAck(ackContent);
+            if (imClient != null && imClient.isConnected()) {
+                imClient.sendGroupConversationAck(ackContent);
                 sent = true;
-                System.out.println("[DEBUG] 群聊会话ACK已通过WebSocket发送");
-            }
-            // 使用TCP客户端发送
-            else if (tcpClient != null && tcpClient.isConnected()) {
-                tcpClient.sendGroupConversationAck(ackContent);
-                sent = true;
-                System.out.println("[DEBUG] 群聊会话ACK已通过TCP发送");
+                System.out.println("[DEBUG] 群聊会话ACK已发送");
             }
 
             return sent;
@@ -1138,14 +1019,8 @@ public class UserWindow extends JFrame implements RealWebSocketClient.MessageHan
      */
     private boolean sendReadReceipt(String conversationId, long lastReadSeq) {
         try {
-            // 使用WebSocket客户端发送
-            if (realWebSocketClient != null && realWebSocketClient.isConnected()) {
-                realWebSocketClient.sendReadReceipt(conversationId, lastReadSeq);
-                return true;
-            }
-            // 使用TCP客户端发送
-            else if (tcpClient != null && tcpClient.isConnected()) {
-                tcpClient.sendReadReceipt(conversationId, lastReadSeq);
+            if (imClient != null && imClient.isConnected()) {
+                imClient.sendReadReceipt(conversationId, lastReadSeq);
                 return true;
             } else {
                 appendMessage("[错误] 未连接到服务器，无法发送已读回执");

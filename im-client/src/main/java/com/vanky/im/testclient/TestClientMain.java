@@ -1,24 +1,28 @@
 package com.vanky.im.testclient;
 
+import com.vanky.im.testclient.client.ClientFactory;
+import com.vanky.im.testclient.client.IMClient;
 import com.vanky.im.testclient.ui.UserWindow;
-
 
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 /**
  * IM测试客户端主程序 - Swing版本
  */
 public class TestClientMain extends JFrame {
-    
+
     private List<UserWindow> userWindows = new ArrayList<>();
-    
+    private Properties config = new Properties();
+
     public TestClientMain() {
+        loadConfig();
         initUI();
     }
     
@@ -157,6 +161,17 @@ public class TestClientMain extends JFrame {
         });
     }
     
+    private void loadConfig() {
+        try (FileInputStream fis = new FileInputStream("im-client/src/main/resources/config.properties")) {
+            config.load(fis);
+        } catch (IOException e) {
+            e.printStackTrace();
+            // 在无法加载配置文件时提供一个默认值
+            config.setProperty("client.type", "tcp");
+            JOptionPane.showMessageDialog(this, "无法加载配置文件，将使用默认的TCP客户端", "警告", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
     /**
      * 创建用户窗口
      */
@@ -164,18 +179,29 @@ public class TestClientMain extends JFrame {
         // 检查是否已存在该用户的窗口
         for (UserWindow window : userWindows) {
             if (window.getUserId().equals(userId)) {
-                JOptionPane.showMessageDialog(this, 
-                        "用户 " + userId + " 的窗口已存在！", 
+                JOptionPane.showMessageDialog(this,
+                        "用户 " + userId + " 的窗口已存在！",
                         "警告", JOptionPane.WARNING_MESSAGE);
                 return;
             }
         }
-        
-        UserWindow userWindow = new UserWindow(userId);
+
+        String clientType = config.getProperty("client.type", "tcp");
+        // 注意：这里的MessageHandler暂时传null，因为UserWindow自己实现了这个接口
+        // 并且在AbstractClient的构造函数中，这个handler是用于外部逻辑的，而UI的更新逻辑在UserWindow内部处理
+        IMClient client = ClientFactory.createClient(clientType, userId, null, null); // Token将在连接时获取
+
+        UserWindow userWindow = new UserWindow(userId, client);
+
+        // 将UserWindow自身设置为消息处理器
+        if (client instanceof com.vanky.im.testclient.client.AbstractClient) {
+            ((com.vanky.im.testclient.client.AbstractClient) client).setMessageHandler(userWindow);
+        }
+
         userWindows.add(userWindow);
         userWindow.setVisible(true);
-        
-        System.out.println("创建用户窗口: " + userId);
+
+        System.out.println("创建用户窗口: " + userId + " (使用 " + clientType.toUpperCase() + " 客户端)");
     }
     
     /**

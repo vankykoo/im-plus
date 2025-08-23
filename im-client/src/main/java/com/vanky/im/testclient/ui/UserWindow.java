@@ -240,43 +240,61 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         new SwingWorker<HttpClient.LoginResponse, Void>() {
             @Override
             protected HttpClient.LoginResponse doInBackground() throws Exception {
-                // 调用HTTP客户端获取Token
-                return httpClient.login(userId, password);
+                // 1. 调用HTTP客户端获取Token
+                HttpClient.LoginResponse loginResponse = httpClient.login(userId, password);
+                if (loginResponse == null || loginResponse.getToken() == null || loginResponse.getToken().isEmpty()) {
+                    throw new RuntimeException(loginResponse != null ? loginResponse.getMessage() : "无法获取Token");
+                }
+
+                // 2. 设置Token并建立连接
+                imClient.setToken(loginResponse.getToken());
+                imClient.connect();
+
+                // 3. 等待连接成功
+                boolean connected = imClient.waitForConnection(10, TimeUnit.SECONDS);
+                if (!connected) {
+                    throw new RuntimeException("连接服务器超时");
+                }
+
+                // 4. 发送登录请求
+                imClient.login();
+
+                return loginResponse; // 返回成功获取的Token信息
             }
 
             @Override
             protected void done() {
                 try {
-                    HttpClient.LoginResponse loginResponse = get();
-                    if (loginResponse != null && loginResponse.getToken() != null && !loginResponse.getToken().isEmpty()) {
-                        appendMessage("[系统] Token获取成功");
+                    // doInBackground成功执行完毕，此时连接已建立，登录请求已发送
+                    // 只需要等待onLoginSuccess/onLoginFailure的回调来更新UI即可
+                    HttpClient.LoginResponse loginResponse = get(); // 调用get()来捕获doInBackground中可能抛出的异常
+                    appendMessage("[系统] Token获取成功，正在等待登录响应...");
+                    // 更新UI到连接中状态
+                    SwingUtilities.invokeLater(() -> {
+                        statusLabel.setText("状态: 连接中 (等待认证)...");
+                        statusLabel.setForeground(Color.ORANGE);
+                        connectButton.setEnabled(false);
+                        disconnectButton.setEnabled(true);
+                        protocolComboBox.setEnabled(false);
+                    });
 
-                        // 3. 设置Token, 建立物理连接, 然后发送登录请求
-                        imClient.setToken(loginResponse.getToken());
-                        
-                        // 更新UI到连接中状态
-                        SwingUtilities.invokeLater(() -> {
-                            statusLabel.setText("状态: 连接中 (等待认证)...");
-                            statusLabel.setForeground(Color.ORANGE);
-                            connectButton.setEnabled(false);
-                            disconnectButton.setEnabled(true);
-                            protocolComboBox.setEnabled(false);
-                        });
-
-                        // 建立连接并登录
-                        imClient.connect();
-                        imClient.login();
-
-                    } else {
-                        String errorMsg = (loginResponse != null) ? loginResponse.getMessage() : "无法获取Token，请检查密码或用户服务状态";
-                        appendMessage("[系统] Token获取失败: " + errorMsg);
-                        JOptionPane.showMessageDialog(UserWindow.this, "登录失败: " + errorMsg, "认证失败", JOptionPane.ERROR_MESSAGE);
-                        resetUIState();
-                    }
                 } catch (Exception e) {
-                    appendMessage("[系统] 登录异常: " + e.getMessage());
-                    JOptionPane.showMessageDialog(UserWindow.this, "登录过程中发生异常: " + e.getMessage(), "异常", JOptionPane.ERROR_MESSAGE);
-                    e.printStackTrace();
+                    // 从ExecutionException中提取根本原因
+                    Throwable cause = e.getCause();
+                    String errorMsg = (cause != null) ? cause.getMessage() : e.getMessage();
+
+                    // 记录日志并显示给用户
+                    appendMessage("[系统] 登录失败: " + errorMsg);
+                    JOptionPane.showMessageDialog(UserWindow.this, "登录失败: " + errorMsg, "错误", JOptionPane.ERROR_MESSAGE);
+
+                    // 打印堆栈信息以供调试
+                    if (cause != null) {
+                        cause.printStackTrace();
+                    } else {
+                        e.printStackTrace();
+                    }
+
+                    // 重置UI状态
                     resetUIState();
                 }
             }

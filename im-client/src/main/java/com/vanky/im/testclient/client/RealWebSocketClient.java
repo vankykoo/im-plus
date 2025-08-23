@@ -53,7 +53,10 @@ public class RealWebSocketClient extends AbstractClient implements WebSocket.Lis
                     .subprotocols("chat") // 指定聊天子协议
                     .buildAsync(uri, this);
 
-            this.webSocket = webSocketFuture.get(10, TimeUnit.SECONDS);
+            // 等待WebSocket连接完成，这是修复竞态条件的关键
+            // .get()会阻塞，直到CompletableFuture完成
+            webSocketFuture.get(10, TimeUnit.SECONDS);
+
         } catch (Exception e) {
             System.err.println("WebSocket 连接失败 - 用户: " + userId + " - " + e.getMessage());
             onDisconnected(); // 连接失败时触发重连

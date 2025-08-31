@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,7 +76,7 @@ public class SequenceService {
             // 检查是否需要恢复序列号
             long initialValue = 0L;
             if (sequenceConfig.getRecovery().isEnabled()) {
-                initialValue = checkAndRecoverSequence(redisKey, businessKey);
+                initialValue = checkAndRecoverSequence(redisKey, sectionKey);
             }
 
             // 执行Lua脚本获取序列号
@@ -230,37 +231,111 @@ public class SequenceService {
     }
 
     /**
-     * 检查并恢复序列号
-     * 如果Redis Key不存在，从业务消息表中查询最大序列号作为初始值
+     * 检查并恢复序列号（带分布式锁保护，防止缓存击穿）
+     * 如果Redis Key不存在，从sequence_section表中查询该分段的最大序列号作为初始值
+     * 
+     * 安全加固说明：
+     * - 使用分布式锁防止并发恢复导致的数据不一致
+     * - 双重检查机制确保恢复过程的原子性
+     * - 异常降级处理保证服务可用性
      *
      * @param redisKey Redis键
-     * @param businessKey 业务键
+     * @param sectionKey 分段键，如 "u_17" 或 "c_456"
      * @return 初始值，如果不需要恢复则返回0
      */
-    private long checkAndRecoverSequence(String redisKey, String businessKey) {
+    private long checkAndRecoverSequence(String redisKey, String sectionKey) {
         try {
-            // 检查Redis Key是否存在
+            // 第一次检查Redis Key是否存在
             Boolean exists = stringRedisTemplate.hasKey(redisKey);
             if (Boolean.TRUE.equals(exists)) {
-                // Key存在，不需要恢复
                 log.debug("Redis Key存在，无需恢复 - redisKey: {}", redisKey);
                 return 0L;
             }
 
-            // Key不存在，需要从业务表恢复
-            log.info("Redis Key不存在，开始恢复序列号 - redisKey: {}, businessKey: {}", redisKey, businessKey);
+            // Key不存在，使用分布式锁防止并发恢复
+            String lockKey = "seq:recovery:lock:" + sectionKey;
+            String lockValue = String.valueOf(System.currentTimeMillis());
+            
+            Boolean lockAcquired = stringRedisTemplate.opsForValue().setIfAbsent(
+                    lockKey, lockValue, Duration.ofSeconds(30));
+            
+            if (Boolean.TRUE.equals(lockAcquired)) {
+                try {
+                    // 获取锁成功，双重检查Redis Key（防止在等待锁期间其他线程已经恢复）
+                    exists = stringRedisTemplate.hasKey(redisKey);
+                    if (Boolean.TRUE.equals(exists)) {
+                        log.debug("锁内二次检查发现Key已存在，无需恢复 - redisKey: {}", redisKey);
+                        return 0L;
+                    }
 
-            Long maxSeq = messageClient.getMaxSeqByBusinessKey(businessKey);
-            if (maxSeq == null || maxSeq < 0) {
-                maxSeq = 0L;
+                    // 执行恢复逻辑
+                    log.info("开始恢复序列号 - redisKey: {}, sectionKey: {}", redisKey, sectionKey);
+                    
+                    Long maxSeq = persistenceService.recoverMaxSeq(sectionKey);
+                    if (maxSeq == null || maxSeq < 0) {
+                        maxSeq = 0L;
+                    }
+
+                    log.info("序列号恢复成功 - sectionKey: {}, 恢复的最大序列号: {}", sectionKey, maxSeq);
+                    return maxSeq;
+                    
+                } finally {
+                    // 释放分布式锁
+                    releaseLock(lockKey, lockValue);
+                }
+            } else {
+                // 获取锁失败，等待一段时间后重试检查Redis Key
+                log.debug("获取恢复锁失败，等待后重试 - sectionKey: {}", sectionKey);
+                
+                for (int i = 0; i < 3; i++) {
+                    try {
+                        Thread.sleep(100); // 等待100ms
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    
+                    exists = stringRedisTemplate.hasKey(redisKey);
+                    if (Boolean.TRUE.equals(exists)) {
+                        log.debug("等待期间Key已被其他线程恢复 - redisKey: {}", redisKey);
+                        return 0L;
+                    }
+                }
+                
+                // 重试后仍未恢复，降级处理：直接从数据库查询但不持久化到Redis
+                log.warn("获取恢复锁失败且重试无效，降级查询 - sectionKey: {}", sectionKey);
+                Long maxSeq = persistenceService.recoverMaxSeq(sectionKey);
+                return maxSeq != null && maxSeq >= 0 ? maxSeq : 0L;
             }
 
-            log.info("从业务表恢复序列号成功 - businessKey: {}, 恢复的最大序列号: {}", businessKey, maxSeq);
-            return maxSeq;
-
         } catch (Exception e) {
-            log.error("恢复序列号失败 - redisKey: {}, businessKey: {}", redisKey, businessKey, e);
+            log.error("恢复序列号失败 - redisKey: {}, sectionKey: {}", redisKey, sectionKey, e);
             return 0L;
+        }
+    }
+
+    /**
+     * 释放分布式锁
+     * 使用Lua脚本确保只释放自己的锁
+     */
+    private void releaseLock(String lockKey, String lockValue) {
+        try {
+            String luaScript = 
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then " +
+                "    return redis.call('DEL', KEYS[1]) " +
+                "else " +
+                "    return 0 " +
+                "end";
+            
+            stringRedisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+                return connection.eval(luaScript.getBytes(), 
+                                     org.springframework.data.redis.connection.ReturnType.INTEGER, 
+                                     1, lockKey.getBytes(), lockValue.getBytes());
+            });
+            
+            log.debug("释放恢复锁成功 - lockKey: {}", lockKey);
+        } catch (Exception e) {
+            log.error("释放恢复锁异常 - lockKey: {}", lockKey, e);
         }
     }
 }

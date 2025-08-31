@@ -3,6 +3,7 @@ package com.vanky.im.message.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
+import com.vanky.im.common.util.CacheSafetyManager;
 import com.vanky.im.message.entity.UserConversationList;
 import com.vanky.im.message.mapper.UserConversationListMapper;
 import com.vanky.im.message.service.GroupMemberService;
@@ -35,80 +36,137 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     @Autowired
     private UserConversationListMapper userConversationListMapper;
 
+    @Autowired
+    private CacheSafetyManager cacheSafetyManager;
+
     // 注意：Redis key前缀和缓存配置已迁移到RedisKeyConstants类
     
     @Override
     public List<String> getGroupMemberIds(String groupId) {
+        String cacheKey = RedisKeyConstants.getGroupMembersKey(groupId);
+        
+        // 使用缓存安全管理器，但由于需要特殊处理Set类型，这里保持原有逻辑并增强
+        return safeGetGroupMemberList(cacheKey, () -> getGroupMemberIdsFromDb(groupId));
+    }
+
+    /**
+     * 安全获取群组成员列表，带缓存穿透和缓存击穿保护
+     * 由于群组成员使用Set类型存储，需要特殊处理
+     */
+    private List<String> safeGetGroupMemberList(String cacheKey, java.util.function.Supplier<List<String>> dataLoader) {
         try {
-            // 1. 先从Redis缓存查询
-            String key = RedisKeyConstants.getGroupMembersKey(groupId);
-            Set<Object> members = redisTemplate.opsForSet().members(key);
-
-            if (members != null && !members.isEmpty()) {
-                log.debug("从Redis缓存获取群组成员 - 群组ID: {}, 成员数: {}", groupId, members.size());
-                return members.stream()
-                        .map(Object::toString)
-                        .collect(Collectors.toList());
+            // 1. 检查缓存是否存在
+            Boolean exists = redisTemplate.hasKey(cacheKey);
+            if (Boolean.TRUE.equals(exists)) {
+                Set<Object> members = redisTemplate.opsForSet().members(cacheKey);
+                if (members != null && !members.isEmpty()) {
+                    log.debug("从Redis缓存获取群组成员 - key: {}, 成员数: {}", cacheKey, members.size());
+                    return members.stream()
+                            .map(Object::toString)
+                            .collect(Collectors.toList());
+                }
             }
 
-            // 2. Redis缓存为空，从数据库查询
-            log.debug("Redis缓存为空，从数据库查询群组成员 - 群组ID: {}", groupId);
-            List<String> memberIds = getGroupMemberIdsFromDb(groupId);
-
-            // 3. 如果数据库中有数据，回填Redis缓存
-            if (!memberIds.isEmpty()) {
-                String[] memberArray = memberIds.toArray(new String[0]);
-                redisTemplate.opsForSet().add(key, (Object[]) memberArray);
-                redisTemplate.expire(key, RedisKeyConstants.CACHE_EXPIRE_HOURS, TimeUnit.HOURS);
-                log.info("从数据库查询到群组成员并回填缓存 - 群组ID: {}, 成员数: {}", groupId, memberIds.size());
+            // 2. 缓存未命中，使用分布式锁防止缓存击穿
+            String lockKey = "cache:lock:" + cacheKey;
+            String lockValue = String.valueOf(System.currentTimeMillis());
+            
+            Boolean lockAcquired = redisTemplate.opsForValue().setIfAbsent(
+                    lockKey, lockValue, java.time.Duration.ofSeconds(30));
+            
+            if (Boolean.TRUE.equals(lockAcquired)) {
+                try {
+                    // 双重检查缓存
+                    exists = redisTemplate.hasKey(cacheKey);
+                    if (Boolean.TRUE.equals(exists)) {
+                        Set<Object> members = redisTemplate.opsForSet().members(cacheKey);
+                        if (members != null && !members.isEmpty()) {
+                            return members.stream()
+                                    .map(Object::toString)
+                                    .collect(Collectors.toList());
+                        }
+                    }
+                    
+                    // 从数据库加载
+                    log.debug("从数据库查询群组成员 - key: {}", cacheKey);
+                    List<String> memberIds = dataLoader.get();
+                    
+                    if (memberIds != null && !memberIds.isEmpty()) {
+                        // 缓存正常数据
+                        String[] memberArray = memberIds.toArray(new String[0]);
+                        redisTemplate.opsForSet().add(cacheKey, (Object[]) memberArray);
+                        redisTemplate.expire(cacheKey, RedisKeyConstants.CACHE_EXPIRE_HOURS, TimeUnit.HOURS);
+                        log.debug("缓存群组成员成功 - key: {}, 成员数: {}", cacheKey, memberIds.size());
+                        return memberIds;
+                    } else {
+                        // 缓存空值标记
+                        cacheSafetyManager.setNullValueCache(cacheKey);
+                        log.debug("缓存群组空值标记 - key: {}", cacheKey);
+                        return new ArrayList<>();
+                    }
+                    
+                } finally {
+                    // 释放锁
+                    String luaScript = 
+                        "if redis.call('GET', KEYS[1]) == ARGV[1] then " +
+                        "    return redis.call('DEL', KEYS[1]) " +
+                        "else " +
+                        "    return 0 " +
+                        "end";
+                    redisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+                        return connection.eval(luaScript.getBytes(), 
+                                             org.springframework.data.redis.connection.ReturnType.INTEGER, 
+                                             1, lockKey.getBytes(), lockValue.getBytes());
+                    });
+                }
             } else {
-                log.warn("群组成员列表为空 - 群组ID: {}", groupId);
+                // 获取锁失败，等待后重试
+                for (int i = 0; i < 3; i++) {
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    
+                    exists = redisTemplate.hasKey(cacheKey);
+                    if (Boolean.TRUE.equals(exists)) {
+                        Set<Object> members = redisTemplate.opsForSet().members(cacheKey);
+                        if (members != null && !members.isEmpty()) {
+                            return members.stream()
+                                    .map(Object::toString)
+                                    .collect(Collectors.toList());
+                        }
+                    }
+                }
+                
+                // 降级处理
+                log.warn("获取分布式锁失败，直接查询数据库 - key: {}", cacheKey);
+                List<String> result = dataLoader.get();
+                return result != null ? result : new ArrayList<>();
             }
-
-            return memberIds;
+            
         } catch (Exception e) {
-            log.error("获取群组成员失败 - 群组ID: {}", groupId, e);
-            return new ArrayList<>();
+            log.error("安全获取群组成员失败 - key: {}", cacheKey, e);
+            try {
+                List<String> result = dataLoader.get();
+                return result != null ? result : new ArrayList<>();
+            } catch (Exception ex) {
+                log.error("数据库查询群组成员失败 - key: {}", cacheKey, ex);
+                return new ArrayList<>();
+            }
         }
     }
     
     @Override
     public boolean isGroupMember(String groupId, String userId) {
         try {
-            // 1. 先从Redis缓存查询
-            String key = RedisKeyConstants.getGroupMembersKey(groupId);
-            Boolean isMemberInCache = redisTemplate.opsForSet().isMember(key, userId);
-
-            if (Boolean.TRUE.equals(isMemberInCache)) {
-                log.debug("从Redis缓存确认群组成员身份 - 群组ID: {}, 用户ID: {}", groupId, userId);
-                return true;
-            }
-
-            // 2. Redis缓存中没有找到，检查缓存是否存在
-            Long cacheSize = redisTemplate.opsForSet().size(key);
-            if (cacheSize != null && cacheSize > 0) {
-                // 缓存存在但用户不在其中，说明用户不是群组成员
-                log.debug("Redis缓存存在但用户不在群组中 - 群组ID: {}, 用户ID: {}", groupId, userId);
-                return false;
-            }
-
-            // 3. 缓存不存在或为空，从数据库查询
-            log.debug("Redis缓存不存在，从数据库查询群组成员身份 - 群组ID: {}, 用户ID: {}", groupId, userId);
-            boolean isMemberInDb = isGroupMemberFromDb(groupId, userId);
-
-            // 4. 如果数据库查询结果为true，可以考虑预加载整个群组成员列表到缓存
-            if (isMemberInDb) {
-                // 预加载群组成员列表到缓存，提高后续查询性能
-                List<String> allMembers = getGroupMemberIdsFromDb(groupId);
-                if (!allMembers.isEmpty()) {
-                    String[] memberArray = allMembers.toArray(new String[0]);
-                    redisTemplate.opsForSet().add(key, (Object[]) memberArray);
-                    redisTemplate.expire(key, RedisKeyConstants.CACHE_EXPIRE_HOURS, TimeUnit.HOURS);
-                    log.info("预加载群组成员列表到缓存 - 群组ID: {}, 成员数: {}", groupId, allMembers.size());
-                }
-            }
-
-            return isMemberInDb;
+            // 优化：直接获取群组成员列表（带缓存安全保护），然后检查用户是否在其中
+            List<String> memberIds = getGroupMemberIds(groupId);
+            boolean isMember = memberIds.contains(userId);
+            
+            log.debug("检查群组成员身份 - 群组ID: {}, 用户ID: {}, 是否成员: {}", groupId, userId, isMember);
+            return isMember;
         } catch (Exception e) {
             log.error("检查群组成员身份失败 - 群组ID: {}, 用户ID: {}", groupId, userId, e);
             return false;
@@ -182,14 +240,8 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     @Override
     public int getGroupMemberCount(String groupId) {
         try {
-            String key = RedisKeyConstants.getGroupMembersKey(groupId);
-            Long count = redisTemplate.opsForSet().size(key);
-            if (count != null && count > 0) {
-                return count.intValue();
-            }
-
-            // Redis缓存为空，从数据库查询
-            List<String> memberIds = getGroupMemberIdsFromDb(groupId);
+            // 优化：直接获取群组成员列表（带缓存安全保护），然后返回数量
+            List<String> memberIds = getGroupMemberIds(groupId);
             return memberIds.size();
         } catch (Exception e) {
             log.error("获取群组成员数量失败 - 群组ID: {}", groupId, e);
@@ -200,7 +252,7 @@ public class GroupMemberServiceImpl implements GroupMemberService {
     /**
      * 从数据库查询群组成员列表
      * @param groupId 群组ID
-     * @return 成员ID列表
+     * @return 成员ID列表，如果群组不存在返回null（由缓存管理器处理空值缓存）
      */
     private List<String> getGroupMemberIdsFromDb(String groupId) {
         try {
@@ -214,6 +266,11 @@ public class GroupMemberServiceImpl implements GroupMemberService {
 
             List<UserConversationList> userConversations = userConversationListMapper.selectList(wrapper);
 
+            if (userConversations == null || userConversations.isEmpty()) {
+                log.debug("群组不存在或无成员 - 群组ID: {}, 会话ID: {}", groupId, conversationId);
+                return null; // 返回null让缓存管理器缓存空值
+            }
+
             List<String> memberIds = userConversations.stream()
                     .map(uc -> String.valueOf(uc.getUserId()))
                     .collect(Collectors.toList());
@@ -224,38 +281,11 @@ public class GroupMemberServiceImpl implements GroupMemberService {
             return memberIds;
         } catch (Exception e) {
             log.error("从数据库查询群组成员失败 - 群组ID: {}", groupId, e);
-            return new ArrayList<>();
+            return null; // 异常时返回null，让缓存管理器使用默认值
         }
     }
 
-    /**
-     * 从数据库查询用户是否为群组成员
-     * @param groupId 群组ID
-     * @param userId 用户ID
-     * @return 是否为成员
-     */
-    private boolean isGroupMemberFromDb(String groupId, String userId) {
-        try {
-            // 将群组ID转换为会话ID格式
-            String conversationId = convertGroupIdToConversationId(groupId);
-
-            // 查询user_conversation_list表，检查用户是否在该会话中
-            LambdaQueryWrapper<UserConversationList> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(UserConversationList::getConversationId, conversationId)
-                   .eq(UserConversationList::getUserId, Long.valueOf(userId));
-
-            Long count = userConversationListMapper.selectCount(wrapper);
-            boolean isMember = count != null && count > 0;
-
-            log.debug("从数据库查询群组成员身份 - 群组ID: {}, 会话ID: {}, 用户ID: {}, 是否成员: {}",
-                    groupId, conversationId, userId, isMember);
-
-            return isMember;
-        } catch (Exception e) {
-            log.error("从数据库查询群组成员身份失败 - 群组ID: {}, 用户ID: {}", groupId, userId, e);
-            return false;
-        }
-    }
+    // isGroupMemberFromDb方法已移除，统一使用getGroupMemberIdsFromDb然后检查包含关系
 
     @Override
     public boolean isSmallGroup(String groupId) {

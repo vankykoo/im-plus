@@ -135,6 +135,12 @@ public class RedisKeyConstants {
     /** 消息幂等性记录TTL（5分钟） */
     public static final long MESSAGE_IDEMPOTENT_TTL_SECONDS = 5 * 60;
     
+    /** 缓存空值标记TTL（5分钟） - 防止缓存穿透 */
+    public static final long NULL_VALUE_CACHE_TTL_SECONDS = 5 * 60;
+    
+    /** 分布式锁过期时间（30秒） - 防止缓存击穿 */
+    public static final long DISTRIBUTED_LOCK_TTL_SECONDS = 30;
+    
     // ========== 业务配置 ==========
     
     /** 用户消息链缓存最大保留条数 */

@@ -14,7 +14,7 @@ import com.vanky.im.common.constant.RedisKeyConstants;
 public class RedisConfig {
 
     // Redis服务器配置（与服务端保持一致）
-    private static final String REDIS_HOST = "192.168.10.6";
+    private static final String REDIS_HOST = "192.168.101.43";
     private static final int REDIS_PORT = 6379;
     private static final int REDIS_DATABASE = 0;
     private static final String REDIS_PASSWORD = "123456";

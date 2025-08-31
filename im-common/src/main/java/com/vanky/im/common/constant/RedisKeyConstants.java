@@ -56,6 +56,11 @@ public class RedisKeyConstants {
     /** 用户最后已读序列号缓存前缀（私聊使用） */
     public static final String USER_LAST_READ_SEQ_PREFIX = "user:last:read:seq:";
     
+    // ========== 消息幂等性相关 Redis Key ==========
+    
+    /** 消息幂等性记录前缀 */
+    public static final String MESSAGE_IDEMPOTENT_PREFIX = "im:message:idempotent:";
+    
     // ========== 用户状态相关 Redis Key ==========
     
     /** 用户状态缓存前缀 */
@@ -63,11 +68,6 @@ public class RedisKeyConstants {
     
     /** 好友关系缓存前缀 */
     public static final String FRIENDSHIP_CACHE_PREFIX = "friendship:";
-    
-
-    
-    /** 未读数缓存前缀 */
-    public static final String UNREAD_COUNT_PREFIX = "user:conversation:unread:";
     
     // ========== 群组成员相关 Redis Key ==========
     
@@ -116,6 +116,9 @@ public class RedisKeyConstants {
 
     /** 用户已读序列号缓存TTL（30天） */
     public static final long USER_READ_SEQ_TTL_SECONDS = 30 * 24 * 60 * 60;
+
+    /** 消息幂等性记录TTL（5分钟） */
+    public static final long MESSAGE_IDEMPOTENT_TTL_SECONDS = 5 * 60;
     
     // ========== 业务配置 ==========
     
@@ -124,10 +127,6 @@ public class RedisKeyConstants {
     
 
     
-    /** 消息内容摘要最大长度 */
-    public static final int MAX_MSG_CONTENT_SUMMARY_LENGTH = 50;
-    
-
 
     /** 小群阈值（小于此数量的群支持已读用户列表） */
     public static final int SMALL_GROUP_THRESHOLD = 50;
@@ -192,18 +191,6 @@ public class RedisKeyConstants {
         return USER_MSG_LIST_PREFIX + userId;
     }
     
-
-    
-    /**
-     * 获取未读数缓存键
-     * @param userId 用户ID
-     * @param conversationId 会话ID
-     * @return Redis键
-     */
-    public static String getUnreadCountKey(String userId, String conversationId) {
-        return UNREAD_COUNT_PREFIX + userId + ":" + conversationId;
-    }
-    
     /**
      * 获取群组成员缓存键
      * @param groupId 群组ID
@@ -223,21 +210,11 @@ public class RedisKeyConstants {
     }
     
     /**
-     * 获取客户端同步序列号键
-     * @param userId 用户ID
+     * 获取消息幂等性记录键
+     * @param clientSeq 客户端序列号
      * @return Redis键
      */
-    public static String getClientSyncSeqKey(String userId) {
-        return CLIENT_SYNC_SEQ_PREFIX + userId;
-    }
-    
-    /**
-     * 获取客户端会话级序列号键
-     * @param userId 用户ID
-     * @param conversationId 会话ID
-     * @return Redis键
-     */
-    public static String getClientConversationSeqKey(String userId, String conversationId) {
-        return CLIENT_CONVERSATION_SEQ_PREFIX + userId + ":" + conversationId;
+    public static String getMessageIdempotentKey(String clientSeq) {
+        return MESSAGE_IDEMPOTENT_PREFIX + clientSeq;
     }
 }

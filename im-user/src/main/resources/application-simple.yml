@@ -36,7 +36,7 @@ spring:
       test-on-return: false
   data:
     redis:
-      host: 192.168.10.6
+      host: 192.168.101.43
       port: 6379
       password:
       database: 0

@@ -1,5 +1,6 @@
 package com.vanky.im.message.service;
 
+import com.vanky.im.common.constant.RedisKeyConstants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -19,12 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class MessageIdempotentService {
     
     // ========== 配置常量 ==========
-    
-    /** Redis Key前缀 */
-    private static final String REDIS_KEY_PREFIX = "im:message:idempotent:";
-    
-    /** 幂等性记录TTL（5分钟） */
-    private static final long IDEMPOTENT_TTL_SECONDS = 300L;
+    // 使用统一的Redis键常量管理
     
     // ========== 核心组件 ==========
     
@@ -44,7 +40,7 @@ public class MessageIdempotentService {
             return null;
         }
         
-        String redisKey = buildRedisKey(clientSeq);
+        String redisKey = RedisKeyConstants.getMessageIdempotentKey(clientSeq);
         
         try {
             // 从Redis中获取之前的处理结果
@@ -84,15 +80,15 @@ public class MessageIdempotentService {
             return;
         }
         
-        String redisKey = buildRedisKey(clientSeq);
+        String redisKey = RedisKeyConstants.getMessageIdempotentKey(clientSeq);
         IdempotentResult result = new IdempotentResult(msgId, seq, System.currentTimeMillis());
         
         try {
             // 将处理结果存储到Redis，设置TTL为5分钟
-            redisTemplate.opsForValue().set(redisKey, result, IDEMPOTENT_TTL_SECONDS, TimeUnit.SECONDS);
+            redisTemplate.opsForValue().set(redisKey, result, RedisKeyConstants.MESSAGE_IDEMPOTENT_TTL_SECONDS, TimeUnit.SECONDS);
             
             log.info("记录消息幂等性成功 - 客户端序列号: {}, 消息ID: {}, 序列号: {}, TTL: {}秒",
-                    clientSeq, msgId, seq, IDEMPOTENT_TTL_SECONDS);
+                    clientSeq, msgId, seq, RedisKeyConstants.MESSAGE_IDEMPOTENT_TTL_SECONDS);
                     
         } catch (Exception e) {
             // Redis操作失败时记录错误，但不影响主流程
@@ -111,7 +107,7 @@ public class MessageIdempotentService {
             return false;
         }
         
-        String redisKey = buildRedisKey(clientSeq);
+        String redisKey = RedisKeyConstants.getMessageIdempotentKey(clientSeq);
         
         try {
             Boolean deleted = redisTemplate.delete(redisKey);
@@ -134,7 +130,7 @@ public class MessageIdempotentService {
             return -2;
         }
         
-        String redisKey = buildRedisKey(clientSeq);
+        String redisKey = RedisKeyConstants.getMessageIdempotentKey(clientSeq);
         
         try {
             Long ttl = redisTemplate.getExpire(redisKey, TimeUnit.SECONDS);
@@ -147,15 +143,6 @@ public class MessageIdempotentService {
     }
     
     // ========== 私有方法 ==========
-    
-    /**
-     * 构建Redis Key
-     * @param clientSeq 客户端序列号
-     * @return Redis Key
-     */
-    private String buildRedisKey(String clientSeq) {
-        return REDIS_KEY_PREFIX + clientSeq;
-    }
     
     // ========== 内部数据类 ==========
     

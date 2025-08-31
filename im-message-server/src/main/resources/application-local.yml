@@ -39,7 +39,7 @@ spring:
 
   data:
     redis:
-      host: 192.168.10.6
+      host: 192.168.101.43
       port: 6379
       database: 0
       password: 123456
@@ -64,7 +64,7 @@ mybatis-plus:
 
 # RocketMQ配置
 rocketmq:
-  name-server: 192.168.10.6:9876
+  name-server: 192.168.101.43:9876
   producer:
     group: im-message-producer-group
     send-message-timeout: 3000

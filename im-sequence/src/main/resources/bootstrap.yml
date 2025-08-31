@@ -7,7 +7,7 @@ spring:
     nacos:
       # Nacos服务发现配置
       discovery:
-        server-addr: 192.168.10.3:8848  # Nacos服务器地址
+        server-addr: 192.168.101.41:8848  # Nacos服务器地址
         username: nacos
         password: nacos
         namespace: public  # 命名空间，默认public
@@ -24,7 +24,7 @@ spring:
       config:
         import-check:
           enabled: false
-        server-addr: 192.168.10.3:8848  # 配置中心地址
+        server-addr: 192.168.101.41:8848  # 配置中心地址
         username: nacos
         password: nacos
         namespace: public  # 配置命名空间

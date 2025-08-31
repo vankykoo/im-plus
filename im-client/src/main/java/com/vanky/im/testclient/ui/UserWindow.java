@@ -7,6 +7,9 @@ import com.vanky.im.testclient.client.IMClient;
 import com.vanky.im.testclient.processor.RealtimeMessageProcessor;
 import com.vanky.im.testclient.storage.LocalMessageStorage;
 import com.vanky.im.testclient.sync.OfflineMessageSyncManager;
+import com.vanky.im.testclient.loadtest.StressTestManager;
+import com.vanky.im.testclient.loadtest.StressTestConfig;
+import com.vanky.im.testclient.loadtest.StressTestStats;
 
 
 import javax.swing.*;
@@ -40,6 +43,7 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
     private JButton registerButton;
     private JButton createGroupButton;
     private JButton markReadButton;
+    private JButton stressTestButton;
     private JLabel statusLabel;
     private JComboBox<String> protocolComboBox;
     
@@ -53,6 +57,10 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
     private JLabel syncStatusLabel;
     private RealtimeMessageProcessor realtimeMessageProcessor;
     
+    // 压测相关组件
+    private StressTestManager stressTestManager;
+    private JLabel stressTestStatusLabel;
+    
     public UserWindow(String userId, IMClient imClient) {
         this.userId = userId;
         this.imClient = imClient;
@@ -64,6 +72,9 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         this.syncManager = new OfflineMessageSyncManager(httpClient, localStorage, this);
         this.realtimeMessageProcessor = new RealtimeMessageProcessor(this, localStorage, syncManager);
         this.syncManager.setRealtimeMessageProcessor(this.realtimeMessageProcessor);
+
+        // 初始化压测管理器
+        this.stressTestManager = new StressTestManager(imClient, new StressTestCallbackImpl());
 
         initUI();
     }
@@ -93,8 +104,13 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         syncStatusLabel.setForeground(Color.GRAY);
         syncStatusLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
 
+        stressTestStatusLabel = new JLabel("压测: 未开始");
+        stressTestStatusLabel.setForeground(Color.GRAY);
+        stressTestStatusLabel.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+
         statusPanel.add(statusLabel);
         statusPanel.add(syncStatusLabel);
+        statusPanel.add(stressTestStatusLabel);
         
         // 协议选择和连接控制面板
         JPanel controlPanel = new JPanel(new FlowLayout());
@@ -114,12 +130,14 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         registerButton = new JButton("用户注册");
         createGroupButton = new JButton("创建群聊");
         markReadButton = new JButton("标记已读");
+        stressTestButton = new JButton("压力测试");
 
         connectButton.addActionListener(e -> connect());
         disconnectButton.addActionListener(e -> disconnect());
         registerButton.addActionListener(e -> showRegisterDialog());
         createGroupButton.addActionListener(e -> showCreateGroupDialog());
         markReadButton.addActionListener(e -> showMarkReadDialog());
+        stressTestButton.addActionListener(e -> showStressTestDialog());
 
         controlPanel.add(protocolLabel);
         controlPanel.add(protocolComboBox);
@@ -129,6 +147,7 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         controlPanel.add(registerButton);
         controlPanel.add(createGroupButton);
         controlPanel.add(markReadButton);
+        controlPanel.add(stressTestButton);
         
         topPanel.add(statusPanel, BorderLayout.WEST);
         topPanel.add(controlPanel, BorderLayout.EAST);
@@ -1100,6 +1119,253 @@ public class UserWindow extends JFrame implements IMClient.MessageHandler {
         } catch (Exception e) {
             appendMessage("[错误] 发送已读回执失败: " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * 显示压测对话框
+     */
+    private void showStressTestDialog() {
+        if (!imClient.isConnected() || !imClient.isLoggedIn()) {
+            JOptionPane.showMessageDialog(this, "请先连接并登录客户端！", "提示", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        if (stressTestManager.isRunning()) {
+            // 如果压测正在运行，显示停止确认对话框
+            int result = JOptionPane.showConfirmDialog(this, 
+                "压测正在运行中，是否要停止？", "停止压测", 
+                JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (result == JOptionPane.YES_OPTION) {
+                stressTestManager.stopStressTest();
+            }
+            return;
+        }
+
+        JDialog stressDialog = new JDialog(this, "压力测试配置", true);
+        stressDialog.setSize(500, 450);
+        stressDialog.setLocationRelativeTo(this);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        // 顶部说明
+        JLabel titleLabel = new JLabel("配置压力测试参数");
+        titleLabel.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+        // 中间配置面板
+        JPanel configPanel = new JPanel(new GridBagLayout());
+        configPanel.setBorder(BorderFactory.createTitledBorder("测试配置"));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+
+        // 测试类型选择
+        gbc.gridx = 0; gbc.gridy = 0;
+        configPanel.add(new JLabel("测试类型:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        ButtonGroup typeGroup = new ButtonGroup();
+        JRadioButton privateTestRadio = new JRadioButton("私聊消息", true);
+        JRadioButton groupTestRadio = new JRadioButton("群聊消息");
+        typeGroup.add(privateTestRadio);
+        typeGroup.add(groupTestRadio);
+        JPanel typePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        typePanel.add(privateTestRadio);
+        typePanel.add(groupTestRadio);
+        configPanel.add(typePanel, gbc);
+
+        // 目标ID
+        gbc.gridx = 0; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        configPanel.add(new JLabel("目标ID:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JTextField targetIdField = new JTextField();
+        // 根据当前界面的默认值设置
+        targetIdField.setText(privateTestRadio.isSelected() ? 
+            targetUserInput.getText() : groupIdInput.getText());
+        configPanel.add(targetIdField, gbc);
+
+        // 消息数量
+        gbc.gridx = 0; gbc.gridy = 2; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        configPanel.add(new JLabel("消息数量:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JSpinner messageCountSpinner = new JSpinner(new SpinnerNumberModel(100, 1, 10000, 1));
+        configPanel.add(messageCountSpinner, gbc);
+
+        // 并发数
+        gbc.gridx = 0; gbc.gridy = 3; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        configPanel.add(new JLabel("并发数:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JSpinner concurrencySpinner = new JSpinner(new SpinnerNumberModel(5, 1, 50, 1));
+        configPanel.add(concurrencySpinner, gbc);
+
+        // 发送间隔
+        gbc.gridx = 0; gbc.gridy = 4; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        configPanel.add(new JLabel("发送间隔(ms):"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JSpinner intervalSpinner = new JSpinner(new SpinnerNumberModel(10, 0, 1000, 1));
+        configPanel.add(intervalSpinner, gbc);
+
+        // 超时时间
+        gbc.gridx = 0; gbc.gridy = 5; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        configPanel.add(new JLabel("超时时间(秒):"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JSpinner timeoutSpinner = new JSpinner(new SpinnerNumberModel(60, 10, 300, 10));
+        configPanel.add(timeoutSpinner, gbc);
+
+        // 消息模板
+        gbc.gridx = 0; gbc.gridy = 6; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0;
+        configPanel.add(new JLabel("消息模板:"), gbc);
+        gbc.gridx = 1; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0;
+        JTextField templateField = new JTextField("压测消息 #%d");
+        configPanel.add(templateField, gbc);
+
+        // 类型切换事件
+        ActionListener typeChangeListener = e -> {
+            if (privateTestRadio.isSelected()) {
+                targetIdField.setText(targetUserInput.getText());
+            } else {
+                targetIdField.setText(groupIdInput.getText());
+            }
+        };
+        privateTestRadio.addActionListener(typeChangeListener);
+        groupTestRadio.addActionListener(typeChangeListener);
+
+        // 底部按钮面板
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JButton startButton = new JButton("开始压测");
+        JButton cancelButton = new JButton("取消");
+
+        startButton.setPreferredSize(new Dimension(100, 30));
+        cancelButton.setPreferredSize(new Dimension(100, 30));
+
+        // 开始按钮事件
+        startButton.addActionListener(e -> {
+            try {
+                String targetId = targetIdField.getText().trim();
+                if (targetId.isEmpty()) {
+                    JOptionPane.showMessageDialog(stressDialog, "请输入目标ID！", "提示", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                String messageTemplate = templateField.getText().trim();
+                if (messageTemplate.isEmpty()) {
+                    JOptionPane.showMessageDialog(stressDialog, "请输入消息模板！", "提示", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+
+                StressTestConfig.TestType testType = privateTestRadio.isSelected() ? 
+                    StressTestConfig.TestType.PRIVATE_MESSAGE : StressTestConfig.TestType.GROUP_MESSAGE;
+
+                StressTestConfig config = new StressTestConfig.Builder()
+                    .testType(testType)
+                    .targetId(targetId)
+                    .messageCount((Integer) messageCountSpinner.getValue())
+                    .concurrency((Integer) concurrencySpinner.getValue())
+                    .sendIntervalMs((Integer) intervalSpinner.getValue())
+                    .timeoutSeconds((Integer) timeoutSpinner.getValue())
+                    .messageTemplate(messageTemplate)
+                    .build();
+
+                stressTestManager.startStressTest(config);
+                stressDialog.dispose();
+
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(stressDialog, "配置错误: " + ex.getMessage(), "错误", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
+        // 取消按钮事件
+        cancelButton.addActionListener(e -> stressDialog.dispose());
+
+        buttonPanel.add(startButton);
+        buttonPanel.add(cancelButton);
+
+        // 组装主面板
+        panel.add(titleLabel, BorderLayout.NORTH);
+        panel.add(configPanel, BorderLayout.CENTER);
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+
+        stressDialog.add(panel);
+        stressDialog.setVisible(true);
+    }
+
+    /**
+     * 更新压测状态显示
+     */
+    private void updateStressTestStatus(String status, Color color) {
+        SwingUtilities.invokeLater(() -> {
+            if (stressTestStatusLabel != null) {
+                stressTestStatusLabel.setText("压测: " + status);
+                stressTestStatusLabel.setForeground(color);
+            }
+        });
+    }
+
+    /**
+     * 压测回调实现类
+     */
+    private class StressTestCallbackImpl implements StressTestManager.StressTestCallback {
+
+        @Override
+        public void onStarted(StressTestConfig config) {
+            SwingUtilities.invokeLater(() -> {
+                updateStressTestStatus("运行中", Color.BLUE);
+                appendMessage("[压测] 开始压力测试: " + config);
+                stressTestButton.setText("停止压测");
+            });
+        }
+
+        @Override
+        public void onStatsUpdate(StressTestStats stats) {
+            SwingUtilities.invokeLater(() -> {
+                appendMessage("[压测] " + stats.toDisplayString());
+            });
+        }
+
+        @Override
+        public void onMessageFailed(String error) {
+            // 失败消息在统计中已记录，这里可以选择性地记录详细错误
+            // 为避免刷屏，暂时注释掉单个失败消息的显示
+            // appendMessage("[压测] 消息发送失败: " + error);
+        }
+
+        @Override
+        public void onCompleted(StressTestStats finalStats) {
+            SwingUtilities.invokeLater(() -> {
+                updateStressTestStatus("已完成", new Color(0, 128, 0));
+                appendMessage("[压测] 测试完成！");
+                appendMessage(finalStats.toDetailedReport());
+                stressTestButton.setText("压力测试");
+            });
+        }
+
+        @Override
+        public void onTimeout(StressTestStats finalStats) {
+            SwingUtilities.invokeLater(() -> {
+                updateStressTestStatus("超时", Color.ORANGE);
+                appendMessage("[压测] 测试超时！");
+                appendMessage(finalStats.toDetailedReport());
+                stressTestButton.setText("压力测试");
+            });
+        }
+
+        @Override
+        public void onStopped() {
+            SwingUtilities.invokeLater(() -> {
+                updateStressTestStatus("已停止", Color.GRAY);
+                appendMessage("[压测] 测试已停止");
+                stressTestButton.setText("压力测试");
+            });
+        }
+
+        @Override
+        public void onError(String error) {
+            SwingUtilities.invokeLater(() -> {
+                updateStressTestStatus("错误", Color.RED);
+                appendMessage("[压测] 错误: " + error);
+                stressTestButton.setText("压力测试");
+            });
         }
     }
 

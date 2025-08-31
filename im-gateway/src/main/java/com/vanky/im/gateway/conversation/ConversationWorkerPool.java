@@ -58,6 +58,12 @@ public class ConversationWorkerPool {
     private final AtomicInteger activeConversations = new AtomicInteger(0);
     
     /**
+     * 工作线程健康状态监控
+     */
+    private AtomicLong[] workerLastActiveTime;
+    private AtomicLong[] workerProcessedCount;
+    
+    /**
      * 初始化工作线程池
      */
     @PostConstruct
@@ -71,23 +77,32 @@ public class ConversationWorkerPool {
         try {
             int poolSize = config.getWorkerPoolSize();
             
+            // 先设置启动标志，避免竞态条件
+            started = true;
+            
             // 初始化工作线程池
             workers = new ExecutorService[poolSize];
             queueMaps = new ConcurrentHashMap[poolSize];
             
+            // 初始化监控数组
+            workerLastActiveTime = new AtomicLong[poolSize];
+            workerProcessedCount = new AtomicLong[poolSize];
+            
             for (int i = 0; i < poolSize; i++) {
                 queueMaps[i] = new ConcurrentHashMap<>();
                 workers[i] = createWorkerExecutor(i);
+                workerLastActiveTime[i] = new AtomicLong(System.currentTimeMillis());
+                workerProcessedCount[i] = new AtomicLong(0);
                 // 启动工作线程
                 startWorkerThread(i);
             }
 
-            started = true;
             log.info("ConversationWorkerPool初始化完成 - 工作线程数: {}, 队列容量: {}",
                     poolSize, config.getQueueCapacity());
                     
         } catch (Exception e) {
             log.error("ConversationWorkerPool初始化失败", e);
+            started = false; // 初始化失败时重置标志
             throw new RuntimeException("Failed to initialize ConversationWorkerPool", e);
         }
     }
@@ -225,8 +240,17 @@ public class ConversationWorkerPool {
     private void startWorkerThread(int workerIndex) {
         log.info("正在启动工作线程 {} ...", workerIndex);
         workers[workerIndex].submit(() -> {
-            log.info("工作线程 {} 的任务已提交到ExecutorService", workerIndex);
-            runWorker(workerIndex);
+            try {
+                // 等待一小段时间确保初始化完成
+                Thread.sleep(100);
+                log.info("工作线程 {} 开始运行，started标志: {}", workerIndex, started);
+                runWorker(workerIndex);
+            } catch (InterruptedException e) {
+                log.warn("工作线程 {} 启动时被中断", workerIndex);
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                log.error("工作线程 {} 启动异常", workerIndex, e);
+            }
         });
         log.info("工作线程 {} 启动请求已发送", workerIndex);
     }
@@ -237,17 +261,41 @@ public class ConversationWorkerPool {
      * @param workerIndex 工作线程索引
      */
     private void runWorker(int workerIndex) {
-        log.info("工作线程 {} 启动", workerIndex);
+        log.info("工作线程 {} 启动，started标志: {}", workerIndex, started);
+        
+        // 确保started标志已设置
+        if (!started) {
+            log.warn("工作线程 {} 启动时发现started标志为false，等待初始化完成", workerIndex);
+            // 等待started标志被设置
+            while (!started && !Thread.currentThread().isInterrupted()) {
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("工作线程 {} 等待启动时被中断", workerIndex);
+                    return;
+                }
+            }
+        }
+        
         ConcurrentHashMap<String, BlockingQueue<ConversationMessage>> queueMap = queueMaps[workerIndex];
+        log.info("工作线程 {} 正式开始处理消息", workerIndex);
 
         while (started && !Thread.currentThread().isInterrupted()) {
             try {
+                // 更新工作线程活动时间
+                if (workerLastActiveTime != null && workerIndex < workerLastActiveTime.length) {
+                    workerLastActiveTime[workerIndex].set(System.currentTimeMillis());
+                }
+                
                 // 轮询所有队列，处理消息
                 boolean hasMessage = false;
 
                 // 创建队列快照，避免并发修改问题
                 var queueSnapshot = new java.util.HashMap<>(queueMap);
-                log.debug("工作线程 {} 轮询开始 - 当前队列数: {}", workerIndex, queueSnapshot.size());
+                if (config.isVerboseLogging()) {
+                    log.debug("工作线程 {} 轮询开始 - 当前队列数: {}", workerIndex, queueSnapshot.size());
+                }
 
                 for (var entry : queueSnapshot.entrySet()) {
                     String conversationId = entry.getKey();
@@ -265,7 +313,7 @@ public class ConversationWorkerPool {
 
                 // 如果没有消息，短暂休眠避免CPU空转
                 if (!hasMessage) {
-                    Thread.sleep(50); // 增加休眠时间，减少CPU占用
+                    Thread.sleep(50); // 减少CPU占用
                 }
 
             } catch (InterruptedException e) {
@@ -284,7 +332,7 @@ public class ConversationWorkerPool {
             }
         }
 
-        log.info("工作线程 {} 退出", workerIndex);
+        log.info("工作线程 {} 退出，started标志: {}", workerIndex, started);
     }
 
     /**
@@ -325,6 +373,12 @@ public class ConversationWorkerPool {
             }
 
             totalMessagesProcessed.incrementAndGet();
+            
+            // 更新工作线程监控信息
+            if (workerProcessedCount != null && workerIndex < workerProcessedCount.length) {
+                workerProcessedCount[workerIndex].incrementAndGet();
+                workerLastActiveTime[workerIndex].set(System.currentTimeMillis());
+            }
 
             long processingTime = System.currentTimeMillis() - startTime;
             log.info("消息处理完成 - 会话ID: {}, 处理时间: {}ms, 工作线程: {}, 消息类型: {}",
@@ -347,5 +401,53 @@ public class ConversationWorkerPool {
             totalMessagesSubmitted.get(), totalMessagesProcessed.get(),
             activeConversations.get(), workers != null ? workers.length : 0
         );
+    }
+    
+    /**
+     * 获取工作线程健康状态
+     * 
+     * @return 健康状态报告
+     */
+    public String getWorkerHealthStatus() {
+        if (!started || workers == null || workerLastActiveTime == null) {
+            return "WorkerPool未启动或未初始化";
+        }
+        
+        StringBuilder status = new StringBuilder("工作线程健康状态:\n");
+        long currentTime = System.currentTimeMillis();
+        
+        for (int i = 0; i < workers.length; i++) {
+            long lastActive = workerLastActiveTime[i].get();
+            long processedCount = workerProcessedCount[i].get();
+            long inactiveTime = currentTime - lastActive;
+            
+            boolean healthy = inactiveTime < 60000; // 60秒内有活动认为是健康的
+            String healthStatus = healthy ? "健康" : "异常";
+            
+            status.append(String.format("  Worker-%d: %s, 处理消息数: %d, 距离上次活动: %dms\n",
+                    i, healthStatus, processedCount, inactiveTime));
+        }
+        
+        return status.toString();
+    }
+    
+    /**
+     * 检查是否有不健康的工作线程
+     * 
+     * @return true如果所有工作线程都健康
+     */
+    public boolean areAllWorkersHealthy() {
+        if (!started || workers == null || workerLastActiveTime == null) {
+            return false;
+        }
+        
+        long currentTime = System.currentTimeMillis();
+        for (int i = 0; i < workers.length; i++) {
+            long lastActive = workerLastActiveTime[i].get();
+            if (currentTime - lastActive > 120000) { // 2分钟无活动认为不健康
+                return false;
+            }
+        }
+        return true;
     }
 }

@@ -60,6 +60,7 @@ public class MessageHandlerStats {
         MessageTypeStats stats = getOrCreateMessageTypeStats(messageType);
         stats.successCount.incrementAndGet();
         stats.totalTime.addAndGet(duration);
+        stats.lastProcessTime.set(duration);
     }
     
     /**
@@ -76,6 +77,7 @@ public class MessageHandlerStats {
         MessageTypeStats stats = getOrCreateMessageTypeStats(messageType);
         stats.failureCount.incrementAndGet();
         stats.totalTime.addAndGet(duration);
+        stats.lastProcessTime.set(duration);
     }
     
     /**
@@ -130,6 +132,10 @@ public class MessageHandlerStats {
         private final AtomicLong failureCount = new AtomicLong(0);
         /** 总处理时间 */
         private final AtomicLong totalTime = new AtomicLong(0);
+        /** a
+         * 最近一次处理时间
+         */
+        private final AtomicLong lastProcessTime = new AtomicLong(0);
         
         /**
          * 获取成功率

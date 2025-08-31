@@ -37,7 +37,10 @@ public class ImMessageHandlerImpl implements ImMessageHandler {
     @Override
     public void handleMessage(ChatMessage chatMessage, String conversationId) throws Exception {
         int messageType = chatMessage.getType();
-        long startTime = stats.recordProcessStart(messageType);
+        // 优先从ThreadLocal获取开始时间，以包含MQ消费的等待时间
+        Long holderStartTime = com.vanky.im.message.mq.MessageProcessingTimeHolder.getStartTime();
+        long startTime = (holderStartTime != null) ? holderStartTime : System.currentTimeMillis();
+        stats.recordProcessStart(messageType);
         
         try {
             // 查找对应的处理器
@@ -52,17 +55,21 @@ public class ImMessageHandlerImpl implements ImMessageHandler {
             processor.process(chatMessage, conversationId);
             
             // 记录成功
+            long endTime = System.currentTimeMillis();
             stats.recordProcessSuccess(messageType, startTime);
+            long duration = endTime - startTime;
             
-            log.debug("消息处理成功 - 类型: {}, 消息ID: {}, 会话ID: {}, 处理器: {}", 
-                    messageType, chatMessage.getUid(), conversationId, processor.getProcessorName());
+            log.info("消息处理成功 - 类型: {}, 消息ID: {}, 会话ID: {}, 处理器: {}, 耗时: {}ms",
+                    messageType, chatMessage.getUid(), conversationId, processor.getProcessorName(), duration);
             
         } catch (Exception e) {
             // 记录失败
+            long endTime = System.currentTimeMillis();
             stats.recordProcessFailure(messageType, startTime);
-            
-            log.error("消息处理失败 - 类型: {}, 消息ID: {}, 会话ID: {}, 错误: {}", 
-                    messageType, chatMessage.getUid(), conversationId, e.getMessage(), e);
+            long duration = endTime - startTime;
+
+            log.error("消息处理失败 - 类型: {}, 消息ID: {}, 会话ID: {}, 处理器: {}, 耗时: {}ms, 错误: {}",
+                    messageType, chatMessage.getUid(), conversationId, "N/A", duration, e.getMessage(), e);
             
             // 重新抛出异常，由调用方决定重试策略
             throw e;

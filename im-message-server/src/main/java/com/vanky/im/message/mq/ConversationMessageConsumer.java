@@ -31,6 +31,8 @@ public class ConversationMessageConsumer implements MessageListenerOrderly {
             ConsumeOrderlyContext context) {
         try {
             for (MessageExt messageExt : messages) {
+                // 设置处理开始时间
+                MessageProcessingTimeHolder.setStartTime(System.currentTimeMillis());
                 // 解析消息体
                 byte[] body = messageExt.getBody();
                 if (body == null || body.length == 0) {
@@ -49,7 +51,12 @@ public class ConversationMessageConsumer implements MessageListenerOrderly {
                 }
 
                 // 使用统一消息分发器处理消息
-                messageHandler.handleMessage(chatMessage, conversationId);
+                try {
+                    messageHandler.handleMessage(chatMessage, conversationId);
+                } finally {
+                    // 清理时间戳，避免内存泄漏
+                    MessageProcessingTimeHolder.clear();
+                }
             }
             
             return ConsumeOrderlyStatus.SUCCESS;

@@ -379,53 +379,18 @@ public class PullCompensationManager {
             ChatMessage.Builder builder = ChatMessage.newBuilder();
 
             // 设置基本字段
-            if (messageMap.get("msgId") != null) {
-                builder.setUid(messageMap.get("msgId").toString());
-            }
-            if (messageMap.get("fromUserId") != null) {  // 修正字段名
-                builder.setFromId(messageMap.get("fromUserId").toString());
-            }
-            if (messageMap.get("toUserId") != null) {    // 修正字段名
-                builder.setToId(messageMap.get("toUserId").toString());
-            }
-            if (messageMap.get("content") != null) {
-                builder.setContent(messageMap.get("content").toString());
-            }
-            if (messageMap.get("conversationId") != null) {
-                builder.setConversationId(messageMap.get("conversationId").toString());
-            }
-            if (messageMap.get("seq") != null) {
-                builder.setSeq(messageMap.get("seq").toString());
-            }
+            builder.setUid(safeGetString(messageMap, "msgId", ""));
+            builder.setFromId(safeGetString(messageMap, "fromUserId", ""));
+            builder.setToId(safeGetString(messageMap, "toUserId", ""));
+            builder.setContent(safeGetString(messageMap, "content", ""));
+            builder.setConversationId(safeGetString(messageMap, "conversationId", ""));
+            builder.setSeq(safeGetString(messageMap, "seq", ""));
 
-            // 设置消息类型
-            if (messageMap.get("msgType") != null) {  // 修正字段名
-                try {
-                    int type = Integer.parseInt(messageMap.get("msgType").toString());
-                    // 根据MessageInfo的msgType转换为ChatMessage的type
-                    if (type == 1) {
-                        builder.setType(MessageTypeConstants.PRIVATE_CHAT_MESSAGE);
-                    } else if (type == 2) {
-                        builder.setType(MessageTypeConstants.GROUP_CHAT_MESSAGE);
-                    } else {
-                        builder.setType(0); // 默认类型
-                    }
-                } catch (NumberFormatException e) {
-                    builder.setType(0); // 默认类型
-                }
-            }
+            // 设置消息类型 - 应用SRP原则，提取专门的类型转换方法
+            builder.setType(convertMessageType(messageMap.get("msgType")));
 
-            // 设置时间戳
-            if (messageMap.get("createTime") != null) {
-                try {
-                    long timestamp = Long.parseLong(messageMap.get("createTime").toString());
-                    builder.setTimestamp(timestamp);
-                } catch (NumberFormatException e) {
-                    builder.setTimestamp(System.currentTimeMillis());
-                }
-            } else {
-                builder.setTimestamp(System.currentTimeMillis());
-            }
+            // 设置时间戳 - 应用OCP原则，支持多种时间格式
+            builder.setTimestamp(convertTimestamp(messageMap.get("createTime")));
 
             // 设置推拉结合模式的序列号字段（从服务端返回的数据中提取）
             // 注意：这里需要根据实际的服务端返回格式来设置
@@ -438,6 +403,123 @@ public class PullCompensationManager {
         } catch (Exception e) {
             log.warning("转换单个消息失败: " + e.getMessage() + ", 消息Map: " + messageMap);
             return null;
+        }
+    }
+
+    /**
+     * 安全获取字符串值 - DRY原则，复用字符串获取逻辑
+     *
+     * @param map Map对象
+     * @param key 键名
+     * @param defaultValue 默认值
+     * @return 字符串值
+     */
+    private String safeGetString(Map<String, Object> map, String key, String defaultValue) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : defaultValue;
+    }
+
+    /**
+     * 转换消息类型 - SRP原则，专门处理消息类型转换
+     *
+     * @param msgTypeObj 消息类型对象
+     * @return ChatMessage类型常量
+     */
+    private int convertMessageType(Object msgTypeObj) {
+        if (msgTypeObj == null) {
+            return 0; // 默认类型
+        }
+
+        try {
+            int type = safeParseInt(msgTypeObj, 0);
+            // 根据MessageInfo的msgType转换为ChatMessage的type
+            switch (type) {
+                case 1:
+                    return MessageTypeConstants.PRIVATE_CHAT_MESSAGE;
+                case 2:
+                    return MessageTypeConstants.GROUP_CHAT_MESSAGE;
+                default:
+                    return 0; // 默认类型
+            }
+        } catch (Exception e) {
+            log.warning("消息类型转换失败: " + msgTypeObj + ", 使用默认类型");
+            return 0;
+        }
+    }
+
+    /**
+     * 转换时间戳 - OCP原则，支持多种时间格式的扩展
+     *
+     * @param createTimeObj 创建时间对象
+     * @return 时间戳（毫秒）
+     */
+    private long convertTimestamp(Object createTimeObj) {
+        if (createTimeObj == null) {
+            return System.currentTimeMillis();
+        }
+
+        String timeStr = createTimeObj.toString();
+        
+        try {
+            // 尝试直接解析为数字时间戳
+            return Long.parseLong(timeStr);
+        } catch (NumberFormatException e1) {
+            try {
+                // 尝试解析ISO时间格式 (如: 2025-08-31T08:42:04.000+00:00)
+                return parseISODateTime(timeStr);
+            } catch (Exception e2) {
+                log.warning("时间戳转换失败 - 原始值: " + timeStr + 
+                          ", 数字解析错误: " + e1.getMessage() + 
+                          ", ISO解析错误: " + e2.getMessage() + 
+                          ", 使用当前时间");
+                return System.currentTimeMillis();
+            }
+        }
+    }
+
+    /**
+     * 解析ISO日期时间格式 - KISS原则，保持简单实用
+     *
+     * @param isoDateTime ISO格式的日期时间字符串
+     * @return 时间戳（毫秒）
+     */
+    private long parseISODateTime(String isoDateTime) {
+        try {
+            // 使用Java 8的时间API解析ISO格式
+            java.time.Instant instant = java.time.Instant.parse(isoDateTime);
+            return instant.toEpochMilli();
+        } catch (Exception e) {
+            // 如果解析失败，尝试简化版本（去掉时区）
+            try {
+                String simplifiedTime = isoDateTime.replaceAll("[+].*$", "Z");
+                java.time.Instant instant = java.time.Instant.parse(simplifiedTime);
+                return instant.toEpochMilli();
+            } catch (Exception e2) {
+                throw new RuntimeException("无法解析时间格式: " + isoDateTime, e2);
+            }
+        }
+    }
+
+    /**
+     * 安全解析整数 - DRY原则，复用数字解析逻辑
+     *
+     * @param obj 对象
+     * @param defaultValue 默认值
+     * @return 整数值
+     */
+    private int safeParseInt(Object obj, int defaultValue) {
+        if (obj == null) {
+            return defaultValue;
+        }
+
+        try {
+            if (obj instanceof Number) {
+                return ((Number) obj).intValue();
+            } else {
+                return Integer.parseInt(obj.toString());
+            }
+        } catch (NumberFormatException e) {
+            return defaultValue;
         }
     }
 

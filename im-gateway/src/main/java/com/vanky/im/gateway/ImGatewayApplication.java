@@ -23,7 +23,7 @@ import com.vanky.im.common.config.RedisConfig;
 @SpringBootApplication
 @EnableDiscoveryClient  // 启用Nacos服务发现
 @ComponentScan(
-    basePackages = {"com.vanky.im.gateway", "com.vanky.im.common.util", "com.vanky.im.common.model", "com.vanky.im.common.constant", "com.vanky.im.common.exception", "com.vanky.im.common.config"},
+    basePackages = {"com.vanky.im.gateway", "com.vanky.im.common.util", "com.vanky.im.common.model", "com.vanky.im.common.constant", "com.vanky.im.common.exception", "com.vanky.im.common.config", "com.vanky.im.common.service"},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.vanky\\.im\\.common\\.config\\.FeignConfig")
     }

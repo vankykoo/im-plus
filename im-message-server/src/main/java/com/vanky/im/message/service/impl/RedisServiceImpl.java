@@ -3,6 +3,7 @@ package com.vanky.im.message.service.impl;
 import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.model.UserSession;
+import com.vanky.im.common.service.PaginatedUserMessageManager;
 import com.vanky.im.message.constant.MessageConstants;
 import com.vanky.im.message.mapper.UserMsgListMapper;
 import com.vanky.im.message.service.ConversationMsgListService;
@@ -37,6 +38,9 @@ public class RedisServiceImpl implements RedisService {
 
     @Autowired
     private SequenceClient sequenceClient;
+
+    @Autowired
+    private PaginatedUserMessageManager paginatedUserMessageManager;
 
     @Override
     public Long generateSeq(String conversationId) {
@@ -117,37 +121,24 @@ public class RedisServiceImpl implements RedisService {
 
     @Override
     public void addToUserMsgList(String userId, String msgId, Long seq, int maxSize) {
-        String key = RedisKeyConstants.getUserMsgListKey(userId);
+        // 使用新的分页管理器替代原有实现（遵循SOLID-O原则）
         try {
-            ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
-            
-            // 添加新消息
-            zSetOps.add(key, msgId, seq.doubleValue());
-            
-            // 保留最近的N条消息
-            Long size = zSetOps.zCard(key);
-            if (size != null && size > maxSize) {
-                // 删除最旧的消息
-                long removeCount = size - maxSize;
-                zSetOps.removeRange(key, 0, removeCount - 1);
-            }
-            
-            log.debug("添加消息到用户消息链成功, userId: {}, msgId: {}, seq: {}", userId, msgId, seq);
+            paginatedUserMessageManager.addMessage(userId, msgId, seq, maxSize);
+            log.debug("添加消息到分页用户消息链成功, userId: {}, msgId: {}, seq: {}", userId, msgId, seq);
         } catch (Exception e) {
-            log.error("添加消息到用户消息链失败, userId: {}, msgId: {}", userId, msgId, e);
-            throw new RuntimeException("添加消息到用户消息链失败", e);
+            log.error("添加消息到分页用户消息链失败, userId: {}, msgId: {}", userId, msgId, e);
+            throw new RuntimeException("添加消息到分页用户消息链失败", e);
         }
     }
 
     @Override
     public Set<String> getUserMsgList(String userId, long start, long end) {
-        String key = RedisKeyConstants.getUserMsgListKey(userId);
+        // 使用新的分页管理器替代原有实现（遵循SOLID-O原则）
         try {
-            ZSetOperations<String, Object> zSetOps = redisTemplate.opsForZSet();
-            Set<Object> result = zSetOps.reverseRange(key, start, end);
-            return result != null ? (Set<String>) (Set<?>) result : Set.of();
+            List<String> messages = paginatedUserMessageManager.getUserMessages(userId, start, end);
+            return new java.util.LinkedHashSet<>(messages); // 保持顺序的Set
         } catch (Exception e) {
-            log.error("获取用户消息链失败, userId: {}", userId, e);
+            log.error("获取分页用户消息链失败, userId: {}", userId, e);
             return Set.of();
         }
     }

@@ -8,6 +8,7 @@ import com.vanky.im.common.constant.SessionConstants;
 import com.vanky.im.common.constant.MessageTypeConstants;
 
 import com.vanky.im.common.model.UserSession;
+import com.vanky.im.common.service.ShardedOnlineUserManager;
 import com.vanky.im.common.protocol.ChatMessage;
 import com.vanky.im.common.util.MsgGenerator;
 import com.vanky.im.common.util.TokenUtil;
@@ -54,6 +55,9 @@ public class IMServiceHandler {
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private ShardedOnlineUserManager shardedOnlineUserManager;
 
     @Autowired
     private TokenUtil tokenUtil;
@@ -212,8 +216,8 @@ public class IMServiceHandler {
                     redisTemplate.opsForValue().set(sessionKey, userSession,
                             RedisKeyConstants.SESSION_EXPIRE_TIME, TimeUnit.SECONDS);
 
-                    // 将用户ID添加到在线用户集合
-                    redisTemplate.opsForSet().add(RedisKeyConstants.ONLINE_USERS_KEY, userId);
+                    // 将用户ID添加到在线用户集合（使用分片管理器）
+                    shardedOnlineUserManager.addOnlineUser(userId);
 
                     log.debug("用户会话Redis存储完成 - 用户: {}, 网关ID: {}", userId, currentGatewayId);
                 } catch (Exception e) {
@@ -241,8 +245,8 @@ public class IMServiceHandler {
             String sessionKey = SessionConstants.getUserSessionKey(userId);
             redisTemplate.delete(sessionKey);
             
-            // 3. 将用户ID从在线用户集合中移除
-            redisTemplate.opsForSet().remove(RedisKeyConstants.ONLINE_USERS_KEY, userId);
+            // 3. 将用户ID从在线用户集合中移除（使用分片管理器）
+            shardedOnlineUserManager.removeOnlineUser(userId);
             
             log.info("用户登出成功 - 用户: {}", userId);
         } catch (Exception e) {

@@ -22,6 +22,12 @@ public class RedisKeyConstants {
 
     /** 在线用户集合的Redis键 */
     public static final String ONLINE_USERS_KEY = "im:online:users";
+
+    /** 在线用户分片键前缀 */
+    public static final String ONLINE_USERS_SHARD_PREFIX = "im:online:users:shard:";
+
+    /** 在线用户分片数量 */
+    public static final int ONLINE_USERS_SHARD_COUNT = 16;
     
     // ========== 消息相关 Redis Key ==========
     
@@ -35,6 +41,15 @@ public class RedisKeyConstants {
     
     /** 用户消息链缓存前缀 */
     public static final String USER_MSG_LIST_PREFIX = "user:msg:list:";
+
+    /** 用户消息链分页前缀 */
+    public static final String USER_MSG_LIST_PAGE_PREFIX = "user:msg:list:page:";
+
+    /** 用户消息链元数据前缀 */
+    public static final String USER_MSG_META_PREFIX = "user:msg:meta:";
+
+    /** 每页消息数量 */
+    public static final int USER_MSG_PAGE_SIZE = 100;
     
     /** 会话最新消息缓存前缀 */
     public static final String CONVERSATION_LATEST_MSG_PREFIX = "conversation:latest:";

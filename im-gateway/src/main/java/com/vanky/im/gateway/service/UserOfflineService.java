@@ -2,6 +2,7 @@ package com.vanky.im.gateway.service;
 
 import com.vanky.im.common.constant.RedisKeyConstants;
 import com.vanky.im.common.constant.SessionConstants;
+import com.vanky.im.common.service.ShardedOnlineUserManager;
 import com.vanky.im.gateway.session.UserChannelManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,9 @@ public class UserOfflineService {
     
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private ShardedOnlineUserManager shardedOnlineUserManager;
 
     /**
      * 处理用户下线
@@ -72,11 +76,11 @@ public class UserOfflineService {
             String sessionKey = SessionConstants.getUserSessionKey(userId);
             Boolean sessionDeleted = redisTemplate.delete(sessionKey);
             
-            // 2. 从在线用户集合中移除
-            Long removedCount = redisTemplate.opsForSet().remove(RedisKeyConstants.ONLINE_USERS_KEY, userId);
+            // 2. 从在线用户集合中移除（使用分片管理器）
+            boolean removed = shardedOnlineUserManager.removeOnlineUser(userId);
             
             log.debug("Redis状态清理完成 - 用户ID: {}, 会话删除: {}, 在线集合移除: {}", 
-                    userId, sessionDeleted, removedCount);
+                    userId, sessionDeleted, removed);
             
         } catch (Exception e) {
             log.error("Redis状态清理失败 - 用户ID: {}", userId, e);
@@ -106,43 +110,36 @@ public class UserOfflineService {
     /**
      * 检查并清理过期的在线用户
      * 定期调用此方法可以清理Redis中的僵尸在线状态
+     * 使用分片清理策略，提升性能和减少热KEY问题
      */
     public void cleanupExpiredOnlineUsers() {
         try {
-            log.debug("开始清理过期的在线用户状态");
+            log.debug("开始分片清理过期的在线用户状态");
             
-            // 获取所有在线用户
-            java.util.Set<Object> onlineUsers = redisTemplate.opsForSet().members(RedisKeyConstants.ONLINE_USERS_KEY);
-            if (onlineUsers == null || onlineUsers.isEmpty()) {
-                log.debug("没有在线用户需要检查");
-                return;
-            }
+            int totalExpiredCount = 0;
             
-            int expiredCount = 0;
-            for (Object userObj : onlineUsers) {
-                String userId = userObj.toString();
-                
-                // 检查用户会话是否存在
+            // 创建会话检查器（SOLID-D原则：依赖抽象）
+            ShardedOnlineUserManager.SessionChecker sessionChecker = userId -> {
                 String sessionKey = SessionConstants.getUserSessionKey(userId);
-                Boolean sessionExists = redisTemplate.hasKey(sessionKey);
-                
-                if (!Boolean.TRUE.equals(sessionExists)) {
-                    // 会话不存在，从在线用户集合中移除
-                    redisTemplate.opsForSet().remove(RedisKeyConstants.ONLINE_USERS_KEY, userId);
-                    expiredCount++;
-                    log.debug("清理过期在线用户 - 用户ID: {}", userId);
-                }
+                return Boolean.TRUE.equals(redisTemplate.hasKey(sessionKey));
+            };
+            
+            // 分片清理，避免一次性获取所有在线用户造成的性能问题
+            for (int shardIndex = 0; shardIndex < RedisKeyConstants.ONLINE_USERS_SHARD_COUNT; shardIndex++) {
+                int expiredCount = shardedOnlineUserManager.cleanExpiredUsersInShard(shardIndex, sessionChecker);
+                totalExpiredCount += expiredCount;
             }
             
-            if (expiredCount > 0) {
-                log.info("清理过期在线用户完成 - 清理数量: {}, 剩余在线用户: {}", 
-                        expiredCount, onlineUsers.size() - expiredCount);
+            if (totalExpiredCount > 0) {
+                long remainingUsers = shardedOnlineUserManager.getOnlineUserCount();
+                log.info("分片清理过期在线用户完成 - 清理数量: {}, 剩余在线用户: {}", 
+                        totalExpiredCount, remainingUsers);
             } else {
                 log.debug("没有发现过期的在线用户");
             }
             
         } catch (Exception e) {
-            log.error("清理过期在线用户失败", e);
+            log.error("分片清理过期在线用户失败", e);
         }
     }
 }
